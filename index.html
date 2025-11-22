@@ -119,7 +119,7 @@
 
 <script>
     // --- 全域變數 ---
-    const SPECS = {{ specs | tojson }}; // 來自 Flask 傳輸的規格數據
+    let SPECS = [];
     let originalImage = null;
     const canvas = document.getElementById('image-canvas');
     const ctx = canvas.getContext('2d');
@@ -132,9 +132,22 @@
     const CANVAS_HEIGHT = 400;
     canvas.width = CANVAS_WIDTH;
     canvas.height = CANVAS_HEIGHT;
+    
+    // !!! 核心修正點 1: 硬編碼 API 基礎 URL !!!
+    // 必須指向 Cloudflare Tunnel 的外部域名，讓 Vercel 知道去哪找 API
+    const API_BASE_URL = 'https://video.pdfsolution.dpdns.org'; // 請確認這是您的正確域名！
 
-    document.addEventListener('DOMContentLoaded', () => {
-        populateSpecSelector();
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        // 核心修正點 2: 從靜態檔案載入規格數據
+        try {
+            const response = await fetch('photo_specs.json');
+            SPECS = await response.json();
+            populateSpecSelector();
+        } catch (error) {
+            console.error("無法載入規格檔案:", error);
+            alert("錯誤：無法載入證件照規格，請檢查 photo_specs.json 檔案是否存在。");
+        }
         switchService('id-photo'); // 預設啟動證件照服務
     });
     
@@ -235,21 +248,13 @@
     }
     
     function applyCanvasEffects() {
-        // --- 這裡將是模擬 '眼睛放大' 的邏輯 ---
-        // 這是 A 類（幾何變形）功能的前端模擬點
-        
         const eyeSize = parseInt(document.getElementById('eyeSize').value);
         if (eyeSize > 0) {
-            // 由於 Canvas 幾何變形複雜，這裡僅展示效果邏輯的呼叫點
-            // 真正的液化效果需要獲取人臉關鍵點，並使用像素著色器或複雜 JS 算法。
             statusMessage.innerText = `[模擬預覽] 眼睛放大強度: ${eyeSize}. 最終效果需後端處理。`;
             statusMessage.classList.remove('hidden');
         } else {
             statusMessage.classList.add('hidden');
         }
-        
-        // 這裡需要重新繪製以顯示變形
-        // drawOriginalImage(); // 重新繪圖將會清除已有的變形，實際需複雜的變形圖層管理
     }
 
     // --- 提交與 API 邏輯 ---
@@ -269,21 +274,21 @@
             const finalImageURL = canvas.toDataURL('image/jpeg', 0.9);
             const base64Image = finalImageURL.split(',')[1];
             
-            let targetUrl = '';
+            let targetEndpoint = '';
             let payload = {};
 
             if (currentService === 'id-photo') {
                 // 證件照：發送到免費預覽端點
                 const selectedSpec = specSelector.value;
-                targetUrl = '/generate/preview'; // 新增的免費預覽端點
+                targetEndpoint = '/generate/preview'; 
                 payload = { 
                     image_base64: base64Image,
                     spec_id: selectedSpec,
-                    edit_params: { eye_size: document.getElementById('eyeSize').value } // 傳輸編輯參數
+                    edit_params: { eye_size: document.getElementById('eyeSize').value } 
                 };
             } else if (currentService === 'job-photo') {
                 // 求職照：直接進入付費高階處理
-                targetUrl = '/generate/advanced';
+                targetEndpoint = '/generate/paid';
                 payload = { 
                     image_base64: base64Image,
                     style_id: 'standard_business'
@@ -292,8 +297,8 @@
                 return;
             }
 
-
-            const response = await fetch(targetUrl, {
+            // !!! 核心修正點 3: 使用完整的外部 URL 呼叫 API !!!
+            const response = await fetch(API_BASE_URL + targetEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -305,15 +310,15 @@
                  // I. 嚴重不合格拒絕
                  if (data.status === 'REJECTED') {
                     statusMessage.innerText = `🚨 嚴重不合格：${data.message}。請重拍！`;
-                    statusMessage.classList.remove('hidden');
+                    statusMessage.classList.remove('hidden', 'bg-yellow-100', 'text-yellow-800');
+                    statusMessage.classList.add('bg-red-100', 'text-red-800');
                     return;
                  }
-                 // II. 中度不合格詢問 (這裡只展示錯誤，實際應彈出確認框)
+                 // II. 中度不合格詢問
                  if (data.status === 'NEEDS_CONFIRMATION') {
                     statusMessage.innerText = `⚠️ 中度不合格：${data.message}。AI 可修補，是否付費修補？`;
                     statusMessage.classList.remove('hidden');
-                    // 這裡應彈出模態框
-                    downloadBtn.classList.remove('hidden'); // 暫時用下載按鈕模擬付費修補選項
+                    downloadBtn.classList.remove('hidden');
                     downloadBtn.innerText = '修補並下載 (付費)';
                     return;
                  }
@@ -323,25 +328,26 @@
             
             // III. 成功或低度不合格自動修復完成
             if (data.status === 'OK' || data.status === 'AUTO_FIXED') {
-                displayResults(data.photos);
+                displayResults(data.photos, data.message);
                 downloadBtn.classList.remove('hidden');
                 downloadBtn.innerText = '💰 付費下載高解析度';
                 statusMessage.innerText = data.message || '✅ 預覽生成成功。';
-                statusMessage.classList.remove('hidden');
+                statusMessage.classList.remove('hidden', 'bg-red-100', 'text-red-800');
+                statusMessage.classList.add('bg-green-100', 'text-green-800');
             }
 
 
         } catch (error) {
             statusMessage.innerText = "❌ 請求失敗: " + error.message;
-            statusMessage.classList.remove('hidden');
+            statusMessage.classList.remove('hidden', 'bg-yellow-100', 'text-yellow-800');
+            statusMessage.classList.add('bg-red-100', 'text-red-800');
         } finally {
             submitBtn.disabled = false;
             loadingOverlay.classList.add('hidden');
         }
     }
     
-    function displayResults(photos) {
-        // ... (省略 displayResults 函式內容，與舊版類似，用於顯示 Base64 圖片) ...
+    function displayResults(photos, message) {
         const photoGrid = document.getElementById('result-grid');
         photoGrid.innerHTML = '';
         
@@ -365,7 +371,6 @@
     
     function startPaidProcess() {
         alert("這裡將啟動付費流程並調用 /generate/paid 端點...");
-        // 實際應該發送新的請求到 /generate/paid 端點獲取高解析度無浮水印照片
     }
 
 </script>
