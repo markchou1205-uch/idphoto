@@ -1,0 +1,70 @@
+[
+  {
+    "country": "TWN_PASSPORT",
+    "name": "台灣護照 (Passport)",
+    "type": "passport",
+    "photo_width_mm": 35,
+    "photo_height_mm": 45,
+    "pixel_resolution": 600,
+    "head_size_ratio_min": 0.70,
+    "head_size_ratio_max": 0.80,
+    "ai_rules": {
+      "ear_exposure": true,
+      "teeth_exposure": false,
+      "head_tilt_max_deg": 5,
+      "background_color": "white"
+    },
+    "template_file": "taiwan_passport_mask.png"
+  },
+  {
+    "country": "TWN_ID",
+    "name": "台灣身份證/健保卡",
+    "type": "id_card",
+    "photo_width_mm": 35,
+    "photo_height_mm": 45,
+    "pixel_resolution": 600,
+    "head_size_ratio_min": 0.70,
+    "head_size_ratio_max": 0.80,
+    "ai_rules": {
+      "ear_exposure": true,
+      "teeth_exposure": false,
+      "head_tilt_max_deg": 5,
+      "background_color": "white"
+    },
+    "template_file": "taiwan_id_mask.png"
+  },
+  {
+    "country": "USA_VISA",
+    "name": "美國簽證/綠卡 (2x2 inch)",
+    "type": "visa",
+    "photo_width_mm": 51,
+    "photo_height_mm": 51,
+    "pixel_resolution": 600,
+    "head_size_ratio_min": 0.50,
+    "head_size_ratio_max": 0.70,
+    "ai_rules": {
+      "ear_exposure": false,
+      "teeth_exposure": false,
+      "head_tilt_max_deg": 3,
+      "background_color": "white"
+    },
+    "template_file": "usa_visa_mask.png"
+  },
+  {
+    "country": "INTL_STANDARD",
+    "name": "國際標準 (申根/通用)",
+    "type": "passport",
+    "photo_width_mm": 35,
+    "photo_height_mm": 45,
+    "pixel_resolution": 600,
+    "head_size_ratio_min": 0.70,
+    "head_size_ratio_max": 0.80,
+    "ai_rules": {
+      "ear_exposure": true,
+      "teeth_exposure": false,
+      "head_tilt_max_deg": 5,
+      "background_color": "light_gray"
+    },
+    "template_file": "international_mask.png"
+  }
+]
