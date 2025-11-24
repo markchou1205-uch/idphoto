@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 證件照 Pro</title>
+    <title>AI 證件照 Pro V3</title>
     <link rel="icon" href="data:,">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -23,12 +23,13 @@
             transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
             z-index: 5;
         }
-        /* 頭頂線 (黃色虛線) */
-        .head-line { position: absolute; top: 0; left: 0; right: 0; border-top: 1px dashed yellow; }
-        .head-line::after { content: "頭頂 (含髮)"; color: yellow; font-size: 10px; position: absolute; right: 0; top: -15px; }
-        
-        /* 下巴線 (綠色虛線) */
-        .chin-line { position: absolute; bottom: 0; left: 0; right: 0; border-bottom: 1px dashed #0f0; }
+        /* 頭頂線 (黃色虛線) - 改為動態定位 */
+        .head-line { 
+            position: absolute; left: 0; right: 0; 
+            border-top: 1px dashed yellow; z-index: 6;
+            pointer-events: none;
+        }
+        .head-line::after { content: "偵測頭頂"; color: yellow; font-size: 10px; position: absolute; right: 5px; top: -15px; background: rgba(0,0,0,0.5); padding: 2px 5px; border-radius: 3px;}
         
         .spec-card { cursor: pointer; border: 1px solid #dee2e6; border-radius: 12px; padding: 15px; margin-bottom: 10px; transition: all 0.2s; background: #fff; }
         .spec-card:hover { border-color: #0d6efd; background: #f8f9fa; transform: translateY(-2px); }
@@ -43,7 +44,7 @@
 
 <div class="main-container">
     <div class="sidebar">
-        <div class="d-flex align-items-center mb-4"><h3 class="fw-bold text-primary m-0">📷 AI 證件照 Pro</h3></div>
+        <div class="d-flex align-items-center mb-4"><h3 class="fw-bold text-primary m-0">📷 AI 證件照 Pro V3</h3></div>
         
         <div id="panel-upload">
             <label class="form-label fw-bold text-muted text-uppercase small ls-1">Step 1. 上傳照片</label>
@@ -122,10 +123,8 @@
         </div>
         <div class="image-wrapper" id="imgWrapper">
             <img id="previewImg" src="" class="d-none">
-            <div id="cropMask" class="crop-mask d-none">
-                <div class="head-line"></div>
-                <div class="chin-line"></div>
-            </div>
+            <div id="headLine" class="head-line d-none"></div>
+            <div id="cropMask" class="crop-mask d-none"></div>
         </div>
         <div id="empty-msg" class="text-center text-muted opacity-50">
             <div style="font-size: 5rem;">📷</div><h4 class="mt-3">請在左側上傳照片</h4>
@@ -137,7 +136,7 @@
     const API_BASE_URL = "https://video.pdfsolution.dpdns.org"; 
     let originalBase64 = "";
     let faceData = null; 
-    let specConfig = {}; // 存後端回傳的設定
+    let specConfig = {}; 
     let currentSpecId = "passport";
     let currentCustomRatio = 0.77;
     let resultPhotos = [];
@@ -147,7 +146,7 @@
         if (!input.files.length) return;
         const file = input.files[0];
         const reader = new FileReader();
-        showLoading(true, "偵測人臉中...");
+        showLoading(true, "智慧偵測頭頂位置...");
         reader.onload = async function() {
             originalBase64 = reader.result;
             const img = document.getElementById('previewImg');
@@ -162,7 +161,7 @@
                 });
                 const data = await res.json();
                 if(data.found) faceData = data;
-                if(data.specs) specConfig = data.specs; // 儲存後端設定
+                if(data.specs) specConfig = data.specs;
                 
                 document.getElementById('panel-upload').classList.add('d-none');
                 document.getElementById('panel-specs').classList.remove('d-none');
@@ -174,17 +173,12 @@
 
     function selectSpec(specId) {
         currentSpecId = specId;
-        
-        // UI 更新
         document.querySelectorAll('.spec-card').forEach(el => el.classList.remove('active'));
         const target = document.getElementById(`spec-${specId}`);
         if(target) target.classList.add('active');
-        
         if (specId !== 'custom') {
             document.getElementById('custom-inputs').classList.add('d-none');
-            if (specConfig[specId]) {
-                document.getElementById('spec-desc').innerText = `標準：${specConfig[specId].name}`;
-            }
+            if (specConfig[specId]) document.getElementById('spec-desc').innerText = `標準：${specConfig[specId].name}`;
         }
         drawMask();
     }
@@ -210,47 +204,48 @@
     function drawMask() {
         const img = document.getElementById('previewImg');
         const mask = document.getElementById('cropMask');
+        const headLine = document.getElementById('headLine');
+        
         if (!img.naturalWidth) return;
         const scale = img.width / img.naturalWidth;
         
         let cropW, cropH, cropX, cropY;
-        
-        // 取得當前規格的參數 (跟後端邏輯同步)
-        let targetRatio, faceMult, topOffset;
+        let targetRatio, faceMult, topMarginRatio;
         
         if (currentSpecId === 'custom') {
-            targetRatio = currentCustomRatio;
-            faceMult = 2.5;
-            topOffset = 0.12;
+            targetRatio = currentCustomRatio; faceMult = 2.5; topMarginRatio = 0.10;
         } else if (specConfig[currentSpecId]) {
             const conf = specConfig[currentSpecId];
-            targetRatio = conf.ratio;
-            faceMult = conf.face_multiplier;
-            topOffset = conf.top_offset;
-        } else {
-            return; // 資料未載入
-        }
+            targetRatio = conf.ratio; faceMult = conf.face_multiplier; topMarginRatio = conf.top_margin_ratio;
+        } else { return; }
 
         if (faceData) {
-            // 模擬後端 V2 裁切邏輯
+            // --- V3 前端預覽邏輯 ---
             const realCropH = faceData.h * faceMult;
             const realCropW = realCropH * targetRatio;
             
             const faceCx = faceData.x + faceData.w / 2;
             const realX = faceCx - realCropW / 2;
-            const realY = faceData.y - (realCropH * topOffset);
+            
+            // 關鍵：使用後端回傳的 head_top_y
+            const margin = realCropH * topMarginRatio;
+            const realY = faceData.head_top_y - margin;
             
             cropW = realCropW * scale;
             cropH = realCropH * scale;
             cropX = realX * scale;
             cropY = realY * scale;
+            
+            // 繪製頭頂線
+            headLine.style.top = `${faceData.head_top_y * scale}px`;
+            headLine.style.width = `${img.width}px`;
+            headLine.classList.remove('d-none');
+
         } else {
-            // 沒人臉：居中
-            cropH = img.height; 
-            cropW = cropH * targetRatio;
+            cropH = img.height; cropW = cropH * targetRatio;
             if (cropW > img.width) { cropW = img.width; cropH = cropW / targetRatio; }
-            cropX = (img.width - cropW) / 2;
-            cropY = (img.height - cropH) / 2;
+            cropX = (img.width - cropW) / 2; cropY = (img.height - cropH) / 2;
+            headLine.classList.add('d-none');
         }
 
         mask.style.width = `${cropW}px`;
@@ -266,11 +261,7 @@
         try {
             const res = await fetch(`${API_BASE_URL}/generate/preview`, {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ 
-                    image_base64: originalBase64,
-                    spec_id: currentSpecId,
-                    custom_ratio: currentCustomRatio
-                })
+                body: JSON.stringify({ image_base64: originalBase64, spec_id: currentSpecId, custom_ratio: currentCustomRatio })
             });
             const data = await res.json();
             if (data.photos) {
@@ -279,6 +270,7 @@
                 document.getElementById('panel-result').classList.remove('d-none');
                 document.getElementById('previewImg').src = `data:image/jpeg;base64,${data.photos[0]}`;
                 document.getElementById('cropMask').classList.add('d-none');
+                document.getElementById('headLine').classList.add('d-none');
                 document.getElementById('img-white').src = `data:image/jpeg;base64,${data.photos[0]}`;
                 document.getElementById('img-blue').src = `data:image/jpeg;base64,${data.photos[1]}`;
                 selectResult('white');
