@@ -187,3 +187,50 @@ function downloadImage() {
     link.download = `id_photo_${Date.now()}.jpg`;
     link.click();
 }
+async function promptEmail() {
+    const email = prompt("請輸入您的 Email 信箱：");
+    if (!email) return;
+    if (!email.includes("@")) { alert("Email 格式錯誤"); return; }
+
+    // 先生成排版圖 (因為通常是要寄排版圖去列印)
+    showLoading(true, "正在生成排版並寄送...");
+    
+    try {
+        // 1. 取得排版圖
+        const resLayout = await fetch(`${API_BASE_URL}/generate/layout`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ image_base64: resultPhotos[selectedResultBg] })
+        });
+        const dataLayout = await resLayout.json();
+        
+        if (!dataLayout.layout_image) throw new Error("排版生成失敗");
+
+        // 2. 呼叫寄信 API
+        const resEmail = await fetch(`${API_BASE_URL}/send-email`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                email: email,
+                image_base64: dataLayout.layout_image 
+            })
+        });
+        
+        const dataEmail = await resEmail.json();
+        if (dataEmail.status === "SUCCESS") {
+            alert("✅ 郵件已發送！請檢查您的信箱 (含垃圾郵件夾)。");
+        } else {
+            alert("❌ 發送失敗: " + dataEmail.error);
+        }
+
+    } catch (e) {
+        alert("錯誤: " + e.message);
+    } finally {
+        showLoading(false);
+    }
+}
+
+// 更新 showLoading 支援文字參數
+function showLoading(show, text="處理中...") {
+    const el = document.getElementById('loading');
+    el.style.display = show ? 'flex' : 'none';
+    el.querySelector('h5').innerText = text;
+}
