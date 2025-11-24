@@ -11,7 +11,7 @@ let currentLayoutBase64 = null;
 function handleFileUpload(input) {
     if (!input.files.length) return;
     const reader = new FileReader();
-    showLoading(true);
+    showLoading(true, "讀取中...");
     reader.onload = async function() {
         originalBase64 = reader.result;
         const img = document.getElementById('previewImg');
@@ -23,6 +23,7 @@ function handleFileUpload(input) {
         document.getElementById('cropMask').classList.remove('d-none');
         
         try {
+            // 呼叫 3060 上的偵測 API
             const res = await fetch(`${API_BASE_URL}/generate/detect`, {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ image_base64: originalBase64 })
@@ -34,7 +35,7 @@ function handleFileUpload(input) {
                 if(data.specs) specConfig = data.specs;
                 renderSpecList(); 
             } else {
-                // Fallback
+                // Fallback (網路不通時的備用資料)
                 specConfig = {
                     "passport": { "name": "2吋大頭照", "width_mm": 35, "height_mm": 45 },
                     "inch1": { "name": "1吋證件照", "width_mm": 28, "height_mm": 35 }
@@ -42,6 +43,7 @@ function handleFileUpload(input) {
                 renderSpecList();
             }
             
+            // UI 切換到 Step 2
             document.getElementById('panel-upload').classList.add('d-none');
             document.getElementById('panel-specs').classList.remove('d-none');
             selectSpec('passport'); 
@@ -58,16 +60,16 @@ function renderSpecList() {
         const pxH = Math.round(val.height_mm * 23.622);
         
         const div = document.createElement('div');
-        div.className = 'spec-card';
+        div.className = 'spec-card d-flex justify-content-between align-items-center';
         div.id = `spec-${key}`;
         div.onclick = () => selectSpec(key);
         
         div.innerHTML = `
-            <div class="fw-bold">${val.name}</div>
-            <div class="d-flex justify-content-between mt-1 text-muted small">
-                <span>${val.width_mm/10} x ${val.height_mm/10} cm</span>
-                <span class="badge bg-light text-dark border">${pxW} x ${pxH} px</span>
+            <div>
+                <div class="fw-bold">${val.name}</div>
+                <div class="text-muted small">${val.width_mm} x ${val.height_mm} mm</div>
             </div>
+            <span class="badge bg-light text-dark border">${pxW}x${pxH}px</span>
         `;
         container.appendChild(div);
     }
@@ -75,10 +77,14 @@ function renderSpecList() {
 
 function selectSpec(specId) {
     currentSpecId = specId;
+    // UI: 移除所有 active 類別
     document.querySelectorAll('.spec-card').forEach(el => el.classList.remove('active'));
+    document.getElementById('spec-custom').classList.remove('active');
+    document.getElementById('custom-inputs').classList.add('d-none');
+
+    // UI: 新增 active
     const el = document.getElementById(`spec-${specId}`);
     if(el) el.classList.add('active');
-    document.getElementById('custom-inputs').classList.add('d-none');
     
     if(specConfig[specId]) {
         const s = specConfig[specId];
@@ -101,7 +107,7 @@ function updateCustom() {
     currentCustomRatio = w / h;
     const pxW = Math.round(w * 23.622);
     const pxH = Math.round(h * 23.622);
-    document.getElementById('spec-desc').innerHTML = `自訂：${w}x${h}mm <span class="badge bg-secondary">${pxW}x${pxH} px</span>`;
+    document.getElementById('spec-desc').innerHTML = `自訂：${w}x${h}mm`;
     drawMask(w, h);
 }
 
@@ -113,42 +119,59 @@ function drawMask(mmW, mmH) {
     
     const pxW = Math.round(mmW * 23.622);
     const pxH = Math.round(mmH * 23.622);
-    label.innerText = `${mmW/10} x ${mmH/10} cm (${pxW}x${pxH}px)`;
+    label.innerText = `${mmW}x${mmH}mm`;
 
     const scale = img.width / img.naturalWidth;
     let cropW, cropH, cropX, cropY;
     let targetRatio = mmW / mmH;
-    let faceMult = 2.5;
+    
+    // 這裡我們只負責前端紅框的「大概位置」，實際裁切由後端 smart_crop 負責
+    // 使用 config 傳回來的 face_multiplier (預設 1.8~2.0)
+    let faceMult = 2.0; 
     let topMargin = 0.12;
     
     if (currentSpecId !== 'custom' && specConfig[currentSpecId]) {
-        faceMult = specConfig[currentSpecId].face_multiplier;
+        if(specConfig[currentSpecId].face_multiplier) faceMult = specConfig[currentSpecId].face_multiplier;
         topMargin = specConfig[currentSpecId].top_margin;
     }
 
     if (faceData && faceData.found) {
+        // 前端預覽公式：依據臉高 x 倍率 來畫框
         const realCropH = faceData.h * faceMult;
         const realCropW = realCropH * targetRatio;
         const faceCx = faceData.x + faceData.w / 2;
         const realX = faceCx - realCropW / 2;
-        const realY = faceData.head_top_y - (realCropH * topMargin);
-        cropW = realCropW * scale; cropH = realCropH * scale; cropX = realX * scale; cropY = realY * scale;
+        
+        // 使用後端偵測到的頭頂位置
+        const headTop = faceData.head_top_y || faceData.y;
+        const realY = headTop - (realCropH * topMargin);
+        
+        cropW = realCropW * scale; 
+        cropH = realCropH * scale; 
+        cropX = realX * scale; 
+        cropY = realY * scale;
     } else {
+        // 沒臉時，置中畫一個框
         cropH = img.height; cropW = cropH * targetRatio;
         if (cropW > img.width) { cropW = img.width; cropH = cropW / targetRatio; }
         cropX = (img.width - cropW) / 2; cropY = (img.height - cropH) / 2;
     }
 
-    mask.style.width = `${cropW}px`; mask.style.height = `${cropH}px`; mask.style.left = `${cropX}px`; mask.style.top = `${cropY}px`;
+    mask.style.width = `${cropW}px`; 
+    mask.style.height = `${cropH}px`; 
+    mask.style.left = `${cropX}px`; 
+    mask.style.top = `${cropY}px`;
     mask.classList.remove('d-none');
 }
+
 window.addEventListener('resize', () => {
+    // 視窗變動時重畫遮罩
     if (currentSpecId === 'custom') updateCustom();
-    else if (currentSpecId) selectSpec(currentSpecId);
+    else if (currentSpecId) drawMask(specConfig[currentSpecId].width_mm, specConfig[currentSpecId].height_mm);
 });
 
 async function processImage() {
-    showLoading(true, "AI 製作中...");
+    showLoading(true, "AI 製作中 (去背/修圖)...");
     try {
         const res = await fetch(`${API_BASE_URL}/generate/preview`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -172,17 +195,14 @@ async function processImage() {
 function selectResult(color) {
     const idx = color === 'white' ? 0 : 1;
     selectedResultBg = idx;
-    document.getElementById('res-white').classList.remove('selected');
-    document.getElementById('res-blue').classList.remove('selected');
-    document.getElementById(`res-${color}`).classList.add('selected');
+    
+    // UI Update
+    document.getElementById('res-white').classList.remove('active');
+    document.getElementById('res-blue').classList.remove('active');
+    document.getElementById(`res-${color}`).classList.add('active');
+    
     const imgData = `data:image/jpeg;base64,${resultPhotos[idx]}`;
     document.getElementById('previewImg').src = imgData;
-    
-    const imgObj = new Image();
-    imgObj.onload = function() {
-        document.getElementById('res-info-single').innerText = `${this.width} x ${this.height} px (600 DPI)`;
-    }
-    imgObj.src = imgData;
 }
 
 function downloadImage() {
@@ -212,7 +232,6 @@ async function generateLayout() {
     } catch(e) { alert("排版錯誤"); } finally { showLoading(false); }
 }
 
-// 新增：檢查功能
 async function runCheck() {
     if (!resultPhotos[selectedResultBg]) return;
     showLoading(true, "AI 審查中...");
@@ -233,14 +252,15 @@ async function runCheck() {
             
             data.results.forEach(item => {
                 let icon = 'bi-check-circle-fill text-success';
-                if (item.status === 'warning') icon = 'bi-exclamation-triangle-fill text-warning';
-                if (item.status === 'fail') icon = 'bi-x-circle-fill text-danger';
+                let bg = 'bg-light';
+                if (item.status === 'warning') { icon = 'bi-exclamation-triangle-fill text-warning'; bg = 'bg-warning-subtle'; }
+                if (item.status === 'fail') { icon = 'bi-x-circle-fill text-danger'; bg = 'bg-danger-subtle'; }
                 
                 const div = document.createElement('div');
-                div.className = 'list-group-item d-flex justify-content-between align-items-center';
+                div.className = `list-group-item d-flex justify-content-between align-items-center ${bg}`;
                 div.innerHTML = `
                     <span><i class="bi ${icon} me-2"></i> ${item.item}</span>
-                    <span class="badge bg-light text-dark border">${item.msg}</span>
+                    <span class="badge bg-white text-dark border">${item.msg}</span>
                 `;
                 list.appendChild(div);
             });
@@ -262,6 +282,7 @@ async function sendEmail() {
     try {
         let imgToSend = currentLayoutBase64;
         if (!imgToSend) {
+            // 如果還沒生成過排版，先生成
             const resLayout = await fetch(`${API_BASE_URL}/generate/layout`, {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ image_base64: resultPhotos[selectedResultBg] })
@@ -269,7 +290,7 @@ async function sendEmail() {
             const dataLayout = await resLayout.json();
             imgToSend = dataLayout.layout_image;
         }
-        if (!imgToSend) throw new Error("排版生成失敗");
+        
         const resEmail = await fetch(`${API_BASE_URL}/send-email`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ email: email, image_base64: imgToSend })
@@ -284,6 +305,10 @@ async function sendEmail() {
 
 function showLoading(show, text="處理中...") {
     const el = document.getElementById('loading');
-    el.style.display = show ? 'flex' : 'none';
-    el.querySelector('h5').innerText = text;
+    if(show) {
+        el.querySelector('div.text-dark').innerText = text;
+        el.style.display = 'flex';
+    } else {
+        el.style.display = 'none';
+    }
 }
