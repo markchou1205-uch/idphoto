@@ -25,11 +25,13 @@
         .preview-box.selected { border: 3px solid #0d6efd; background-color: #e7f1ff; }
         
         /* --- 修改點：給圖片加上邊框 --- */
-        .preview-box img { 
+.preview-box img { 
             max-width: 100%; 
             max-height: 300px; 
-            border: 1px solid #dee2e6; /* 淺灰色實線邊框 */
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1); /* 輕微陰影讓它浮起來 */
+            /* 改成 2px 深灰色虛線，這樣在白底上會非常明顯 */
+            border: 2px dashed #999; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2); 
+            background-color: white;
         }
 
         .step-card { background: white; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; padding: 20px; }
