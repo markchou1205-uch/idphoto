@@ -114,9 +114,8 @@ function drawMask(mmW, mmH) {
     let topMargin = 0.12;
     
     if (currentSpecId !== 'custom' && specConfig[currentSpecId]) {
-        // 如果後端沒傳 face_multiplier (例如使用預設 fallback)，給預設值
-        faceMult = specConfig[currentSpecId].face_multiplier || 2.5;
-        topMargin = specConfig[currentSpecId].top_margin || 0.1;
+        faceMult = specConfig[currentSpecId].face_multiplier;
+        topMargin = specConfig[currentSpecId].top_margin;
     }
 
     if (faceData && faceData.found) {
