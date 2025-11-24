@@ -22,15 +22,32 @@ function handleFileUpload(input) {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ image_base64: originalBase64 })
             });
-            const data = await res.json();
-            faceData = data.found ? data : null;
-            if(data.specs) specConfig = data.specs;
             
-            renderSpecList();
+            if (res.ok) {
+                const data = await res.json();
+                faceData = data.found ? data : null;
+                if(data.specs) specConfig = data.specs;
+                renderSpecList(); // 渲染選單
+            } else {
+                console.error("Detect failed but continuing...");
+                // 即使失敗，也嘗試顯示預設選單 (如果之前有載入過)
+                if (Object.keys(specConfig).length === 0) {
+                    // 手動填入預設值，確保選單不空白
+                    specConfig = {
+                        "passport": { "name": "2吋大頭照", "width_mm": 35, "height_mm": 45 },
+                        "inch1": { "name": "1吋證件照", "width_mm": 28, "height_mm": 35 }
+                    };
+                    renderSpecList();
+                }
+            }
+            
             document.getElementById('panel-upload').classList.add('d-none');
             document.getElementById('panel-specs').classList.remove('d-none');
-            selectSpec('passport'); // 預設
-        } catch (err) { alert("連線錯誤"); } finally { showLoading(false); }
+            selectSpec('passport'); 
+        } catch (err) { 
+            console.error(err);
+            alert("連線錯誤，請檢查網路"); 
+        } finally { showLoading(false); }
     };
     reader.readAsDataURL(input.files[0]);
 }
@@ -87,29 +104,26 @@ function drawMask(mmW, mmH) {
     const label = document.getElementById('maskLabel');
     if (!img.naturalWidth) return;
     
-    // 更新紅色標籤
     label.innerText = `${mmW/10} x ${mmH/10} cm`;
 
     const scale = img.width / img.naturalWidth;
     let cropW, cropH, cropX, cropY;
     
-    // 取得參數
     let targetRatio = mmW / mmH;
     let faceMult = 2.5;
     let topMargin = 0.12;
     
     if (currentSpecId !== 'custom' && specConfig[currentSpecId]) {
-        faceMult = specConfig[currentSpecId].face_multiplier;
-        topMargin = specConfig[currentSpecId].top_margin;
+        // 如果後端沒傳 face_multiplier (例如使用預設 fallback)，給預設值
+        faceMult = specConfig[currentSpecId].face_multiplier || 2.5;
+        topMargin = specConfig[currentSpecId].top_margin || 0.1;
     }
 
-    if (faceData) {
-        // 使用後端回傳的 head_top_y 計算
+    if (faceData && faceData.found) {
         const realCropH = faceData.h * faceMult;
         const realCropW = realCropH * targetRatio;
         const faceCx = faceData.x + faceData.w / 2;
         const realX = faceCx - realCropW / 2;
-        // 關鍵：使用 head_top_y
         const realY = faceData.head_top_y - (realCropH * topMargin);
         
         cropW = realCropW * scale;
@@ -180,23 +194,14 @@ async function generateLayout() {
     } catch(e) { alert("排版錯誤"); } finally { showLoading(false); }
 }
 
-function showLoading(show) { document.getElementById('loading').style.display = show ? 'flex' : 'none'; }
-function downloadImage() {
-    const link = document.createElement('a');
-    link.href = `data:image/jpeg;base64,${resultPhotos[selectedResultBg]}`;
-    link.download = `id_photo_${Date.now()}.jpg`;
-    link.click();
-}
 async function promptEmail() {
-    const email = prompt("請輸入您的 Email 信箱：");
+    const email = prompt("請輸入您的 Email：");
     if (!email) return;
     if (!email.includes("@")) { alert("Email 格式錯誤"); return; }
 
-    // 先生成排版圖 (因為通常是要寄排版圖去列印)
     showLoading(true, "正在生成排版並寄送...");
     
     try {
-        // 1. 取得排版圖
         const resLayout = await fetch(`${API_BASE_URL}/generate/layout`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ image_base64: resultPhotos[selectedResultBg] })
@@ -205,7 +210,6 @@ async function promptEmail() {
         
         if (!dataLayout.layout_image) throw new Error("排版生成失敗");
 
-        // 2. 呼叫寄信 API
         const resEmail = await fetch(`${API_BASE_URL}/send-email`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ 
@@ -216,9 +220,9 @@ async function promptEmail() {
         
         const dataEmail = await resEmail.json();
         if (dataEmail.status === "SUCCESS") {
-            alert("✅ 郵件已發送！請檢查您的信箱 (含垃圾郵件夾)。");
+            alert("✅ 郵件已發送！請檢查您的信箱。");
         } else {
-            alert("❌ 發送失敗: " + dataEmail.error);
+            alert("❌ 發送失敗: " + (dataEmail.error || "未知錯誤"));
         }
 
     } catch (e) {
@@ -228,9 +232,15 @@ async function promptEmail() {
     }
 }
 
-// 更新 showLoading 支援文字參數
 function showLoading(show, text="處理中...") {
     const el = document.getElementById('loading');
     el.style.display = show ? 'flex' : 'none';
     el.querySelector('h5').innerText = text;
+}
+
+function downloadImage() {
+    const link = document.createElement('a');
+    link.href = `data:image/jpeg;base64,${resultPhotos[selectedResultBg]}`;
+    link.download = `id_photo_${Date.now()}.jpg`;
+    link.click();
 }
