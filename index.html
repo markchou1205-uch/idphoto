@@ -1,155 +1,242 @@
-:root {
-    --main-bg-color: #f8f9fa;
-    --sidebar-width: 280px;
-    --primary-color: #0d6efd;
-}
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 影像工作室 Pro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-body {
-    overflow-x: hidden;
-    background-color: var(--main-bg-color);
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
+<div class="d-flex" id="wrapper">
+    <div class="bg-white border-end" id="sidebar-wrapper">
+        <div class="sidebar-heading text-center py-4 primary-text fs-4 fw-bold text-uppercase border-bottom">
+            <i class="bi bi-camera-fill me-2"></i>AI Studio
+        </div>
+        <div class="list-group list-group-flush my-3">
+            <a href="#" class="list-group-item list-group-item-action bg-transparent second-text active" onclick="switchFeature('id-photo', this)">
+                <i class="bi bi-person-badge-fill me-2"></i>證件照製作
+            </a>
+            <a href="#" class="list-group-item list-group-item-action bg-transparent second-text" onclick="switchFeature('job-photo', this)">
+                <i class="bi bi-briefcase-fill me-2"></i>職場/求職照
+                <span class="badge bg-secondary ms-1" style="font-size: 0.6rem;">3090</span>
+            </a>
+            <a href="#" class="list-group-item list-group-item-action bg-transparent second-text" onclick="switchFeature('grad-photo', this)">
+                <i class="bi bi-mortarboard-fill me-2"></i>畢業學士照
+                <span class="badge bg-secondary ms-1" style="font-size: 0.6rem;">3090</span>
+            </a>
+            <a href="#" class="list-group-item list-group-item-action bg-transparent second-text" onclick="switchFeature('beauty', this)">
+                <i class="bi bi-magic me-2"></i>智能美顏
+            </a>
+            <a href="#" class="list-group-item list-group-item-action bg-transparent second-text" onclick="switchFeature('restore', this)">
+                <i class="bi bi-hourglass-split me-2"></i>老圖翻新
+                <span class="badge bg-secondary ms-1" style="font-size: 0.6rem;">3090</span>
+            </a>
+            <a href="#" class="list-group-item list-group-item-action bg-transparent second-text text-danger mt-5" onclick="location.reload()">
+                <i class="bi bi-power me-2"></i>重置系統
+            </a>
+        </div>
+    </div>
+    <div id="page-content-wrapper">
+        <nav class="navbar navbar-expand-lg navbar-light bg-transparent py-4 px-4">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-list fs-4 me-3" id="menu-toggle"></i>
+                <h2 class="fs-2 m-0" id="page-title">證件照製作</h2>
+            </div>
+        </nav>
 
-#wrapper {
-    display: flex;
-    width: 100%;
-    height: 100vh; /* 全螢幕高度 */
-    overflow: hidden;
-}
+        <div class="container-fluid px-4">
+            
+            <div id="feature-id-photo" class="feature-section">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body">
+                                <div id="panel-upload">
+                                    <h5 class="card-title text-muted mb-3">Step 1. 上傳照片</h5>
+                                    <div class="upload-box p-4 text-center border rounded bg-light">
+                                        <input type="file" id="fileInput" accept="image/*" hidden onchange="handleFileUpload(this)">
+                                        <button class="btn btn-primary mb-2" onclick="document.getElementById('fileInput').click()">
+                                            <i class="bi bi-folder2-open"></i> 選擇檔案
+                                        </button>
+                                        <div class="small text-muted">支援 JPG, PNG</div>
+                                    </div>
+                                </div>
 
-/* --- Sidebar --- */
-#sidebar-wrapper {
-    min-width: var(--sidebar-width);
-    max-width: var(--sidebar-width);
-    height: 100vh;
-    transition: margin 0.25s ease-out;
-    display: flex;
-    flex-direction: column;
-}
+                                <div id="panel-specs" class="d-none animate-fade">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h5 class="card-title text-muted">Step 2. 選擇規格</h5>
+                                        <button class="btn btn-sm btn-link text-decoration-none" onclick="location.reload()">重選</button>
+                                    </div>
+                                    <div id="specs-container" class="vstack gap-2"></div>
+                                    
+                                    <div class="mt-3">
+                                        <div id="spec-custom" class="spec-card p-2 border rounded text-center" onclick="toggleCustom()" style="cursor:pointer">
+                                            <i class="bi bi-pencil-square"></i> 自訂尺寸
+                                        </div>
+                                        <div id="custom-inputs" class="d-none mt-2 row g-1">
+                                            <div class="col"><input type="number" id="custom-w" class="form-control form-control-sm" placeholder="寬mm" oninput="updateCustom()"></div>
+                                            <div class="col"><input type="number" id="custom-h" class="form-control form-control-sm" placeholder="高mm" oninput="updateCustom()"></div>
+                                        </div>
+                                    </div>
 
-#sidebar-wrapper .sidebar-heading {
-    padding: 0.875rem 1.25rem;
-    font-size: 1.2rem;
-}
+                                    <button class="btn btn-primary w-100 mt-4 py-2 fw-bold shadow-sm" onclick="processImage()">
+                                        <i class="bi bi-lightning-charge-fill"></i> AI 自動製作
+                                    </button>
+                                    <div class="mt-2 text-center small text-muted" id="spec-desc"></div>
+                                </div>
 
-#sidebar-wrapper .list-group {
-    width: var(--sidebar-width);
-}
+                                <div id="panel-result" class="d-none animate-fade">
+                                    <h5 class="card-title text-muted mb-3">Step 3. 完成下載</h5>
+                                    <div class="d-flex justify-content-center gap-3 mb-3">
+                                        <div onclick="selectResult('white')" class="result-btn p-2 border rounded text-center active" id="res-white">
+                                            <img id="img-white" width="60" class="d-block mb-1 mx-auto rounded">
+                                            <small class="fw-bold">白底</small>
+                                        </div>
+                                        <div onclick="selectResult('blue')" class="result-btn p-2 border rounded text-center" id="res-blue">
+                                            <img id="img-blue" width="60" class="d-block mb-1 mx-auto rounded">
+                                            <small class="fw-bold">藍底</small>
+                                        </div>
+                                    </div>
 
-.list-group-item {
-    border: none;
-    padding: 20px 30px;
-    font-weight: 500;
-}
+                                    <div class="d-grid gap-2">
+                                        <button class="btn btn-outline-success" onclick="runCheck()"><i class="bi bi-shield-check"></i> 合規檢查</button>
+                                        <button class="btn btn-success" onclick="downloadImage()"><i class="bi bi-download"></i> 下載高清圖</button>
+                                        <button class="btn btn-dark" onclick="generateLayout()"><i class="bi bi-grid-3x3"></i> 下載 4x6 排版</button>
+                                        <button class="btn btn-outline-primary" onclick="toggleEmailInput()"><i class="bi bi-envelope"></i> 寄到信箱</button>
+                                        
+                                        <div id="email-group" class="d-none mt-2 p-2 bg-light rounded">
+                                            <div class="input-group input-group-sm">
+                                                <input type="email" id="user-email" class="form-control" placeholder="Email">
+                                                <button class="btn btn-primary" onclick="sendEmail()">發送</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-.list-group-item.active {
-    background-color: transparent;
-    color: var(--primary-color);
-    border-right: 4px solid var(--primary-color);
-    font-weight: bold;
-}
+                    <div class="col-md-8">
+                        <div class="preview-area bg-light rounded d-flex align-items-center justify-content-center border" style="height: 80vh; position: relative; overflow: hidden;">
+                            <div class="loading-overlay" id="loading">
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <div class="mt-2 fw-bold text-dark">處理中...</div>
+                            </div>
+                            
+                            <div class="image-wrapper shadow-lg" style="max-width: 90%; max-height: 90%;">
+                                <img id="previewImg" src="" class="d-none img-fluid rounded">
+                                <div id="cropMask" class="crop-mask d-none">
+                                    <div class="mask-label" id="maskLabel"></div>
+                                </div>
+                            </div>
+                            
+                            <div id="empty-msg" class="text-center text-muted opacity-50">
+                                <i class="bi bi-camera" style="font-size: 4rem;"></i>
+                                <p class="mt-2">請先上傳照片</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-/* 手機版隱藏側邊欄 */
-#wrapper.toggled #sidebar-wrapper {
-    margin-left: calc(-1 * var(--sidebar-width));
-}
+            <div id="feature-job-photo" class="feature-section d-none">
+                <div class="row text-center mt-5">
+                    <div class="col">
+                        <i class="bi bi-briefcase text-secondary" style="font-size: 5rem;"></i>
+                        <h3 class="mt-3">AI 職場換裝功能開發中</h3>
+                        <p class="text-muted">本功能將由 RTX 3090 驅動，提供專業西裝、套裝一鍵更換。</p>
+                        <button class="btn btn-outline-secondary" disabled>即將推出</button>
+                    </div>
+                </div>
+            </div>
 
-/* --- Page Content --- */
-#page-content-wrapper {
-    width: 100%;
-    height: 100vh;
-    overflow-y: auto; /* 讓內容區可滾動 */
-    display: flex;
-    flex-direction: column;
-}
+            <div id="feature-grad-photo" class="feature-section d-none">
+                <div class="row text-center mt-5">
+                    <div class="col">
+                        <i class="bi bi-mortarboard text-secondary" style="font-size: 5rem;"></i>
+                        <h3 class="mt-3">AI 畢業照功能開發中</h3>
+                        <p class="text-muted">即將支援學士、碩士、博士服裝與學位帽更換。</p>
+                    </div>
+                </div>
+            </div>
 
-/* --- ID Photo Components --- */
-.upload-box {
-    border: 2px dashed #dee2e6;
-    transition: all 0.3s;
-}
-.upload-box:hover {
-    border-color: var(--primary-color);
-    background-color: #e9ecef;
-}
+            <div id="feature-beauty" class="feature-section d-none">
+                <div class="row text-center mt-5">
+                    <div class="col">
+                        <i class="bi bi-magic text-secondary" style="font-size: 5rem;"></i>
+                        <h3 class="mt-3">智能美顏實驗室</h3>
+                        <p class="text-muted">提供磨皮、大眼、瘦臉等即時預覽功能。</p>
+                    </div>
+                </div>
+            </div>
 
-.spec-card {
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
-    padding: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-    background: white;
-}
-.spec-card:hover { transform: translateY(-2px); border-color: var(--primary-color); }
-.spec-card.active {
-    background-color: #e7f1ff;
-    border-color: var(--primary-color);
-    border-width: 2px;
-}
+            <div id="feature-restore" class="feature-section d-none">
+                <div class="row text-center mt-5">
+                    <div class="col">
+                        <i class="bi bi-hourglass-split text-secondary" style="font-size: 5rem;"></i>
+                        <h3 class="mt-3">老照片修復工程</h3>
+                        <p class="text-muted">利用 AI 修補破損、去除噪點並自動上色。</p>
+                    </div>
+                </div>
+            </div>
 
-/* Result Buttons */
-.result-btn {
-    cursor: pointer;
-    transition: all 0.2s;
-    background: white;
-}
-.result-btn.active {
-    border-color: var(--primary-color) !important;
-    background-color: #e7f1ff;
-    box-shadow: 0 0 10px rgba(13, 110, 253, 0.2);
-}
+        </div>
+    </div>
+</div>
 
-/* Crop Mask */
-.crop-mask {
-    position: absolute;
-    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7);
-    pointer-events: none;
-    z-index: 10;
-    border: 2px dashed rgba(255, 50, 50, 0.8);
-    transition: all 0.3s ease;
-}
+<div class="modal fade" id="checkModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-shield-check"></i> 規格檢查</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="check-results-list" class="list-group mb-3"></div>
+                <div class="alert alert-warning small">
+                    <i class="bi bi-exclamation-triangle"></i> <strong>注意：</strong> AI 判讀僅供參考，請以戶政單位審查為準。
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
+            </div>
+        </div>
+    </div>
+</div>
 
-.mask-label {
-    position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%);
-    background: rgba(255, 50, 50, 0.9); color: white;
-    padding: 2px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap;
-}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="main.js"></script>
+<script>
+    // 側邊欄切換邏輯 (內聯腳本處理 UI 切換，不影響主邏輯)
+    var el = document.getElementById("wrapper");
+    var toggleButton = document.getElementById("menu-toggle");
 
-/* Loading Overlay */
-.loading-overlay {
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(255, 255, 255, 0.9);
-    z-index: 50;
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
+    toggleButton.onclick = function () {
+        el.classList.toggle("toggled");
+    };
 
-.animate-fade {
-    animation: fadeIn 0.5s ease-in-out;
-}
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
+    function switchFeature(featureId, btn) {
+        // 1. 更新選單狀態
+        document.querySelectorAll('.list-group-item').forEach(el => el.classList.remove('active', 'text-primary'));
+        btn.classList.add('active');
+        
+        // 2. 更新標題
+        const titles = {
+            'id-photo': '證件照製作',
+            'job-photo': '職場/求職照',
+            'grad-photo': '畢業學士照',
+            'beauty': '智能美顏',
+            'restore': '老圖翻新'
+        };
+        document.getElementById('page-title').innerText = titles[featureId];
 
-/* RWD Adjustments */
-@media (min-width: 768px) {
-    #wrapper.toggled #sidebar-wrapper {
-        margin-left: 0; /* 電腦版切換行為相反 */
+        // 3. 切換顯示區塊
+        document.querySelectorAll('.feature-section').forEach(el => el.classList.add('d-none'));
+        document.getElementById('feature-' + featureId).classList.remove('d-none');
     }
-    #wrapper #sidebar-wrapper {
-        margin-left: 0;
-    }
-}
-@media (max-width: 768px) {
-    #sidebar-wrapper {
-        margin-left: calc(-1 * var(--sidebar-width)); /* 手機版預設隱藏 */
-    }
-    #wrapper.toggled #sidebar-wrapper {
-        margin-left: 0;
-    }
-}
+</script>
+</body>
+</html>
