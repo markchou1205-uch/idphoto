@@ -10,9 +10,7 @@ let currentLayoutBase64 = null;
 let currentFeature = 'id-photo';
 let isImageLoaded = false;
 
-// 初始化
 window.onload = function() {
-    // 預載規格列表
     specConfig = {
         "passport": { "name": "2吋大頭照", "width_mm": 35, "height_mm": 45 },
         "inch1": { "name": "1吋證件照", "width_mm": 28, "height_mm": 35 },
@@ -20,12 +18,10 @@ window.onload = function() {
         "visa_us": { "name": "美國簽證", "width_mm": 51, "height_mm": 51 }
     };
     renderSpecList();
-    // 預設選中
     setTimeout(() => selectSpec('passport'), 100);
 };
 
-// --- Navigation & Layout Logic ---
-
+// --- Navigation ---
 function goHome() {
     document.querySelectorAll('.nav-item-icon').forEach(el => el.classList.remove('active'));
     document.getElementById('dashboard-area').classList.remove('d-none');
@@ -37,7 +33,6 @@ function goHome() {
 
 function switchFeature(featureId, updateRightPanel = true) {
     currentFeature = featureId;
-
     document.querySelectorAll('.nav-item-icon').forEach(el => el.classList.remove('active'));
     const navEl = document.getElementById(`nav-${featureId}`);
     if(navEl) navEl.classList.add('active');
@@ -48,11 +43,8 @@ function switchFeature(featureId, updateRightPanel = true) {
     if (!panel) document.getElementById('panel-job-photo').classList.remove('d-none');
 
     if (updateRightPanel) {
-        if (isImageLoaded && featureId === 'id-photo') {
-            showWorkspace();
-        } else {
-            showIntro(featureId);
-        }
+        if (isImageLoaded && featureId === 'id-photo') showWorkspace();
+        else showIntro(featureId);
     }
 }
 
@@ -70,7 +62,6 @@ function showIntro(featureId) {
         'beauty': { title: '智能美顏', icon: 'bi-magic', desc: '磨皮、瘦臉、大眼，自然美化不失真。' },
         'restore': { title: '老圖翻新', icon: 'bi-hourglass-split', desc: '修復破損、去除噪點、黑白上色。' }
     };
-
     const data = content[featureId] || content['id-photo'];
     document.getElementById('intro-title').innerText = data.title;
     document.getElementById('intro-icon').className = `bi ${data.icon} fs-1 text-primary`;
@@ -81,31 +72,26 @@ function showWorkspace() {
     document.getElementById('dashboard-area').classList.add('d-none');
     document.getElementById('intro-area').classList.add('d-none');
     document.getElementById('workspace-area').classList.remove('d-none');
-    
     setTimeout(() => {
         if(currentSpecId === 'custom') updateCustom();
         else if(specConfig[currentSpecId]) drawMask(specConfig[currentSpecId].width_mm, specConfig[currentSpecId].height_mm);
     }, 100);
 }
 
-// --- File Upload & Logic ---
-
+// --- Logic ---
 function handleFileUpload(input) {
     if (!input.files.length) return;
     const reader = new FileReader();
     showLoading(true, "讀取照片中...");
     reader.onload = async function() {
         originalBase64 = reader.result;
-        const img = document.getElementById('previewImg');
-        img.src = originalBase64;
-        img.classList.remove('d-none');
-        
+        document.getElementById('previewImg').src = originalBase64;
+        document.getElementById('previewImg').classList.remove('d-none');
         isImageLoaded = true;
 
         document.querySelector('.upload-btn-wrapper').classList.add('d-none');
         document.getElementById('uploaded-status').classList.remove('d-none');
         document.getElementById('btn-process').classList.remove('d-none');
-
         showWorkspace();
         document.getElementById('cropMask').classList.remove('d-none');
         
@@ -114,14 +100,12 @@ function handleFileUpload(input) {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ image_base64: originalBase64 })
             });
-            
             if (res.ok) {
                 const data = await res.json();
                 faceData = data.found ? data : null;
                 if(data.specs) {
                     specConfig = data.specs;
                     renderSpecList();
-                    // 重新選擇當前規格以更新遮罩
                     selectSpec(currentSpecId); 
                 }
             }
@@ -136,11 +120,9 @@ function resetUpload() {
     document.getElementById('btn-process').classList.add('d-none');
     document.getElementById('result-section').classList.add('d-none');
     document.getElementById('specs-section').classList.remove('d-none');
-    
     document.getElementById('previewImg').classList.add('d-none');
     document.getElementById('cropMask').classList.add('d-none');
     isImageLoaded = false;
-    
     showIntro(currentFeature);
 }
 
@@ -152,45 +134,26 @@ function renderSpecList() {
         div.className = 'spec-card';
         div.id = `spec-${key}`;
         div.onclick = () => selectSpec(key);
-        
-        div.innerHTML = `
-            <div>
-                <div class="fw-bold" style="font-size: 0.95rem;">${val.name}</div>
-                <div class="text-muted" style="font-size: 0.75rem;">${val.width_mm} x ${val.height_mm} mm</div>
-            </div>
-            <i class="bi bi-check-circle-fill text-primary d-none check-icon"></i>
-        `;
+        div.innerHTML = `<div><div class="fw-bold" style="font-size: 0.95rem;">${val.name}</div><div class="text-muted" style="font-size: 0.75rem;">${val.width_mm} x ${val.height_mm} mm</div></div><i class="bi bi-check-circle-fill text-primary d-none check-icon"></i>`;
         container.appendChild(div);
     }
 }
 
-// 修正後的 selectSpec：增加防呆判斷
 function selectSpec(specId) {
     currentSpecId = specId;
-    
-    // 清除其他卡片的 active 狀態
     document.querySelectorAll('.spec-card').forEach(el => {
         el.classList.remove('active');
-        // 關鍵修正：先確認有沒有 check-icon 才去操作 classList
         const icon = el.querySelector('.check-icon');
         if (icon) icon.classList.add('d-none');
     });
-    
-    // 隱藏自訂輸入框
     document.getElementById('custom-inputs').classList.add('d-none');
-
-    // 啟用當前卡片
     const el = document.getElementById(`spec-${specId}`);
     if(el) {
         el.classList.add('active');
         const icon = el.querySelector('.check-icon');
         if (icon) icon.classList.remove('d-none');
     }
-    
-    // 更新遮罩
-    if(isImageLoaded && specConfig[specId]) {
-        drawMask(specConfig[specId].width_mm, specConfig[specId].height_mm);
-    }
+    if(isImageLoaded && specConfig[specId]) drawMask(specConfig[specId].width_mm, specConfig[specId].height_mm);
 }
 
 function toggleCustom() {
@@ -199,10 +162,7 @@ function toggleCustom() {
         const icon = el.querySelector('.check-icon');
         if (icon) icon.classList.add('d-none');
     });
-    
-    const customBtn = document.getElementById('spec-custom');
-    if(customBtn) customBtn.classList.add('active');
-
+    document.getElementById('spec-custom').classList.add('active');
     document.getElementById('custom-inputs').classList.remove('d-none');
     currentSpecId = 'custom';
     updateCustom();
@@ -222,11 +182,9 @@ function drawMask(mmW, mmH) {
     if (!img.naturalWidth) return;
     
     label.innerText = `${mmW}x${mmH}mm`;
-
     const scale = img.width / img.naturalWidth;
     let targetRatio = mmW / mmH;
-    let faceMult = 2.0; 
-    let topMargin = 0.12;
+    let faceMult = 2.0; let topMargin = 0.12;
 
     if (currentSpecId !== 'custom' && specConfig[currentSpecId]) {
         if(specConfig[currentSpecId].face_multiplier) faceMult = specConfig[currentSpecId].face_multiplier;
@@ -234,7 +192,6 @@ function drawMask(mmW, mmH) {
     }
 
     let cropW, cropH, cropX, cropY;
-
     if (faceData && faceData.found) {
         const realCropH = faceData.h * faceMult;
         const realCropW = realCropH * targetRatio;
@@ -242,21 +199,13 @@ function drawMask(mmW, mmH) {
         const realX = faceCx - realCropW / 2;
         const headTop = faceData.head_top_y || faceData.y;
         const realY = headTop - (realCropH * topMargin);
-        
-        cropW = realCropW * scale; 
-        cropH = realCropH * scale; 
-        cropX = realX * scale; 
-        cropY = realY * scale;
+        cropW = realCropW * scale; cropH = realCropH * scale; cropX = realX * scale; cropY = realY * scale;
     } else {
         cropH = img.height; cropW = cropH * targetRatio;
         if (cropW > img.width) { cropW = img.width; cropH = cropW / targetRatio; }
         cropX = (img.width - cropW) / 2; cropY = (img.height - cropH) / 2;
     }
-
-    mask.style.width = `${cropW}px`; 
-    mask.style.height = `${cropH}px`; 
-    mask.style.left = `${cropX}px`; 
-    mask.style.top = `${cropY}px`;
+    mask.style.width = `${cropW}px`; mask.style.height = `${cropH}px`; mask.style.left = `${cropX}px`; mask.style.top = `${cropY}px`;
     mask.classList.remove('d-none');
 }
 
@@ -277,11 +226,9 @@ async function processImage() {
         const data = await res.json();
         if (data.photos) {
             resultPhotos = data.photos;
-            
             document.getElementById('specs-section').classList.add('d-none');
             document.getElementById('result-section').classList.remove('d-none');
             document.getElementById('cropMask').classList.add('d-none');
-            
             document.getElementById('img-white').src = `data:image/jpeg;base64,${data.photos[0]}`;
             document.getElementById('img-blue').src = `data:image/jpeg;base64,${data.photos[1]}`;
             selectResult('white');
@@ -298,6 +245,54 @@ function selectResult(color) {
     document.getElementById('previewImg').src = `data:image/jpeg;base64,${resultPhotos[idx]}`;
 }
 
+// 修正後的合規檢查：增加錯誤顯示
+async function runCheck() {
+    if (!resultPhotos[selectedResultBg]) return;
+    showLoading(true, "AI 審查中...");
+    
+    try {
+        const res = await fetch(`${API_BASE_URL}/generate/check`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                image_base64: resultPhotos[selectedResultBg],
+                spec_id: currentSpecId
+            })
+        });
+        
+        const data = await res.json();
+        
+        // 如果後端有回傳 error，直接顯示
+        if (data.error) {
+            alert("後端錯誤: " + data.error);
+            return;
+        }
+
+        if (data.results) {
+            const list = document.getElementById('check-results-list');
+            list.innerHTML = '';
+            
+            data.results.forEach(item => {
+                let icon = 'bi-check-circle-fill text-success';
+                let bg = 'bg-light';
+                if (item.status === 'warning') { icon = 'bi-exclamation-triangle-fill text-warning'; bg = 'bg-warning-subtle'; }
+                if (item.status === 'fail') { icon = 'bi-x-circle-fill text-danger'; bg = 'bg-danger-subtle'; }
+                
+                const div = document.createElement('div');
+                div.className = `list-group-item d-flex justify-content-between align-items-center ${bg}`;
+                div.innerHTML = `<span><i class="bi ${icon} me-2"></i> ${item.item}</span><span class="badge bg-white text-dark border">${item.msg}</span>`;
+                list.appendChild(div);
+            });
+            
+            const modal = new bootstrap.Modal(document.getElementById('checkModal'));
+            modal.show();
+        }
+    } catch(e) { 
+        alert("檢查失敗，請確認後端服務正常。\n錯誤訊息: " + e.message); 
+    } finally { 
+        showLoading(false); 
+    }
+}
+
 function downloadImage() {
     const link = document.createElement('a');
     link.href = `data:image/jpeg;base64,${resultPhotos[selectedResultBg]}`;
@@ -305,7 +300,6 @@ function downloadImage() {
     link.click();
 }
 
-// 補回完整功能
 async function generateLayout() {
     showLoading(true, "排版生成中...");
     try {
@@ -322,14 +316,11 @@ async function generateLayout() {
             link.href = imgUrl;
             link.download = `layout_4x6_${Date.now()}.jpg`;
             link.click();
-        }
+        } else { alert(data.error || "排版失敗"); }
     } catch(e) { alert("排版錯誤"); } finally { showLoading(false); }
 }
 
-function toggleEmailInput() {
-    document.getElementById('email-group').classList.toggle('d-none');
-}
-
+function toggleEmailInput() { document.getElementById('email-group').classList.toggle('d-none'); }
 async function sendEmail() {
     const email = document.getElementById('user-email').value;
     if (!email || !email.includes("@")) { alert("請輸入有效的 Email"); return; }
@@ -344,7 +335,6 @@ async function sendEmail() {
             const dataLayout = await resLayout.json();
             imgToSend = dataLayout.layout_image;
         }
-        
         const resEmail = await fetch(`${API_BASE_URL}/send-email`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ email: email, image_base64: imgToSend })
@@ -359,10 +349,6 @@ async function sendEmail() {
 
 function showLoading(show, text="處理中...") {
     const el = document.getElementById('loading');
-    if(show) {
-        el.querySelector('div.text-dark').innerText = text;
-        el.style.display = 'flex';
-    } else {
-        el.style.display = 'none';
-    }
+    if(show) { el.querySelector('div.text-dark').innerText = text; el.style.display = 'flex'; }
+    else { el.style.display = 'none'; }
 }
