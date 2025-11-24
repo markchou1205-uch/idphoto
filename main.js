@@ -54,7 +54,7 @@ function showIntro(featureId) {
     const intro = document.getElementById('intro-area');
     intro.classList.remove('d-none');
     intro.className = "container py-5 h-100 d-flex align-items-center justify-content-center text-center animate-fade";
-    // ... (內容省略以節省篇幅，保持原樣)
+
     const content = {
         'id-photo': { title: '證件照製作', icon: 'bi-person-badge-fill', desc: '上傳生活照，AI 自動去背、裁切、排版。<br>支援護照、簽證、駕照等多國規格。' },
         'job-photo': { title: '職場求職照', icon: 'bi-briefcase-fill', desc: 'AI 智慧換裝，一鍵生成專業形象照。<br>(需 RTX 3090 算力支援)' },
@@ -88,13 +88,11 @@ function handleFileUpload(input) {
         document.getElementById('previewImg').src = originalBase64;
         document.getElementById('previewImg').classList.remove('d-none');
         isImageLoaded = true;
-
         document.querySelector('.upload-btn-wrapper').classList.add('d-none');
         document.getElementById('uploaded-status').classList.remove('d-none');
         document.getElementById('btn-process').classList.remove('d-none');
         showWorkspace();
         document.getElementById('cropMask').classList.remove('d-none');
-        
         try {
             const res = await fetch(`${API_BASE_URL}/generate/detect`, {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -114,9 +112,7 @@ function handleFileUpload(input) {
     reader.readAsDataURL(input.files[0]);
 }
 
-function resetUpload() {
-    location.reload(); // 簡單重置
-}
+function resetUpload() { location.reload(); }
 
 function renderSpecList() {
     const container = document.getElementById('specs-container');
@@ -172,17 +168,14 @@ function drawMask(mmW, mmH) {
     const mask = document.getElementById('cropMask');
     const label = document.getElementById('maskLabel');
     if (!img.naturalWidth) return;
-    
     label.innerText = `${mmW}x${mmH}mm`;
     const scale = img.width / img.naturalWidth;
     let targetRatio = mmW / mmH;
     let faceMult = 2.0; let topMargin = 0.12;
-
     if (currentSpecId !== 'custom' && specConfig[currentSpecId]) {
         if(specConfig[currentSpecId].face_multiplier) faceMult = specConfig[currentSpecId].face_multiplier;
         topMargin = specConfig[currentSpecId].top_margin;
     }
-
     let cropW, cropH, cropX, cropY;
     if (faceData && faceData.found) {
         const realCropH = faceData.h * faceMult;
@@ -237,6 +230,7 @@ function selectResult(color) {
     document.getElementById('previewImg').src = `data:image/jpeg;base64,${resultPhotos[idx]}`;
 }
 
+// 核心更新：智慧審查報告
 async function runCheck() {
     if (!resultPhotos[selectedResultBg]) return;
     showLoading(true, "AI 審查中...");
@@ -256,7 +250,53 @@ async function runCheck() {
         if (data.results) {
             const list = document.getElementById('check-results-list');
             list.innerHTML = '';
-            
+
+            // 統計數據
+            let failCount = 0;
+            let warningCount = 0;
+            let fixableCount = 0;
+            let passCount = 0;
+
+            data.results.forEach(item => {
+                if(item.status === 'fail') failCount++;
+                if(item.status === 'warning') warningCount++;
+                if(item.status === 'pass') passCount++;
+                if(item.fix_action) fixableCount++;
+            });
+
+            // 生成總結報告 (Summary Block)
+            let summaryHtml = '';
+            let totalIssues = failCount + warningCount;
+
+            if (totalIssues === 0) {
+                // 完美通過
+                summaryHtml = `
+                    <div class="alert alert-success border-0 shadow-sm mb-3 text-center">
+                        <i class="bi bi-check-circle-fill fs-3 d-block mb-2"></i>
+                        <h5 class="fw-bold">照片符合標準</h5>
+                        <p class="mb-0 small">太棒了！這張照片符合 AI 初步審查標準。</p>
+                        <div class="mt-2 text-muted" style="font-size: 0.75rem;">(註：仍需以戶政機關臨櫃審查為準)</div>
+                    </div>`;
+            } else {
+                if (fixableCount > 0) {
+                    // 有問題但可修復
+                    summaryHtml = `
+                        <div class="alert alert-primary border-0 shadow-sm mb-3">
+                            <h5 class="fw-bold text-primary"><i class="bi bi-magic me-2"></i>發現可修復的問題</h5>
+                            <p class="mb-1 small">經審查發現 <strong>${totalIssues}</strong> 個缺失，建議您使用下方的「AI 修復」按鈕進行調整。</p>
+                        </div>`;
+                } else {
+                    // 有問題且無法修復
+                    summaryHtml = `
+                        <div class="alert alert-danger border-0 shadow-sm mb-3">
+                            <h5 class="fw-bold text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>建議重新拍攝</h5>
+                            <p class="mb-1 small">經審查發現 <strong>${totalIssues}</strong> 個缺失，且部分無法透過修圖解決 (如頭部傾斜或五官遮擋)。</p>
+                        </div>`;
+                }
+            }
+            list.innerHTML = summaryHtml; // 插入總結
+
+            // 列表生成
             data.results.forEach(item => {
                 let icon = 'bi-check-circle-fill text-success';
                 let bg = 'bg-light';
@@ -265,13 +305,12 @@ async function runCheck() {
                 if (item.status === 'warning') { icon = 'bi-exclamation-triangle-fill text-warning'; bg = 'bg-warning-subtle'; }
                 if (item.status === 'fail') { icon = 'bi-x-circle-fill text-danger'; bg = 'bg-danger-subtle'; }
                 
-                // 動態生成修復按鈕
                 if (item.fix_action) {
-                    actionBtn = `<button class="btn btn-sm btn-outline-dark ms-2" onclick="applyFix('${item.fix_action}')"><i class="bi bi-magic"></i> 修復</button>`;
+                    actionBtn = `<button class="btn btn-sm btn-primary ms-2 shadow-sm" onclick="applyFix('${item.fix_action}')"><i class="bi bi-magic"></i> AI 修復</button>`;
                 }
 
                 const div = document.createElement('div');
-                div.className = `list-group-item d-flex justify-content-between align-items-center ${bg}`;
+                div.className = `list-group-item d-flex justify-content-between align-items-center ${bg} mb-1 border-0 rounded`;
                 div.innerHTML = `
                     <span><i class="bi ${icon} me-2"></i> ${item.item}</span>
                     <div class="d-flex align-items-center">
@@ -288,7 +327,6 @@ async function runCheck() {
 }
 
 async function applyFix(actionType) {
-    // 關閉 Modal
     const modalEl = document.getElementById('checkModal');
     const modal = bootstrap.Modal.getInstance(modalEl);
     if(modal) modal.hide();
@@ -304,12 +342,9 @@ async function applyFix(actionType) {
         });
         const data = await res.json();
         if(data.image_base64) {
-            // 更新當前照片
             resultPhotos[selectedResultBg] = data.image_base64;
-            // 更新畫面
             if(selectedResultBg === 0) document.getElementById('img-white').src = `data:image/jpeg;base64,${data.image_base64}`;
             else document.getElementById('img-blue').src = `data:image/jpeg;base64,${data.image_base64}`;
-            
             selectResult(selectedResultBg === 0 ? 'white' : 'blue');
             alert("✅ 修復完成！請重新執行合規檢查確認結果。");
         } else {
