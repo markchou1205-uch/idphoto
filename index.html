@@ -13,16 +13,25 @@
             display: flex; 
             align-items: center; 
             justify-content: center; 
-            background: #fff; 
+            background: #fff; /* 背景保持白色 */
             border-radius: 10px;
             overflow: hidden;
             position: relative;
             cursor: pointer;
             transition: all 0.3s;
+            padding: 10px; /* 增加內距，讓圖片不貼邊 */
         }
         .preview-box:hover { border-color: #0d6efd; box-shadow: 0 0 15px rgba(13, 110, 253, 0.2); }
         .preview-box.selected { border: 3px solid #0d6efd; background-color: #e7f1ff; }
-        .preview-box img { max-width: 100%; max-height: 300px; }
+        
+        /* --- 修改點：給圖片加上邊框 --- */
+        .preview-box img { 
+            max-width: 100%; 
+            max-height: 300px; 
+            border: 1px solid #dee2e6; /* 淺灰色實線邊框 */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); /* 輕微陰影讓它浮起來 */
+        }
+
         .step-card { background: white; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; padding: 20px; }
         .loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -40,14 +49,14 @@
 
 <div class="loading-overlay" id="loading">
     <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
-    <h4 class="mt-3 text-primary" id="loading-text">AI 正在修復與去背中...</h4>
-    <p class="text-muted">請稍候，這可能需要 15-30 秒</p>
+    <h4 class="mt-3 text-primary" id="loading-text">處理中...</h4>
+    <p class="text-muted">請稍候，AI 正在運算</p>
 </div>
 
 <div class="container py-5">
     <div class="text-center mb-5">
         <h1 class="fw-bold text-primary">📷 AI 智能證件照</h1>
-        <p class="text-muted">上傳自拍，一鍵生成標準證件照 (含美顏、去背、排版)</p>
+        <p class="text-muted">上傳自拍，一鍵生成標準證件照</p>
     </div>
 
     <div class="step-card">
@@ -59,23 +68,21 @@
     </div>
 
     <div class="step-card d-none" id="step2">
-        <h4 class="mb-3"><span class="step-badge">2</span>選擇滿意的底色</h4>
-        <p class="text-muted small">點擊下方圖片選擇您要使用的版本</p>
+        <h4 class="mb-3"><span class="step-badge">2</span>選擇底色</h4>
         <div class="row g-4">
             <div class="col-md-6">
                 <div class="preview-box" id="box-white" onclick="selectBackground('white')">
-                    <span class="text-muted">白底預覽</span>
+                    <span class="text-muted">載入中...</span>
                 </div>
                 <div class="text-center mt-2 fw-bold">白底 (護照/身分證)</div>
             </div>
             <div class="col-md-6">
                 <div class="preview-box" id="box-blue" onclick="selectBackground('blue')">
-                    <span class="text-muted">藍底預覽</span>
+                    <span class="text-muted">載入中...</span>
                 </div>
                 <div class="text-center mt-2 fw-bold">藍底 (履歷/證書)</div>
             </div>
         </div>
-        
         <div class="text-center mt-4">
             <button class="btn btn-success btn-lg px-5 disabled" id="btn-layout" onclick="generateLayout()">
                 🖨️ 製作 4x6 沖洗排版
@@ -86,17 +93,14 @@
     <div class="step-card d-none" id="step3">
         <h4 class="mb-3"><span class="step-badge">3</span>下載與列印</h4>
         <div class="alert alert-success">
-            <strong>排版完成！</strong> 此圖片為標準 4x6 英吋 (10x15cm)，請直接下載並送至超商列印。
+            <strong>排版完成！</strong> 圖片已加上邊框，可直接查看範圍。
         </div>
         <div class="text-center mb-3">
-            <img id="layout-result" class="img-fluid border rounded shadow-sm" style="max-height: 400px;">
+            <img id="layout-result" class="img-fluid border rounded shadow-sm" style="max-height: 400px; border: 1px solid #333;">
         </div>
         <div class="row g-2">
-            <div class="col-md-6 d-grid">
-                <a id="btn-download" class="btn btn-dark btn-lg">⬇️ 下載圖片</a>
-            </div>
-            <div class="col-md-6 d-grid">
-                <button class="btn btn-outline-primary btn-lg" onclick="alert('Email 功能尚未連結資料庫，請先使用下載功能。')">📧 寄到信箱</button>
+            <div class="col-md-12 d-grid">
+                <a id="btn-download" class="btn btn-dark btn-lg">⬇️ 下載排版圖片</a>
             </div>
         </div>
     </div>
@@ -104,12 +108,12 @@
 
 <script>
     // ================= CONFIG =================
-    // 請將此處替換為您的 Cloudflare Tunnel 網址 (主控機 Proxy)
+    // 請確認此網址正確
     const API_BASE_URL = "https://video.pdfsolution.dpdns.org"; 
     // ==========================================
 
-    let currentPhotoBase64 = ""; // 暫存選中的照片 (單張)
-    let photosData = []; // 暫存後端回傳的 [白底, 藍底]
+    let photosData = []; 
+    let selectedColor = "";
 
     function showLoading(show, text="處理中...") {
         const el = document.getElementById('loading');
@@ -119,53 +123,43 @@
 
     async function uploadAndProcess() {
         const fileInput = document.getElementById('fileInput');
-        if (!fileInput.files.length) {
-            alert('請先選擇一張照片！');
-            return;
-        }
+        if (!fileInput.files.length) { alert('請先選擇照片！'); return; }
 
-        showLoading(true, "AI 正在進行人臉修復與去背...");
+        showLoading(true, "AI 正在修復與去背 (約15-30秒)...");
         
         const file = fileInput.files[0];
         const reader = new FileReader();
 
         reader.onloadend = async function() {
-            const base64data = reader.result;
-            
             try {
-                // 呼叫後端 API
                 const response = await fetch(`${API_BASE_URL}/generate/preview`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
-                        image_base64: base64data,
+                        image_base64: reader.result,
                         spec_id: "TWN_PASSPORT",
-                        bg_color: "#FFFFFF" // 這裡主要觸發預覽邏輯
+                        bg_color: "#FFFFFF"
                     })
                 });
 
+                if (!response.ok) throw new Error("伺服器回應錯誤");
+                
                 const data = await response.json();
-
-                if (response.ok && data.photos) {
-                    // 顯示步驟 2
+                if (data.photos) {
+                    photosData = data.photos;
                     document.getElementById('step2').classList.remove('d-none');
                     document.getElementById('step3').classList.add('d-none');
                     
-                    // 儲存資料: photos[0] 是白底, photos[1] 是藍底
-                    photosData = data.photos;
-
-                    // 更新預覽圖
                     document.getElementById('box-white').innerHTML = `<img src="data:image/jpeg;base64,${data.photos[0]}">`;
                     document.getElementById('box-blue').innerHTML = `<img src="data:image/jpeg;base64,${data.photos[1]}">`;
                     
-                    // 滾動到步驟 2
                     document.getElementById('step2').scrollIntoView({ behavior: 'smooth' });
                 } else {
-                    alert('處理失敗: ' + (data.error || data.message));
+                    alert('處理失敗: ' + (data.error || "未知錯誤"));
                 }
             } catch (error) {
                 console.error(error);
-                alert('連線錯誤，請檢查網路或伺服器狀態。');
+                alert('連線失敗，請稍後再試。');
             } finally {
                 showLoading(false);
             }
@@ -174,62 +168,55 @@
     }
 
     function selectBackground(color) {
-        // 移除所有選中狀態
         document.querySelectorAll('.preview-box').forEach(el => el.classList.remove('selected'));
-        
-        // 設定當前選中
         if (color === 'white') {
             document.getElementById('box-white').classList.add('selected');
-            currentPhotoBase64 = photosData[0];
+            selectedColor = photosData[0];
         } else {
             document.getElementById('box-blue').classList.add('selected');
-            currentPhotoBase64 = photosData[1];
+            selectedColor = photosData[1];
         }
-
-        // 啟用排版按鈕
-        const btn = document.getElementById('btn-layout');
-        btn.classList.remove('disabled');
-        btn.innerText = `🖨️ 使用${color === 'white' ? '白底' : '藍底'}製作排版`;
+        document.getElementById('btn-layout').classList.remove('disabled');
     }
 
     async function generateLayout() {
-        if (!currentPhotoBase64) return;
-
-        showLoading(true, "正在生成 4x6 沖洗排版...");
+        if (!selectedColor) return;
+        showLoading(true, "正在生成排版大圖 (請耐心等待)...");
 
         try {
             const response = await fetch(`${API_BASE_URL}/generate/layout`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    image_base64: currentPhotoBase64,
+                    image_base64: selectedColor, // 傳送 Base64
                     layout_type: "2_inch_8",
                     paper_size: "4x6"
                 })
             });
+            
+            // 處理 Failed to fetch
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`伺服器錯誤: ${response.status} - ${errText}`);
+            }
 
             const data = await response.json();
-
             if (data.layout_image) {
-                // 顯示步驟 3
                 document.getElementById('step3').classList.remove('d-none');
-                
-                // 顯示排版圖
                 const imgUrl = `data:image/jpeg;base64,${data.layout_image}`;
                 document.getElementById('layout-result').src = imgUrl;
                 
-                // 設定下載按鈕
                 const dlBtn = document.getElementById('btn-download');
                 dlBtn.href = imgUrl;
-                dlBtn.download = `id_photo_layout_${Date.now()}.jpg`;
-
-                // 滾動到步驟 3
+                dlBtn.download = `layout_${Date.now()}.jpg`;
+                
                 document.getElementById('step3').scrollIntoView({ behavior: 'smooth' });
             } else {
-                alert("排版生成失敗");
+                alert("生成失敗: " + (data.error || "無資料回傳"));
             }
         } catch (e) {
-            alert("連線錯誤: " + e);
+            console.error(e);
+            alert("連線錯誤 (Failed to fetch): 資料量可能過大或網路不穩。請重新整理網頁再試一次。");
         } finally {
             showLoading(false);
         }
