@@ -1,78 +1,107 @@
 :root {
-    --main-bg-color: #f8f9fa;
-    --sidebar-width: 280px;
+    --sidebar-icon-width: 80px;
+    --sidebar-panel-width: 320px;
     --primary-color: #0d6efd;
 }
 
 body {
-    overflow-x: hidden;
-    background-color: var(--main-bg-color);
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
-
-#wrapper {
-    display: flex;
-    width: 100%;
-    height: 100vh; /* 全螢幕高度 */
+    background-color: #f8f9fa;
+    font-family: 'Segoe UI', sans-serif;
+    height: 100vh;
     overflow: hidden;
 }
 
-/* --- Sidebar --- */
-#sidebar-wrapper {
-    min-width: var(--sidebar-width);
-    max-width: var(--sidebar-width);
-    height: 100vh;
-    transition: margin 0.25s ease-out;
+/* --- Level 1: Icons Sidebar --- */
+#sidebar-icons {
+    width: var(--sidebar-icon-width);
+    min-width: var(--sidebar-icon-width);
+    z-index: 1020;
+    transition: transform 0.3s ease;
+}
+
+/* 隱藏狀態 (向左滑出) */
+#sidebar-icons.hidden {
+    transform: translateX(-100%);
+    margin-right: calc(-1 * var(--sidebar-icon-width));
+}
+
+.nav-item-icon {
+    width: 100%;
+    padding: 15px 0;
+    cursor: pointer;
+    color: rgba(255,255,255,0.6);
+    transition: all 0.2s;
+}
+.nav-item-icon:hover { color: white; background: rgba(255,255,255,0.1); }
+.nav-item-icon.active { color: #fff; background: var(--primary-color); border-left: 4px solid #fff; }
+.nav-item-icon i { font-size: 1.5rem; display: block; margin-bottom: 2px; }
+
+/* --- Level 2: Panel Sidebar --- */
+#sidebar-panels {
+    width: var(--sidebar-panel-width);
+    min-width: var(--sidebar-panel-width);
+    z-index: 1010;
+    transition: transform 0.3s ease, margin 0.3s ease;
+    background: #fff;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+}
+
+/* 隱藏狀態 */
+#sidebar-panels.hidden {
+    transform: translateX(-100%);
+    margin-right: calc(-1 * var(--sidebar-panel-width));
+}
+
+/* --- Toggle Button (Float) --- */
+#sidebar-toggle-btn {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 1030;
+    width: 50px;
+    height: 50px;
+    display: none; /* 預設隱藏 */
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+/* 當側邊欄隱藏時，顯示按鈕 */
+body.sidebar-collapsed #sidebar-toggle-btn {
     display: flex;
-    flex-direction: column;
 }
 
-#sidebar-wrapper .sidebar-heading {
-    padding: 0.875rem 1.25rem;
-    font-size: 1.2rem;
+/* --- Image & Mask Fix (關鍵修正) --- */
+/* 讓 wrapper 變成一個緊貼圖片的座標系 */
+.image-wrapper {
+    position: relative !important; 
+    display: inline-block; /* 或 block + width: fit-content */
+    line-height: 0; /* 消除圖片下方的微小留白 */
+    background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><rect width="5" height="5" fill="%23eee"/><rect x="5" y="5" width="5" height="5" fill="%23eee"/></svg>'); /* 透明背景格 */
 }
 
-#sidebar-wrapper .list-group {
-    width: var(--sidebar-width);
+/* 確保圖片是塊級元素，不會有 inline 的間隙 */
+.image-wrapper img {
+    display: block;
+    max-width: 100%;
 }
 
-.list-group-item {
-    border: none;
-    padding: 20px 30px;
-    font-weight: 500;
+.crop-mask {
+    position: absolute;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.85); /* 遮罩暗度 */
+    pointer-events: none;
+    z-index: 10;
+    border: 2px dashed #ff3333; /* 紅色虛線 */
+    transition: all 0.3s ease;
 }
 
-.list-group-item.active {
-    background-color: transparent;
-    color: var(--primary-color);
-    border-right: 4px solid var(--primary-color);
+.mask-label {
+    position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%);
+    background: #ff3333; color: white;
+    padding: 3px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap;
     font-weight: bold;
 }
 
-/* 手機版隱藏側邊欄 */
-#wrapper.toggled #sidebar-wrapper {
-    margin-left: calc(-1 * var(--sidebar-width));
-}
-
-/* --- Page Content --- */
-#page-content-wrapper {
-    width: 100%;
-    height: 100vh;
-    overflow-y: auto; /* 讓內容區可滾動 */
-    display: flex;
-    flex-direction: column;
-}
-
-/* --- ID Photo Components --- */
-.upload-box {
-    border: 2px dashed #dee2e6;
-    transition: all 0.3s;
-}
-.upload-box:hover {
-    border-color: var(--primary-color);
-    background-color: #e9ecef;
-}
-
+/* --- Components --- */
 .spec-card {
     border: 1px solid #dee2e6;
     border-radius: 8px;
@@ -81,75 +110,19 @@ body {
     transition: all 0.2s;
     background: white;
 }
-.spec-card:hover { transform: translateY(-2px); border-color: var(--primary-color); }
-.spec-card.active {
-    background-color: #e7f1ff;
-    border-color: var(--primary-color);
-    border-width: 2px;
-}
+.spec-card:hover { border-color: var(--primary-color); background: #f1f8ff; }
+.spec-card.active { border-color: var(--primary-color); background: #e7f1ff; box-shadow: 0 2px 5px rgba(13,110,253,0.1); }
 
-/* Result Buttons */
-.result-btn {
-    cursor: pointer;
-    transition: all 0.2s;
-    background: white;
-}
-.result-btn.active {
-    border-color: var(--primary-color) !important;
-    background-color: #e7f1ff;
-    box-shadow: 0 0 10px rgba(13, 110, 253, 0.2);
-}
+.result-btn { cursor: pointer; transition: 0.2s; background: #fff; }
+.result-btn.active { border-color: var(--primary-color) !important; background: #e7f1ff; }
 
-/* Crop Mask */
-.crop-mask {
-    position: absolute;
-    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7);
-    pointer-events: none;
-    z-index: 10;
-    border: 2px dashed rgba(255, 50, 50, 0.8);
-    transition: all 0.3s ease;
-}
-
-.mask-label {
-    position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%);
-    background: rgba(255, 50, 50, 0.9); color: white;
-    padding: 2px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap;
-}
-
-/* Loading Overlay */
 .loading-overlay {
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(255, 255, 255, 0.9);
-    z-index: 50;
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255, 255, 255, 0.95);
+    z-index: 2000;
     display: none;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    flex-direction: column; align-items: center; justify-content: center;
 }
 
-.animate-fade {
-    animation: fadeIn 0.5s ease-in-out;
-}
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* RWD Adjustments */
-@media (min-width: 768px) {
-    #wrapper.toggled #sidebar-wrapper {
-        margin-left: 0; /* 電腦版切換行為相反 */
-    }
-    #wrapper #sidebar-wrapper {
-        margin-left: 0;
-    }
-}
-@media (max-width: 768px) {
-    #sidebar-wrapper {
-        margin-left: calc(-1 * var(--sidebar-width)); /* 手機版預設隱藏 */
-    }
-    #wrapper.toggled #sidebar-wrapper {
-        margin-left: 0;
-    }
-}
+.animate-fade { animation: fadeIn 0.4s ease-in-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
