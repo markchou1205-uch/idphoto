@@ -3,376 +3,237 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 圖像客製化服務</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>AI 智能證件照服務</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f7f9fc; }
-        .service-tab.active { border-bottom: 3px solid #007bff; color: #007bff; font-weight: 600; }
-        .service-tab:not(.active):hover { color: #4a5568; }
-        .photo-specs-select { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #ccc; }
-        #image-container { position: relative; width: 100%; max-width: 500px; margin: 0 auto; }
-        #image-canvas { border: 2px solid #007bff; border-radius: 8px; margin-top: 10px; }
-        .edit-slider { width: 100%; height: 6px; background: #e0e7ff; border-radius: 3px; }
+        body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .preview-box { 
+            border: 2px dashed #ccc; 
+            min-height: 200px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            background: #fff; 
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .preview-box:hover { border-color: #0d6efd; box-shadow: 0 0 15px rgba(13, 110, 253, 0.2); }
+        .preview-box.selected { border: 3px solid #0d6efd; background-color: #e7f1ff; }
+        .preview-box img { max-width: 100%; max-height: 300px; }
+        .step-card { background: white; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; padding: 20px; }
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.9); z-index: 9999;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .step-badge {
+            background-color: #0d6efd; color: white; width: 30px; height: 30px;
+            border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+            margin-right: 10px; font-weight: bold;
+        }
     </style>
 </head>
-<body class="p-4 sm:p-8">
+<body>
 
-    <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-2xl p-6 sm:p-10">
-        <h1 class="text-3xl font-extrabold text-gray-900 mb-6 text-center">📸 AI 圖像客製化服務</h1>
-        
-        <!-- 服務切換標籤 -->
-        <div class="flex border-b mb-6 text-gray-500">
-            <button class="service-tab active px-4 py-2 text-sm" data-service="id-photo" onclick="switchService('id-photo')">證件照生成</button>
-            <button class="service-tab px-4 py-2 text-sm" data-service="job-photo" onclick="switchService('job-photo')">求職照/換裝</button>
-            <button class="service-tab px-4 py-2 text-sm" data-service="hair-style" onclick="switchService('hair-style')">變換髮型</button>
-        </div>
+<div class="loading-overlay" id="loading">
+    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+    <h4 class="mt-3 text-primary" id="loading-text">AI 正在修復與去背中...</h4>
+    <p class="text-muted">請稍候，這可能需要 15-30 秒</p>
+</div>
 
-        <!-- 警告/提示區 -->
-        <div id="status-message" class="bg-yellow-100 text-yellow-800 p-3 rounded-lg text-sm mb-6 hidden"></div>
-
-        <!-- 主內容區 -->
-        <div id="service-content" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            <!-- 檔案上傳與編輯區 (左側) -->
-            <div class="lg:col-span-2">
-                <h2 class="text-xl font-semibold mb-3 text-gray-700">上傳與編輯</h2>
-                
-                <!-- 圖片上傳 -->
-                <input type="file" id="fileInput" accept="image/*" class="mb-4 hidden" onchange="handleFileUpload()">
-                <button onclick="document.getElementById('fileInput').click()" 
-                        class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-lg transition duration-150">
-                    上傳您的照片
-                </button>
-
-                <!-- 圖像容器 -->
-                <div id="image-container" class="mt-4 bg-gray-100 border border-gray-300 rounded-lg p-2 text-center relative">
-                    <canvas id="image-canvas" class="w-full h-auto rounded-md hidden"></canvas>
-                    <p id="canvas-placeholder" class="py-10 text-gray-500">請先上傳圖片</p>
-                    
-                    <!-- 載入和錯誤提示 -->
-                    <div id="loading-overlay" class="absolute inset-0 bg-white bg-opacity-70 flex flex-col items-center justify-center rounded-lg hidden">
-                        <svg class="animate-spin h-8 w-8 text-blue-500 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span id="loading-text" class="text-gray-700 font-semibold">AI 審核中...</span>
-                    </div>
-                </div>
-                
-                <!-- 證件照專屬：裁剪工具提示 -->
-                <p id="crop-hint" class="text-xs text-gray-500 mt-2 hidden">請拖曳、縮放 Canvas 調整頭部位置和大小。</p>
-
-            </div>
-            
-            <!-- 控制面板 (右側) -->
-            <div id="control-panel" class="lg:col-span-1 space-y-6">
-                
-                <!-- 服務選單 -->
-                <div id="id-photo-controls">
-                    <h2 class="text-lg font-semibold mb-2">證件照規格</h2>
-                    <select id="spec-selector" class="photo-specs-select" onchange="updateSpecDescription()">
-                        <!-- 選項將由 JS 載入 -->
-                    </select>
-                    <p id="spec-description" class="text-xs text-gray-600 mt-1 h-10"></p>
-                </div>
-                
-                <!-- 美顏與修復滑桿 (模擬效果) -->
-                <div id="beauty-controls">
-                    <h2 class="text-lg font-semibold mb-3">美顏/修復 (預覽)</h2>
-                    
-                    <!-- 眼睛放大 -->
-                    <div>
-                        <label for="eyeSize" class="block text-sm font-medium text-gray-700">眼睛放大 (模擬)</label>
-                        <input type="range" id="eyeSize" min="0" max="10" value="0" class="edit-slider" oninput="applyCanvasEffects()">
-                    </div>
-                    
-                    <!-- 法令紋消除 (模擬) -->
-                    <div>
-                        <label for="wrinkle" class="block text-sm font-medium text-gray-700">消除皺紋/法令紋 (標記後生效)</label>
-                        <input type="range" id="wrinkle" min="0" max="100" value="0" class="edit-slider" disabled>
-                        <p class="text-xs text-gray-500 mt-1">此效果需後端 AI 處理，滑桿僅供參考強度。</p>
-                    </div>
-                </div>
-
-                <!-- 提交按鈕 -->
-                <button id="submit-btn" onclick="handleSubmit()" 
-                        class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition duration-150"
-                        disabled>
-                    ✅ 免費預覽 (低解析度)
-                </button>
-                <button id="download-btn" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-lg transition duration-150 mt-2 hidden" onclick="startPaidProcess()">
-                    💰 付費下載高解析度
-                </button>
-            </div>
-            
-        </div>
-
-        <!-- 結果顯示區 -->
-        <div id="result-display" class="mt-8 pt-6 border-t hidden">
-            <h2 class="text-xl font-semibold mb-4 text-center">生成結果預覽</h2>
-            <div id="result-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <!-- 預覽照片將顯示在這裡 -->
-            </div>
-        </div>
-
+<div class="container py-5">
+    <div class="text-center mb-5">
+        <h1 class="fw-bold text-primary">📷 AI 智能證件照</h1>
+        <p class="text-muted">上傳自拍，一鍵生成標準證件照 (含美顏、去背、排版)</p>
     </div>
 
+    <div class="step-card">
+        <h4 class="mb-3"><span class="step-badge">1</span>上傳照片</h4>
+        <input type="file" class="form-control form-control-lg" id="fileInput" accept="image/*">
+        <div class="d-grid gap-2 mt-3">
+            <button class="btn btn-primary btn-lg" onclick="uploadAndProcess()">🚀 開始製作證件照</button>
+        </div>
+    </div>
+
+    <div class="step-card d-none" id="step2">
+        <h4 class="mb-3"><span class="step-badge">2</span>選擇滿意的底色</h4>
+        <p class="text-muted small">點擊下方圖片選擇您要使用的版本</p>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="preview-box" id="box-white" onclick="selectBackground('white')">
+                    <span class="text-muted">白底預覽</span>
+                </div>
+                <div class="text-center mt-2 fw-bold">白底 (護照/身分證)</div>
+            </div>
+            <div class="col-md-6">
+                <div class="preview-box" id="box-blue" onclick="selectBackground('blue')">
+                    <span class="text-muted">藍底預覽</span>
+                </div>
+                <div class="text-center mt-2 fw-bold">藍底 (履歷/證書)</div>
+            </div>
+        </div>
+        
+        <div class="text-center mt-4">
+            <button class="btn btn-success btn-lg px-5 disabled" id="btn-layout" onclick="generateLayout()">
+                🖨️ 製作 4x6 沖洗排版
+            </button>
+        </div>
+    </div>
+
+    <div class="step-card d-none" id="step3">
+        <h4 class="mb-3"><span class="step-badge">3</span>下載與列印</h4>
+        <div class="alert alert-success">
+            <strong>排版完成！</strong> 此圖片為標準 4x6 英吋 (10x15cm)，請直接下載並送至超商列印。
+        </div>
+        <div class="text-center mb-3">
+            <img id="layout-result" class="img-fluid border rounded shadow-sm" style="max-height: 400px;">
+        </div>
+        <div class="row g-2">
+            <div class="col-md-6 d-grid">
+                <a id="btn-download" class="btn btn-dark btn-lg">⬇️ 下載圖片</a>
+            </div>
+            <div class="col-md-6 d-grid">
+                <button class="btn btn-outline-primary btn-lg" onclick="alert('Email 功能尚未連結資料庫，請先使用下載功能。')">📧 寄到信箱</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-    // --- 全域變數 ---
-    let SPECS = [];
-    let originalImage = null;
-    const canvas = document.getElementById('image-canvas');
-    const ctx = canvas.getContext('2d');
-    const statusMessage = document.getElementById('status-message');
-    const specSelector = document.getElementById('spec-selector');
-    const beautyControls = document.getElementById('beauty-controls');
-    
-    // 設置 Canvas 初始尺寸 (用於縮放)
-    const CANVAS_WIDTH = 500;
-    const CANVAS_HEIGHT = 400;
-    canvas.width = CANVAS_WIDTH;
-    canvas.height = CANVAS_HEIGHT;
-    
-    // !!! 核心修正點 1: 硬編碼 API 基礎 URL !!!
-    // 必須指向 Cloudflare Tunnel 的外部域名，讓 Vercel 知道去哪找 API
-    const API_BASE_URL = 'https://video.pdfsolution.dpdns.org'; // 請確認這是您的正確域名！
+    // ================= CONFIG =================
+    // 請將此處替換為您的 Cloudflare Tunnel 網址 (主控機 Proxy)
+    const API_BASE_URL = "https://video.pdfsolution.dpdns.org"; 
+    // ==========================================
 
+    let currentPhotoBase64 = ""; // 暫存選中的照片 (單張)
+    let photosData = []; // 暫存後端回傳的 [白底, 藍底]
 
-    document.addEventListener('DOMContentLoaded', async () => {
-        // 核心修正點 2: 從靜態檔案載入規格數據
-        try {
-            const response = await fetch('photo_specs.json');
-            SPECS = await response.json();
-            populateSpecSelector();
-        } catch (error) {
-            console.error("無法載入規格檔案:", error);
-            alert("錯誤：無法載入證件照規格，請檢查 photo_specs.json 檔案是否存在。");
+    function showLoading(show, text="處理中...") {
+        const el = document.getElementById('loading');
+        document.getElementById('loading-text').innerText = text;
+        el.style.display = show ? 'flex' : 'none';
+    }
+
+    async function uploadAndProcess() {
+        const fileInput = document.getElementById('fileInput');
+        if (!fileInput.files.length) {
+            alert('請先選擇一張照片！');
+            return;
         }
-        switchService('id-photo'); // 預設啟動證件照服務
-    });
-    
-    // --- 服務切換邏輯 ---
-    function switchService(serviceId) {
-        document.querySelectorAll('.service-tab').forEach(tab => {
-            tab.classList.remove('active');
-            if (tab.dataset.service === serviceId) {
-                tab.classList.add('active');
-            }
-        });
 
-        // 隱藏/顯示控制項
-        document.getElementById('id-photo-controls').style.display = serviceId === 'id-photo' ? 'block' : 'none';
-        beautyControls.style.display = (serviceId === 'id-photo' || serviceId === 'job-photo') ? 'block' : 'none';
+        showLoading(true, "AI 正在進行人臉修復與去背...");
         
-        // 變更按鈕文本
-        const submitBtn = document.getElementById('submit-btn');
-        if (serviceId === 'id-photo') {
-            submitBtn.innerText = '✅ 免費預覽 (基礎修復)';
-        } else {
-            submitBtn.innerText = '✨ 開始高階生成 (進階付費)';
-        }
-        
-        // 清除狀態和 Canvas
-        statusMessage.classList.add('hidden');
-        document.getElementById('result-display').classList.add('hidden');
-        drawPlaceholder();
-    }
-    
-    function drawPlaceholder() {
-        ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        document.getElementById('canvas-placeholder').style.display = 'block';
-        canvas.classList.add('hidden');
-    }
-
-    // --- 規格選擇邏輯 ---
-    function populateSpecSelector() {
-        specSelector.innerHTML = SPECS.map(spec => 
-            `<option value="${spec.country}">${spec.name} (${spec.photo_width_mm}x${spec.photo_height_mm}mm)</option>`
-        ).join('');
-        updateSpecDescription();
-    }
-    
-    function updateSpecDescription() {
-        const selectedCountry = specSelector.value;
-        const spec = SPECS.find(s => s.country === selectedCountry);
-        if (spec) {
-            document.getElementById('spec-description').innerHTML = 
-                `背景：<span class="font-bold">${spec.ai_rules.background_color}</span> | 規則：露耳：${spec.ai_rules.ear_exposure ? '是' : '否'}`;
-        }
-    }
-
-    // --- 檔案處理與 Canvas 繪圖邏輯 ---
-    function handleFileUpload() {
-        const file = document.getElementById('fileInput').files[0];
-        if (!file) return;
-
+        const file = fileInput.files[0];
         const reader = new FileReader();
-        reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
-                originalImage = img;
-                // 初始化 Canvas
-                canvas.classList.remove('hidden');
-                document.getElementById('canvas-placeholder').style.display = 'none';
-                document.getElementById('submit-btn').disabled = false;
-                
-                // 繪製原始圖像
-                drawOriginalImage();
-            };
-            img.src = e.target.result;
+
+        reader.onloadend = async function() {
+            const base64data = reader.result;
+            
+            try {
+                // 呼叫後端 API
+                const response = await fetch(`${API_BASE_URL}/generate/preview`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        image_base64: base64data,
+                        spec_id: "TWN_PASSPORT",
+                        bg_color: "#FFFFFF" // 這裡主要觸發預覽邏輯
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.photos) {
+                    // 顯示步驟 2
+                    document.getElementById('step2').classList.remove('d-none');
+                    document.getElementById('step3').classList.add('d-none');
+                    
+                    // 儲存資料: photos[0] 是白底, photos[1] 是藍底
+                    photosData = data.photos;
+
+                    // 更新預覽圖
+                    document.getElementById('box-white').innerHTML = `<img src="data:image/jpeg;base64,${data.photos[0]}">`;
+                    document.getElementById('box-blue').innerHTML = `<img src="data:image/jpeg;base64,${data.photos[1]}">`;
+                    
+                    // 滾動到步驟 2
+                    document.getElementById('step2').scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    alert('處理失敗: ' + (data.error || data.message));
+                }
+            } catch (error) {
+                console.error(error);
+                alert('連線錯誤，請檢查網路或伺服器狀態。');
+            } finally {
+                showLoading(false);
+            }
         };
         reader.readAsDataURL(file);
     }
-    
-    function drawOriginalImage() {
-        if (!originalImage) return;
-        
-        // 1. 清除
-        ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        
-        // 2. 計算比例以適應 Canvas
-        const ratio = Math.min(CANVAS_WIDTH / originalImage.width, CANVAS_HEIGHT / originalImage.height);
-        const newWidth = originalImage.width * ratio;
-        const newHeight = originalImage.height * ratio;
-        
-        // 3. 繪製到 Canvas 中央
-        const x = (CANVAS_WIDTH - newWidth) / 2;
-        const y = (CANVAS_HEIGHT - newHeight) / 2;
-        ctx.drawImage(originalImage, x, y, newWidth, newHeight);
 
-        // 4. 應用模擬效果 (例如眼睛放大)
-        applyCanvasEffects();
+    function selectBackground(color) {
+        // 移除所有選中狀態
+        document.querySelectorAll('.preview-box').forEach(el => el.classList.remove('selected'));
         
-        // 設置拖曳和縮放功能 (簡化：這裡僅為框架，實際裁剪需引入外部庫或複雜 JS 邏輯)
-        document.getElementById('crop-hint').classList.remove('hidden');
-    }
-    
-    function applyCanvasEffects() {
-        const eyeSize = parseInt(document.getElementById('eyeSize').value);
-        if (eyeSize > 0) {
-            statusMessage.innerText = `[模擬預覽] 眼睛放大強度: ${eyeSize}. 最終效果需後端處理。`;
-            statusMessage.classList.remove('hidden');
+        // 設定當前選中
+        if (color === 'white') {
+            document.getElementById('box-white').classList.add('selected');
+            currentPhotoBase64 = photosData[0];
         } else {
-            statusMessage.classList.add('hidden');
+            document.getElementById('box-blue').classList.add('selected');
+            currentPhotoBase64 = photosData[1];
         }
+
+        // 啟用排版按鈕
+        const btn = document.getElementById('btn-layout');
+        btn.classList.remove('disabled');
+        btn.innerText = `🖨️ 使用${color === 'white' ? '白底' : '藍底'}製作排版`;
     }
 
-    // --- 提交與 API 邏輯 ---
-    async function handleSubmit() {
-        const currentService = document.querySelector('.service-tab.active').dataset.service;
-        const submitBtn = document.getElementById('submit-btn');
-        const loadingOverlay = document.getElementById('loading-overlay');
-        const downloadBtn = document.getElementById('download-btn');
-        
-        submitBtn.disabled = true;
-        downloadBtn.classList.add('hidden');
-        loadingOverlay.classList.remove('hidden');
-        document.getElementById('loading-text').innerText = 'AI 審核與修復中...';
+    async function generateLayout() {
+        if (!currentPhotoBase64) return;
+
+        showLoading(true, "正在生成 4x6 沖洗排版...");
 
         try {
-            // 獲取 Canvas 最終圖像 (包含前端裁剪和模擬變形)
-            const finalImageURL = canvas.toDataURL('image/jpeg', 0.9);
-            const base64Image = finalImageURL.split(',')[1];
-            
-            let targetEndpoint = '';
-            let payload = {};
-
-            if (currentService === 'id-photo') {
-                // 證件照：發送到免費預覽端點
-                const selectedSpec = specSelector.value;
-                targetEndpoint = '/generate/preview'; 
-                payload = { 
-                    image_base64: base64Image,
-                    spec_id: selectedSpec,
-                    edit_params: { eye_size: document.getElementById('eyeSize').value } 
-                };
-            } else if (currentService === 'job-photo') {
-                // 求職照：直接進入付費高階處理
-                targetEndpoint = '/generate/paid';
-                payload = { 
-                    image_base64: base64Image,
-                    style_id: 'standard_business'
-                };
-            } else {
-                return;
-            }
-
-            // !!! 核心修正點 3: 使用完整的外部 URL 呼叫 API !!!
-            const response = await fetch(API_BASE_URL + targetEndpoint, {
+            const response = await fetch(`${API_BASE_URL}/generate/layout`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({
+                    image_base64: currentPhotoBase64,
+                    layout_type: "2_inch_8",
+                    paper_size: "4x6"
+                })
             });
 
             const data = await response.json();
-            
-            if (!response.ok || data.error) {
-                 // I. 嚴重不合格拒絕
-                 if (data.status === 'REJECTED') {
-                    statusMessage.innerText = `🚨 嚴重不合格：${data.message}。請重拍！`;
-                    statusMessage.classList.remove('hidden', 'bg-yellow-100', 'text-yellow-800');
-                    statusMessage.classList.add('bg-red-100', 'text-red-800');
-                    return;
-                 }
-                 // II. 中度不合格詢問
-                 if (data.status === 'NEEDS_CONFIRMATION') {
-                    statusMessage.innerText = `⚠️ 中度不合格：${data.message}。AI 可修補，是否付費修補？`;
-                    statusMessage.classList.remove('hidden');
-                    downloadBtn.classList.remove('hidden');
-                    downloadBtn.innerText = '修補並下載 (付費)';
-                    return;
-                 }
-                 
-                 throw new Error(data.error || "後端處理失敗");
-            }
-            
-            // III. 成功或低度不合格自動修復完成
-            if (data.status === 'OK' || data.status === 'AUTO_FIXED') {
-                displayResults(data.photos, data.message);
-                downloadBtn.classList.remove('hidden');
-                downloadBtn.innerText = '💰 付費下載高解析度';
-                statusMessage.innerText = data.message || '✅ 預覽生成成功。';
-                statusMessage.classList.remove('hidden', 'bg-red-100', 'text-red-800');
-                statusMessage.classList.add('bg-green-100', 'text-green-800');
-            }
 
+            if (data.layout_image) {
+                // 顯示步驟 3
+                document.getElementById('step3').classList.remove('d-none');
+                
+                // 顯示排版圖
+                const imgUrl = `data:image/jpeg;base64,${data.layout_image}`;
+                document.getElementById('layout-result').src = imgUrl;
+                
+                // 設定下載按鈕
+                const dlBtn = document.getElementById('btn-download');
+                dlBtn.href = imgUrl;
+                dlBtn.download = `id_photo_layout_${Date.now()}.jpg`;
 
-        } catch (error) {
-            statusMessage.innerText = "❌ 請求失敗: " + error.message;
-            statusMessage.classList.remove('hidden', 'bg-yellow-100', 'text-yellow-800');
-            statusMessage.classList.add('bg-red-100', 'text-red-800');
+                // 滾動到步驟 3
+                document.getElementById('step3').scrollIntoView({ behavior: 'smooth' });
+            } else {
+                alert("排版生成失敗");
+            }
+        } catch (e) {
+            alert("連線錯誤: " + e);
         } finally {
-            submitBtn.disabled = false;
-            loadingOverlay.classList.add('hidden');
+            showLoading(false);
         }
     }
-    
-    function displayResults(photos, message) {
-        const photoGrid = document.getElementById('result-grid');
-        photoGrid.innerHTML = '';
-        
-        photos.forEach((base64Str, index) => {
-            const item = document.createElement('div');
-            item.className = 'photo-item';
-            
-            const img = document.createElement('img');
-            img.src = 'data:image/jpeg;base64,' + base64Str;
-            
-            const p = document.createElement('p');
-            p.innerText = `預覽 #${index + 1}`;
-            
-            item.appendChild(img);
-            item.appendChild(p);
-            photoGrid.appendChild(item);
-        });
-        
-        document.getElementById('result-display').classList.remove('hidden');
-    }
-    
-    function startPaidProcess() {
-        alert("這裡將啟動付費流程並調用 /generate/paid 端點...");
-    }
-
 </script>
 
 </body>
