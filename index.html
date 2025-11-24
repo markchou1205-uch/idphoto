@@ -1,154 +1,155 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 證件照 Pro V5</title>
-    <link rel="icon" href="data:,">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
+:root {
+    --main-bg-color: #f8f9fa;
+    --sidebar-width: 280px;
+    --primary-color: #0d6efd;
+}
 
-<!-- Modal: 檢查結果 -->
-<div class="modal fade" id="checkModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header bg-primary text-white">
-        <h5 class="modal-title"><i class="bi bi-shield-check"></i> 證件照合規性檢查</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <div id="check-results-list" class="list-group mb-3">
-            <!-- JS 動態填入 -->
-        </div>
-        <div class="alert alert-warning small">
-            <i class="bi bi-exclamation-triangle"></i> <strong>免責聲明：</strong><br>
-            本檢查係依據 <a href="https://www.ris.gov.tw/app/portal/187" target="_blank">內政部戶政司國民身分證相片規格</a> 之規定由 AI 進行模擬審查。<br>
-            AI 判讀僅供參考，是否合格仍以主管機關（戶政事務所、外交部領事事務局）臨櫃審查結果為準。
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
-      </div>
-    </div>
-  </div>
-</div>
+body {
+    overflow-x: hidden;
+    background-color: var(--main-bg-color);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
 
-<div class="main-container">
-    <!-- 左側：控制面板 -->
-    <div class="sidebar">
-        <div class="d-flex align-items-center mb-4"><h3 class="fw-bold text-primary m-0">📷 AI 證件照 Pro</h3></div>
-        
-        <!-- Step 1 -->
-        <div id="panel-upload">
-            <label class="section-label">Step 1. 上傳照片</label>
-            <div class="upload-box">
-                <input type="file" id="fileInput" accept="image/*" hidden onchange="handleFileUpload(this)">
-                <button class="btn btn-primary mb-2" onclick="document.getElementById('fileInput').click()">📁 選擇檔案</button>
-                <div class="small text-muted">支援 JPG, PNG</div>
-            </div>
-        </div>
+#wrapper {
+    display: flex;
+    width: 100%;
+    height: 100vh; /* 全螢幕高度 */
+    overflow: hidden;
+}
 
-        <!-- Step 2 -->
-        <div id="panel-specs" class="d-none">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <label class="section-label">Step 2. 選擇用途</label>
-                <button class="btn btn-sm btn-link" onclick="location.reload()">重選</button>
-            </div>
-            
-            <div id="specs-container"></div>
+/* --- Sidebar --- */
+#sidebar-wrapper {
+    min-width: var(--sidebar-width);
+    max-width: var(--sidebar-width);
+    height: 100vh;
+    transition: margin 0.25s ease-out;
+    display: flex;
+    flex-direction: column;
+}
 
-            <div id="spec-custom" class="spec-card" onclick="toggleCustom()">
-                <div class="fw-bold">✏️ 自訂尺寸</div>
-            </div>
-            <div id="custom-inputs" class="d-none mt-2 mb-3 p-3 bg-light rounded border">
-                <div class="row g-2">
-                    <div class="col"><input type="number" id="custom-w" class="form-control form-control-sm" placeholder="寬mm" oninput="updateCustom()"></div>
-                    <div class="col"><input type="number" id="custom-h" class="form-control form-control-sm" placeholder="高mm" oninput="updateCustom()"></div>
-                </div>
-            </div>
+#sidebar-wrapper .sidebar-heading {
+    padding: 0.875rem 1.25rem;
+    font-size: 1.2rem;
+}
 
-            <button class="btn btn-primary btn-lg w-100 mt-4 shadow-sm" onclick="processImage()">⚡ 開始製作</button>
-            <div class="mt-3 text-center small text-muted" id="spec-desc"></div>
-        </div>
+#sidebar-wrapper .list-group {
+    width: var(--sidebar-width);
+}
 
-        <!-- Step 3 -->
-        <div id="panel-result" class="d-none">
-            <label class="section-label">Step 3. 完成下載</label>
-            
-            <!-- 預覽切換 -->
-            <div class="d-flex justify-content-center gap-3 mb-4 bg-white p-3 rounded shadow-sm border">
-                <div onclick="selectResult('white')" class="result-box" id="res-white">
-                    <img id="img-white" width="110" class="d-block"><div class="text-center small py-1 bg-light fw-bold">白底</div>
-                </div>
-                <div onclick="selectResult('blue')" class="result-box" id="res-blue">
-                    <img id="img-blue" width="110" class="d-block"><div class="text-center small py-1 bg-light fw-bold">藍底</div>
-                </div>
-            </div>
+.list-group-item {
+    border: none;
+    padding: 20px 30px;
+    font-weight: 500;
+}
 
-            <!-- 按鈕群 -->
-            <div class="d-grid gap-2">
-                <!-- 新增：檢查按鈕 -->
-                <button class="btn btn-outline-success fw-bold" onclick="runCheck()">
-                    <i class="bi bi-shield-check"></i> 檢查是否符合規定
-                </button>
+.list-group-item.active {
+    background-color: transparent;
+    color: var(--primary-color);
+    border-right: 4px solid var(--primary-color);
+    font-weight: bold;
+}
 
-                <button class="btn btn-success" onclick="downloadImage()">
-                    <i class="bi bi-download"></i> 下載單張高清圖
-                    <div class="small opacity-75" id="res-info-single">解析度偵測中...</div>
-                </button>
-                
-                <button class="btn btn-dark" onclick="generateLayout()">
-                    <i class="bi bi-grid-3x3"></i> 預覽並下載 4x6 排版
-                    <div class="small opacity-75">1800 x 1200 px (300 DPI)</div>
-                </button>
-                
-                <button class="btn btn-outline-primary mt-2" onclick="toggleEmailInput()">
-                    <i class="bi bi-envelope"></i> 將照片寄到我的信箱
-                </button>
+/* 手機版隱藏側邊欄 */
+#wrapper.toggled #sidebar-wrapper {
+    margin-left: calc(-1 * var(--sidebar-width));
+}
 
-                <div id="email-group" class="d-none mt-2 p-3 bg-light border rounded animate-fade">
-                    <label class="form-label small fw-bold">輸入 Email 地址：</label>
-                    <div class="input-group mb-2">
-                        <input type="email" id="user-email" class="form-control" placeholder="example@gmail.com">
-                        <button class="btn btn-primary" onclick="sendEmail()">發送</button>
-                    </div>
-                    <div class="small text-muted">將發送 4x6 排版圖至您的信箱。</div>
-                </div>
-                
-                <hr class="my-2">
-                <button class="btn btn-outline-secondary btn-sm" onclick="location.reload()">
-                    <i class="bi bi-arrow-repeat"></i> 製作下一張
-                </button>
-            </div>
-        </div>
-    </div>
+/* --- Page Content --- */
+#page-content-wrapper {
+    width: 100%;
+    height: 100vh;
+    overflow-y: auto; /* 讓內容區可滾動 */
+    display: flex;
+    flex-direction: column;
+}
 
-    <!-- 右側：預覽區 -->
-    <div class="preview-area">
-        <div class="loading-overlay" id="loading">
-            <div class="spinner-border text-primary mb-3"></div>
-            <h5 class="fw-bold">處理中...</h5>
-        </div>
-        <div class="image-wrapper">
-            <img id="previewImg" src="" class="d-none">
-            <div id="cropMask" class="crop-mask d-none">
-                <div class="mask-border top"></div>
-                <div class="mask-border bottom"></div>
-                <div class="mask-border left"></div>
-                <div class="mask-border right"></div>
-                <div class="mask-label" id="maskLabel"></div>
-            </div>
-        </div>
-        <div id="empty-msg" class="text-center text-muted opacity-50">
-            <div style="font-size: 5rem;">📷</div><h4 class="mt-3">請上傳照片</h4>
-        </div>
-    </div>
-</div>
+/* --- ID Photo Components --- */
+.upload-box {
+    border: 2px dashed #dee2e6;
+    transition: all 0.3s;
+}
+.upload-box:hover {
+    border-color: var(--primary-color);
+    background-color: #e9ecef;
+}
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="main.js"></script>
-</body>
-</html>
+.spec-card {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: white;
+}
+.spec-card:hover { transform: translateY(-2px); border-color: var(--primary-color); }
+.spec-card.active {
+    background-color: #e7f1ff;
+    border-color: var(--primary-color);
+    border-width: 2px;
+}
+
+/* Result Buttons */
+.result-btn {
+    cursor: pointer;
+    transition: all 0.2s;
+    background: white;
+}
+.result-btn.active {
+    border-color: var(--primary-color) !important;
+    background-color: #e7f1ff;
+    box-shadow: 0 0 10px rgba(13, 110, 253, 0.2);
+}
+
+/* Crop Mask */
+.crop-mask {
+    position: absolute;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7);
+    pointer-events: none;
+    z-index: 10;
+    border: 2px dashed rgba(255, 50, 50, 0.8);
+    transition: all 0.3s ease;
+}
+
+.mask-label {
+    position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%);
+    background: rgba(255, 50, 50, 0.9); color: white;
+    padding: 2px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    z-index: 50;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.animate-fade {
+    animation: fadeIn 0.5s ease-in-out;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* RWD Adjustments */
+@media (min-width: 768px) {
+    #wrapper.toggled #sidebar-wrapper {
+        margin-left: 0; /* 電腦版切換行為相反 */
+    }
+    #wrapper #sidebar-wrapper {
+        margin-left: 0;
+    }
+}
+@media (max-width: 768px) {
+    #sidebar-wrapper {
+        margin-left: calc(-1 * var(--sidebar-width)); /* 手機版預設隱藏 */
+    }
+    #wrapper.toggled #sidebar-wrapper {
+        margin-left: 0;
+    }
+}
