@@ -54,7 +54,7 @@ function showIntro(featureId) {
     const intro = document.getElementById('intro-area');
     intro.classList.remove('d-none');
     intro.className = "container py-5 h-100 d-flex align-items-center justify-content-center text-center animate-fade";
-
+    // ... (內容省略以節省篇幅，保持原樣)
     const content = {
         'id-photo': { title: '證件照製作', icon: 'bi-person-badge-fill', desc: '上傳生活照，AI 自動去背、裁切、排版。<br>支援護照、簽證、駕照等多國規格。' },
         'job-photo': { title: '職場求職照', icon: 'bi-briefcase-fill', desc: 'AI 智慧換裝，一鍵生成專業形象照。<br>(需 RTX 3090 算力支援)' },
@@ -115,15 +115,7 @@ function handleFileUpload(input) {
 }
 
 function resetUpload() {
-    document.querySelector('.upload-btn-wrapper').classList.remove('d-none');
-    document.getElementById('uploaded-status').classList.add('d-none');
-    document.getElementById('btn-process').classList.add('d-none');
-    document.getElementById('result-section').classList.add('d-none');
-    document.getElementById('specs-section').classList.remove('d-none');
-    document.getElementById('previewImg').classList.add('d-none');
-    document.getElementById('cropMask').classList.add('d-none');
-    isImageLoaded = false;
-    showIntro(currentFeature);
+    location.reload(); // 簡單重置
 }
 
 function renderSpecList() {
@@ -245,7 +237,6 @@ function selectResult(color) {
     document.getElementById('previewImg').src = `data:image/jpeg;base64,${resultPhotos[idx]}`;
 }
 
-// 修正後的合規檢查：增加錯誤顯示
 async function runCheck() {
     if (!resultPhotos[selectedResultBg]) return;
     showLoading(true, "AI 審查中...");
@@ -260,12 +251,7 @@ async function runCheck() {
         });
         
         const data = await res.json();
-        
-        // 如果後端有回傳 error，直接顯示
-        if (data.error) {
-            alert("後端錯誤: " + data.error);
-            return;
-        }
+        if (data.error) { alert("後端錯誤: " + data.error); return; }
 
         if (data.results) {
             const list = document.getElementById('check-results-list');
@@ -274,23 +260,62 @@ async function runCheck() {
             data.results.forEach(item => {
                 let icon = 'bi-check-circle-fill text-success';
                 let bg = 'bg-light';
+                let actionBtn = '';
+
                 if (item.status === 'warning') { icon = 'bi-exclamation-triangle-fill text-warning'; bg = 'bg-warning-subtle'; }
                 if (item.status === 'fail') { icon = 'bi-x-circle-fill text-danger'; bg = 'bg-danger-subtle'; }
                 
+                // 動態生成修復按鈕
+                if (item.fix_action) {
+                    actionBtn = `<button class="btn btn-sm btn-outline-dark ms-2" onclick="applyFix('${item.fix_action}')"><i class="bi bi-magic"></i> 修復</button>`;
+                }
+
                 const div = document.createElement('div');
                 div.className = `list-group-item d-flex justify-content-between align-items-center ${bg}`;
-                div.innerHTML = `<span><i class="bi ${icon} me-2"></i> ${item.item}</span><span class="badge bg-white text-dark border">${item.msg}</span>`;
+                div.innerHTML = `
+                    <span><i class="bi ${icon} me-2"></i> ${item.item}</span>
+                    <div class="d-flex align-items-center">
+                        <span class="badge bg-white text-dark border me-1">${item.msg}</span>
+                        ${actionBtn}
+                    </div>
+                `;
                 list.appendChild(div);
             });
-            
             const modal = new bootstrap.Modal(document.getElementById('checkModal'));
             modal.show();
         }
-    } catch(e) { 
-        alert("檢查失敗，請確認後端服務正常。\n錯誤訊息: " + e.message); 
-    } finally { 
-        showLoading(false); 
-    }
+    } catch(e) { alert("檢查失敗: " + e.message); } finally { showLoading(false); }
+}
+
+async function applyFix(actionType) {
+    // 關閉 Modal
+    const modalEl = document.getElementById('checkModal');
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    if(modal) modal.hide();
+
+    showLoading(true, "AI 修復中...");
+    try {
+        const res = await fetch(`${API_BASE_URL}/generate/fix`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                image_base64: resultPhotos[selectedResultBg],
+                action: actionType
+            })
+        });
+        const data = await res.json();
+        if(data.image_base64) {
+            // 更新當前照片
+            resultPhotos[selectedResultBg] = data.image_base64;
+            // 更新畫面
+            if(selectedResultBg === 0) document.getElementById('img-white').src = `data:image/jpeg;base64,${data.image_base64}`;
+            else document.getElementById('img-blue').src = `data:image/jpeg;base64,${data.image_base64}`;
+            
+            selectResult(selectedResultBg === 0 ? 'white' : 'blue');
+            alert("✅ 修復完成！請重新執行合規檢查確認結果。");
+        } else {
+            alert("修復失敗: " + (data.error || "未知錯誤"));
+        }
+    } catch(e) { alert("連線錯誤"); } finally { showLoading(false); }
 }
 
 function downloadImage() {
