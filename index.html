@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 智能證件照 Pro</title>
+    <title>AI 證件照 Pro</title>
     <link rel="icon" href="data:,">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -13,17 +13,26 @@
         .preview-area { flex: 1; background: #e9ecef; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
         .image-wrapper { position: relative; display: inline-block; box-shadow: 0 20px 50px rgba(0,0,0,0.3); line-height: 0; border-radius: 4px; overflow: hidden; }
         .image-wrapper img { max-height: 85vh; max-width: 100%; display: block; }
+        
+        /* 遮罩 */
         .crop-mask {
-            position: absolute; border: 2px solid rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7);
-            pointer-events: none; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); z-index: 5;
+            position: absolute;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7);
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            z-index: 5;
         }
-        .crop-mask::before { content: ""; position: absolute; top: 33%; left: 0; right: 0; border-top: 1px solid rgba(255,255,255,0.3); }
-        .crop-mask::after { content: ""; position: absolute; top: 66%; left: 0; right: 0; border-top: 1px solid rgba(255,255,255,0.3); }
+        /* 頭頂線 (黃色虛線) */
+        .head-line { position: absolute; top: 0; left: 0; right: 0; border-top: 1px dashed yellow; }
+        .head-line::after { content: "頭頂 (含髮)"; color: yellow; font-size: 10px; position: absolute; right: 0; top: -15px; }
+        
+        /* 下巴線 (綠色虛線) */
+        .chin-line { position: absolute; bottom: 0; left: 0; right: 0; border-bottom: 1px dashed #0f0; }
         
         .spec-card { cursor: pointer; border: 1px solid #dee2e6; border-radius: 12px; padding: 15px; margin-bottom: 10px; transition: all 0.2s; background: #fff; }
         .spec-card:hover { border-color: #0d6efd; background: #f8f9fa; transform: translateY(-2px); }
         .spec-card.active { border-color: #0d6efd; background: #e7f1ff; border-width: 2px; box-shadow: 0 4px 10px rgba(13, 110, 253, 0.1); }
-        
         .result-box { border: 3px solid transparent; margin: 5px; cursor: pointer; border-radius: 8px; overflow: hidden; transition: all 0.2s; }
         .result-box:hover { transform: scale(1.05); }
         .result-box.selected { border-color: #0d6efd; box-shadow: 0 0 15px rgba(13,110,253,0.4); transform: scale(1.05); }
@@ -51,24 +60,24 @@
                 <button class="btn btn-sm btn-link text-decoration-none" onclick="resetApp()">重選</button>
             </div>
             
-            <div id="spec-passport" class="spec-card" onclick="selectSpec('passport', 0.77, 0.75, '2吋大頭照 (3.5x4.5cm)')">
+            <div id="spec-passport" class="spec-card" onclick="selectSpec('passport')">
                 <div class="fw-bold">🇹🇼 2吋大頭照 (護照/身分證)</div>
-                <div class="small text-muted mt-1">3.5 x 4.5 cm | 頭部比例 70-80%</div>
+                <div class="small text-muted mt-1">3.5 x 4.5 cm | 頭大 (符合規定)</div>
             </div>
             
-            <div id="spec-resume" class="spec-card" onclick="selectSpec('resume', 0.89, 0.6, '2吋半身照 (4.2x4.7cm)')">
+            <div id="spec-resume" class="spec-card" onclick="selectSpec('resume')">
                 <div class="fw-bold">🏥 2吋半身照 (健保/履歷)</div>
-                <div class="small text-muted mt-1">4.2 x 4.7 cm | 頭部比例 一般</div>
+                <div class="small text-muted mt-1">4.2 x 4.7 cm | 含肩膀</div>
             </div>
 
-            <div id="spec-inch1" class="spec-card" onclick="selectSpec('inch1', 0.8, 0.6, '1吋證件照 (2.8x3.5cm)')">
-                <div class="fw-bold">🚗 1吋證件照 (駕照/身障)</div>
-                <div class="small text-muted mt-1">2.8 x 3.5 cm | 頭部比例 一般</div>
+            <div id="spec-inch1" class="spec-card" onclick="selectSpec('inch1')">
+                <div class="fw-bold">🚗 1吋證件照 (駕照)</div>
+                <div class="small text-muted mt-1">2.8 x 3.5 cm</div>
             </div>
             
-            <div id="spec-visa_us" class="spec-card" onclick="selectSpec('visa_us', 1.0, 0.6, '美國簽證 (5x5cm)')">
+            <div id="spec-visa_us" class="spec-card" onclick="selectSpec('visa_us')">
                 <div class="fw-bold">🇺🇸 美國簽證</div>
-                <div class="small text-muted mt-1">5.0 x 5.0 cm | 頭部比例 50-70%</div>
+                <div class="small text-muted mt-1">5.0 x 5.0 cm</div>
             </div>
 
             <div id="spec-custom" class="spec-card" onclick="toggleCustom()">
@@ -113,7 +122,10 @@
         </div>
         <div class="image-wrapper" id="imgWrapper">
             <img id="previewImg" src="" class="d-none">
-            <div id="cropMask" class="crop-mask d-none"></div>
+            <div id="cropMask" class="crop-mask d-none">
+                <div class="head-line"></div>
+                <div class="chin-line"></div>
+            </div>
         </div>
         <div id="empty-msg" class="text-center text-muted opacity-50">
             <div style="font-size: 5rem;">📷</div><h4 class="mt-3">請在左側上傳照片</h4>
@@ -125,8 +137,9 @@
     const API_BASE_URL = "https://video.pdfsolution.dpdns.org"; 
     let originalBase64 = "";
     let faceData = null; 
-    let currentRatio = 0.77;
-    let currentHeadFill = 0.75; // 新增：頭部佔比參數
+    let specConfig = {}; // 存後端回傳的設定
+    let currentSpecId = "passport";
+    let currentCustomRatio = 0.77;
     let resultPhotos = [];
     let selectedResultBg = 0;
 
@@ -134,7 +147,7 @@
         if (!input.files.length) return;
         const file = input.files[0];
         const reader = new FileReader();
-        showLoading(true, "讀取照片...");
+        showLoading(true, "偵測人臉中...");
         reader.onload = async function() {
             originalBase64 = reader.result;
             const img = document.getElementById('previewImg');
@@ -148,28 +161,31 @@
                     body: JSON.stringify({ image_base64: originalBase64 })
                 });
                 const data = await res.json();
-                faceData = data.found ? data : null;
+                if(data.found) faceData = data;
+                if(data.specs) specConfig = data.specs; // 儲存後端設定
                 
                 document.getElementById('panel-upload').classList.add('d-none');
                 document.getElementById('panel-specs').classList.remove('d-none');
-                // 預設選 2吋大頭
-                selectSpec('passport', 0.77, 0.75, '2吋大頭照 (3.5x4.5cm)');
+                selectSpec('passport');
             } catch (err) { alert("連線錯誤"); } finally { showLoading(false); }
         };
         reader.readAsDataURL(file);
     }
 
-    // 選擇規格函數 (新增 headFill 參數)
-    function selectSpec(type, ratio, headFill, desc) {
-        currentRatio = ratio;
-        currentHeadFill = headFill;
-        document.getElementById('spec-desc').innerText = `預覽模式：${desc}`;
+    function selectSpec(specId) {
+        currentSpecId = specId;
         
+        // UI 更新
         document.querySelectorAll('.spec-card').forEach(el => el.classList.remove('active'));
-        const target = document.getElementById(`spec-${type}`);
+        const target = document.getElementById(`spec-${specId}`);
         if(target) target.classList.add('active');
         
-        if (type !== 'custom') document.getElementById('custom-inputs').classList.add('d-none');
+        if (specId !== 'custom') {
+            document.getElementById('custom-inputs').classList.add('d-none');
+            if (specConfig[specId]) {
+                document.getElementById('spec-desc').innerText = `標準：${specConfig[specId].name}`;
+            }
+        }
         drawMask();
     }
 
@@ -177,6 +193,7 @@
         document.getElementById('custom-inputs').classList.remove('d-none');
         document.querySelectorAll('.spec-card').forEach(el => el.classList.remove('active'));
         document.getElementById('spec-custom').classList.add('active');
+        currentSpecId = 'custom';
         updateCustom();
     }
 
@@ -184,8 +201,8 @@
         const w = parseFloat(document.getElementById('custom-w').value);
         const h = parseFloat(document.getElementById('custom-h').value);
         if (w && h) {
-            currentRatio = w / h;
-            currentHeadFill = 0.65; // 自訂預設適中
+            currentCustomRatio = w / h;
+            document.getElementById('spec-desc').innerText = `自訂：${w}x${h}mm`;
             drawMask();
         }
     }
@@ -197,33 +214,41 @@
         const scale = img.width / img.naturalWidth;
         
         let cropW, cropH, cropX, cropY;
+        
+        // 取得當前規格的參數 (跟後端邏輯同步)
+        let targetRatio, faceMult, topOffset;
+        
+        if (currentSpecId === 'custom') {
+            targetRatio = currentCustomRatio;
+            faceMult = 2.5;
+            topOffset = 0.12;
+        } else if (specConfig[currentSpecId]) {
+            const conf = specConfig[currentSpecId];
+            targetRatio = conf.ratio;
+            faceMult = conf.face_multiplier;
+            topOffset = conf.top_offset;
+        } else {
+            return; // 資料未載入
+        }
 
         if (faceData) {
-            // 模擬後端邏輯
-            // crop_h = face_h / head_fill_ratio
-            const safeHeadRatio = Math.max(currentHeadFill, 0.3);
-            const realCropH = faceData.h / safeHeadRatio;
-            const realCropW = realCropH * currentRatio;
+            // 模擬後端 V2 裁切邏輯
+            const realCropH = faceData.h * faceMult;
+            const realCropW = realCropH * targetRatio;
             
             const faceCx = faceData.x + faceData.w / 2;
-            const eyeY = faceData.y + faceData.h * 0.4;
-            
-            // 垂直定位
-            let topMargin = 0.12;
-            if (currentHeadFill > 0.7) topMargin = 0.08; // 大頭照留少一點
-            
-            const realY = faceData.y - (realCropH * topMargin); // 簡化預覽定位
             const realX = faceCx - realCropW / 2;
+            const realY = faceData.y - (realCropH * topOffset);
             
             cropW = realCropW * scale;
             cropH = realCropH * scale;
             cropX = realX * scale;
             cropY = realY * scale;
         } else {
-            const realH = img.naturalHeight;
+            // 沒人臉：居中
             cropH = img.height; 
-            cropW = cropH * currentRatio;
-            if (cropW > img.width) { cropW = img.width; cropH = cropW / currentRatio; }
+            cropW = cropH * targetRatio;
+            if (cropW > img.width) { cropW = img.width; cropH = cropW / targetRatio; }
             cropX = (img.width - cropW) / 2;
             cropY = (img.height - cropH) / 2;
         }
@@ -237,15 +262,14 @@
     window.addEventListener('resize', drawMask);
 
     async function processImage() {
-        showLoading(true, "AI 正在處理...");
+        showLoading(true, "AI 製作中...");
         try {
             const res = await fetch(`${API_BASE_URL}/generate/preview`, {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
-                // 傳送 head_ratio 給後端
                 body: JSON.stringify({ 
                     image_base64: originalBase64,
-                    target_ratio: currentRatio,
-                    head_ratio: currentHeadFill
+                    spec_id: currentSpecId,
+                    custom_ratio: currentCustomRatio
                 })
             });
             const data = await res.json();
