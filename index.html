@@ -4,137 +4,171 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI 智能證件照 (Pro)</title>
+    <link rel="icon" href="data:,">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f0f2f5; height: 100vh; overflow: hidden; }
+        body { background-color: #f0f2f5; height: 100vh; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
         .main-container { height: 100vh; display: flex; }
         
         /* 左側控制欄 */
-        .sidebar { width: 400px; background: white; padding: 30px; overflow-y: auto; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
+        .sidebar { width: 400px; background: white; padding: 30px; overflow-y: auto; border-right: 1px solid #ddd; display: flex; flex-direction: column; box-shadow: 2px 0 10px rgba(0,0,0,0.05); z-index: 10; }
         
         /* 右側預覽區 */
         .preview-area { flex: 1; background: #e9ecef; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
         
-        /* 圖片容器 (用於遮罩定位) */
-        .image-wrapper { position: relative; display: inline-block; box-shadow: 0 10px 30px rgba(0,0,0,0.2); line-height: 0; }
-        .image-wrapper img { max-height: 80vh; max-width: 100%; }
+        /* 圖片容器 */
+        .image-wrapper { position: relative; display: inline-block; box-shadow: 0 20px 50px rgba(0,0,0,0.3); line-height: 0; border-radius: 4px; overflow: hidden; }
+        .image-wrapper img { max-height: 85vh; max-width: 100%; display: block; }
         
         /* 遮罩層 */
         .crop-mask {
             position: absolute;
-            border: 2px dashed rgba(255, 255, 255, 0.8);
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6); /* 讓框框外面變黑 */
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7); /* 讓框框外面變黑 */
             pointer-events: none;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            z-index: 5;
         }
-        /* 遮罩上的導引線 (頭頂線) */
-        .crop-mask::after {
-            content: "頭頂位置"; position: absolute; top: 10%; left: 0; right: 0; 
-            border-top: 1px dotted rgba(255,255,0,0.7); color: yellow; font-size: 12px; text-align: center;
-        }
-
-        .spec-card { cursor: pointer; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 10px; transition: all 0.2s; }
-        .spec-card:hover { border-color: #0d6efd; background: #f8f9fa; }
-        .spec-card.active { border-color: #0d6efd; background: #e7f1ff; border-width: 2px; }
+        /* 輔助線 */
+        .crop-mask::before { content: ""; position: absolute; top: 33%; left: 0; right: 0; border-top: 1px solid rgba(255,255,255,0.3); }
+        .crop-mask::after { content: ""; position: absolute; top: 66%; left: 0; right: 0; border-top: 1px solid rgba(255,255,255,0.3); }
         
-        .result-box { border: 2px solid #ccc; margin: 5px; cursor: pointer; }
-        .result-box.selected { border-color: #0d6efd; box-shadow: 0 0 10px rgba(13,110,253,0.3); }
+        /* 頭頂安全線 (黃色) */
+        .head-line {
+            position: absolute; top: 10%; left: 0; right: 0;
+            border-top: 1px dashed yellow;
+            text-align: center; color: yellow; font-size: 10px;
+            pointer-events: none;
+        }
 
-        .loading-overlay { position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(255,255,255,0.8); z-index: 10; display: none; flex-direction: column; align-items: center; justify-content: center; }
+        .spec-card { cursor: pointer; border: 1px solid #dee2e6; border-radius: 12px; padding: 15px; margin-bottom: 10px; transition: all 0.2s; background: #fff; }
+        .spec-card:hover { border-color: #0d6efd; background: #f8f9fa; transform: translateY(-2px); }
+        .spec-card.active { border-color: #0d6efd; background: #e7f1ff; border-width: 2px; box-shadow: 0 4px 10px rgba(13, 110, 253, 0.1); }
+        
+        .result-box { border: 3px solid transparent; margin: 5px; cursor: pointer; border-radius: 8px; overflow: hidden; transition: all 0.2s; }
+        .result-box:hover { transform: scale(1.05); }
+        .result-box.selected { border-color: #0d6efd; box-shadow: 0 0 15px rgba(13,110,253,0.4); transform: scale(1.05); }
+
+        .loading-overlay { 
+            position: absolute; top:0; left:0; right:0; bottom:0; 
+            background: rgba(255,255,255,0.9); z-index: 20; 
+            display: none; flex-direction: column; align-items: center; justify-content: center; 
+        }
     </style>
 </head>
 <body>
 
 <div class="main-container">
     <div class="sidebar">
-        <h3 class="fw-bold text-primary mb-4">📷 AI 證件照</h3>
+        <div class="d-flex align-items-center mb-4">
+            <h3 class="fw-bold text-primary m-0">📷 AI 證件照 Pro</h3>
+        </div>
         
         <div id="panel-upload">
-            <label class="form-label fw-bold">1. 上傳照片</label>
-            <input type="file" class="form-control mb-3" id="fileInput" accept="image/*">
-            <div class="alert alert-info small">
-                請上傳正面、五官清晰、光線充足的照片。背景不限。
+            <label class="form-label fw-bold text-muted text-uppercase small ls-1">Step 1. 上傳照片</label>
+            <div class="card border-dashed p-4 text-center bg-light mb-3">
+                <input type="file" class="form-control" id="fileInput" accept="image/*" style="display: none;" onchange="handleFileUpload(this)">
+                <button class="btn btn-primary mb-2" onclick="document.getElementById('fileInput').click()">📁 選擇檔案</button>
+                <div class="small text-muted">支援 JPG, PNG</div>
+            </div>
+            <div class="alert alert-secondary small">
+                <i class="bi bi-info-circle"></i> 建議使用白牆背景，正面拍攝，光線充足。
             </div>
         </div>
 
         <div id="panel-specs" class="d-none">
-            <hr>
-            <label class="form-label fw-bold">2. 請選擇用途</label>
-            
-            <div class="spec-card" onclick="selectSpec('passport', 0.77, '台灣護照/身分證 (2吋)')">
-                <div class="fw-bold">台灣護照 / 身分證</div>
-                <div class="small text-muted">3.5cm x 4.5cm (大頭照)</div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label fw-bold text-muted text-uppercase small">Step 2. 選擇用途</label>
+                <button class="btn btn-sm btn-link text-decoration-none" onclick="resetApp()">重選照片</button>
             </div>
             
-            <div class="spec-card" onclick="selectSpec('resume', 0.82, '履歷/駕照 (半身)')">
-                <div class="fw-bold">履歷表 / 駕照</div>
-                <div class="small text-muted">3.5cm x 4.5cm (半身照)</div>
+            <div id="spec-passport" class="spec-card" onclick="selectSpec('passport', 0.77, '台灣護照 / 身分證')">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="fw-bold">🇹🇼 台灣護照 / 身分證</div>
+                    <span class="badge bg-primary rounded-pill">推薦</span>
+                </div>
+                <div class="small text-muted mt-1">3.5cm x 4.5cm (大頭照標準)</div>
             </div>
             
-            <div class="spec-card" onclick="selectSpec('visa_us', 1.0, '美國簽證 (5x5)')">
-                <div class="fw-bold">美國簽證</div>
-                <div class="small text-muted">5.1cm x 5.1cm (正方形)</div>
+            <div id="spec-resume" class="spec-card" onclick="selectSpec('resume', 0.82, '履歷 / 駕照')">
+                <div class="fw-bold">🚗 履歷表 / 駕照</div>
+                <div class="small text-muted mt-1">3.5cm x 4.5cm (半身照標準)</div>
+            </div>
+            
+            <div id="spec-visa_us" class="spec-card" onclick="selectSpec('visa_us', 1.0, '美國簽證')">
+                <div class="fw-bold">🇺🇸 美國簽證</div>
+                <div class="small text-muted mt-1">5.1cm x 5.1cm (正方形)</div>
             </div>
 
-            <div class="spec-card" onclick="toggleCustom()">
+            <div id="spec-custom" class="spec-card" onclick="toggleCustom()">
                 <div class="fw-bold">✏️ 自訂尺寸</div>
-                <div class="small text-muted">自行輸入寬高</div>
+                <div class="small text-muted">自行輸入寬高 (mm)</div>
             </div>
 
-            <div id="custom-inputs" class="d-none mt-2 mb-3 p-2 bg-light rounded">
+            <div id="custom-inputs" class="d-none mt-2 mb-3 p-3 bg-light rounded border">
                 <div class="row g-2">
                     <div class="col">
-                        <input type="number" id="custom-w" class="form-control" placeholder="寬(mm)" oninput="updateCustom()">
+                        <label class="small text-muted">寬 (mm)</label>
+                        <input type="number" id="custom-w" class="form-control form-control-sm" value="35" oninput="updateCustom()">
                     </div>
                     <div class="col">
-                        <input type="number" id="custom-h" class="form-control" placeholder="高(mm)" oninput="updateCustom()">
+                        <label class="small text-muted">高 (mm)</label>
+                        <input type="number" id="custom-h" class="form-control form-control-sm" value="45" oninput="updateCustom()">
                     </div>
                 </div>
             </div>
 
             <div class="mt-4 d-grid gap-2">
-                <button class="btn btn-primary btn-lg" onclick="processImage()">⚡ 送出製作</button>
-                <button class="btn btn-outline-secondary" onclick="resetApp()">🔄 換一張圖</button>
+                <button class="btn btn-primary btn-lg shadow-sm" onclick="processImage()">
+                    ⚡ 開始製作 <small class="ms-1 opacity-75">(約15秒)</small>
+                </button>
             </div>
             
-            <div class="mt-3 text-center small text-muted" id="spec-desc">
-                請選擇上方規格以預覽裁切範圍
+            <div class="mt-3 text-center small text-muted bg-light p-2 rounded" id="spec-desc">
+                正在等待選擇...
             </div>
         </div>
 
         <div id="panel-result" class="d-none">
-            <hr>
-            <label class="form-label fw-bold">3. 製作完成</label>
-            <div class="d-flex justify-content-center mb-3">
-                <div onclick="selectResult('white')" class="result-box p-1" id="res-white">
-                    <img id="img-white" width="100">
-                    <div class="text-center small">白底</div>
+            <label class="form-label fw-bold text-muted text-uppercase small">Step 3. 完成</label>
+            
+            <div class="d-flex justify-content-center gap-3 mb-4 bg-white p-3 rounded shadow-sm border">
+                <div onclick="selectResult('white')" class="result-box" id="res-white">
+                    <img id="img-white" width="110" class="d-block">
+                    <div class="text-center small py-1 bg-light fw-bold">白底</div>
                 </div>
-                <div onclick="selectResult('blue')" class="result-box p-1" id="res-blue">
-                    <img id="img-blue" width="100">
-                    <div class="text-center small">藍底</div>
+                <div onclick="selectResult('blue')" class="result-box" id="res-blue">
+                    <img id="img-blue" width="110" class="d-block">
+                    <div class="text-center small py-1 bg-light fw-bold">藍底</div>
                 </div>
             </div>
-            <button class="btn btn-success w-100 mb-2" onclick="downloadImage()">⬇️ 下載單張大圖</button>
-            <button class="btn btn-dark w-100" onclick="generateLayout()">🖨️ 製作 4x6 排版</button>
-            <button class="btn btn-link w-100 mt-2" onclick="resetApp()">重新製作</button>
+            
+            <div class="d-grid gap-2">
+                <button class="btn btn-success" onclick="downloadImage()">⬇️ 下載單張高清圖</button>
+                <button class="btn btn-dark" onclick="generateLayout()">🖨️ 下載 4x6 排版沖洗圖</button>
+                <button class="btn btn-outline-secondary mt-2" onclick="resetApp()">🔄 製作下一張</button>
+            </div>
         </div>
     </div>
 
     <div class="preview-area">
         <div class="loading-overlay" id="loading">
-            <div class="spinner-border text-primary mb-2"></div>
-            <div id="loading-text">處理中...</div>
+            <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;"></div>
+            <h5 class="fw-bold text-dark">AI 正在運算中...</h5>
+            <div id="loading-text" class="text-muted">正在進行人臉修復、去背與裁切</div>
         </div>
 
         <div class="image-wrapper" id="imgWrapper">
             <img id="previewImg" src="" class="d-none">
-            <div id="cropMask" class="crop-mask d-none"></div>
+            <div id="cropMask" class="crop-mask d-none">
+                <div class="head-line">頭頂預留區</div>
+            </div>
         </div>
         
-        <div id="empty-msg" class="text-muted">
-            <h1 style="font-size: 4rem;">📷</h1>
-            <p>請在左側上傳照片</p>
+        <div id="empty-msg" class="text-center text-muted opacity-50">
+            <div style="font-size: 5rem;">📷</div>
+            <h4 class="mt-3">請在左側上傳照片</h4>
+            <p>支援即時預覽裁切範圍</p>
         </div>
     </div>
 </div>
@@ -148,10 +182,10 @@
     let resultPhotos = []; // [white, blue]
     let selectedResultBg = 0; // 0=white, 1=blue
 
-    // 1. 上傳與人臉偵測
-    document.getElementById('fileInput').addEventListener('change', async function(e) {
-        if (!e.target.files.length) return;
-        const file = e.target.files[0];
+    // 1. 上傳處理
+    function handleFileUpload(input) {
+        if (!input.files.length) return;
+        const file = input.files[0];
         const reader = new FileReader();
         
         showLoading(true, "讀取照片並偵測人臉...");
@@ -159,13 +193,13 @@
         reader.onload = async function() {
             originalBase64 = reader.result;
             
-            // 顯示圖片
+            // UI 切換
             const img = document.getElementById('previewImg');
             img.src = originalBase64;
             img.classList.remove('d-none');
             document.getElementById('empty-msg').classList.add('d-none');
             
-            // 呼叫後端偵測人臉
+            // 呼叫後端偵測
             try {
                 const res = await fetch(`${API_BASE_URL}/generate/detect`, {
                     method: 'POST',
@@ -177,43 +211,54 @@
                     faceData = data;
                     console.log("Face found:", faceData);
                 } else {
-                    // 沒找到臉，預設居中
                     faceData = null; 
-                    alert("提示：未能自動偵測到人臉，將使用預設居中裁切。");
+                    console.log("No face found, using default center crop");
                 }
                 
-                // 顯示規格選單
                 document.getElementById('panel-upload').classList.add('d-none');
                 document.getElementById('panel-specs').classList.remove('d-none');
                 
-                // 預設選護照
-                selectSpec('passport', 0.77, '台灣護照/身分證');
+                // 自動選擇護照 (修復了原本的錯誤)
+                selectSpec('passport', 0.77, '台灣護照 / 身分證');
                 
             } catch (err) {
                 console.error(err);
-                alert("連線錯誤");
+                alert("連線錯誤，請檢查網路或伺服器");
             } finally {
                 showLoading(false);
             }
         };
         reader.readAsDataURL(file);
-    });
+    }
 
-    // 2. 選擇規格 & 繪製遮罩 (核心邏輯)
+    // 2. 選擇規格
     function selectSpec(type, ratio, desc) {
         currentRatio = ratio;
-        document.getElementById('spec-desc').innerText = `目前選擇：${desc}`;
-        document.getElementById('spec-desc').className = "mt-3 text-center small text-primary fw-bold";
+        document.getElementById('spec-desc').innerText = `預覽模式：${desc}`;
         
-        // 更新 UI 樣式
+        // UI 更新 (修正點：不使用 event.currentTarget，改用 ID)
         document.querySelectorAll('.spec-card').forEach(el => el.classList.remove('active'));
-        event.currentTarget.classList.add('active');
+        
+        const targetId = `spec-${type}`;
+        const targetEl = document.getElementById(targetId);
+        if(targetEl) targetEl.classList.add('active');
+        
+        // 關閉自訂輸入框 (如果是點擊其他標準選項)
+        if (type !== 'custom') {
+            document.getElementById('custom-inputs').classList.add('d-none');
+        }
         
         drawMask();
     }
 
     function toggleCustom() {
-        document.getElementById('custom-inputs').classList.toggle('d-none');
+        const el = document.getElementById('custom-inputs');
+        el.classList.remove('d-none');
+        
+        document.querySelectorAll('.spec-card').forEach(el => el.classList.remove('active'));
+        document.getElementById('spec-custom').classList.add('active');
+        
+        updateCustom();
     }
 
     function updateCustom() {
@@ -221,36 +266,33 @@
         const h = parseFloat(document.getElementById('custom-h').value);
         if (w && h) {
             currentRatio = w / h;
+            document.getElementById('spec-desc').innerText = `自訂尺寸：${w}mm x ${h}mm`;
             drawMask();
         }
     }
 
+    // 3. 繪製遮罩 (核心邏輯)
     function drawMask() {
         const img = document.getElementById('previewImg');
         const mask = document.getElementById('cropMask');
         
         if (!img.naturalWidth) return;
 
-        // 計算顯示比例 (Displayed Size / Natural Size)
+        // 計算顯示縮放比
         const scale = img.width / img.naturalWidth;
         
-        // 計算裁切框 (基於後端邏輯的模擬)
         let cropW, cropH, cropX, cropY;
 
         if (faceData) {
-            // 有人臉：模擬後端的 "Smart Crop" 邏輯
-            // 後端邏輯：crop_h = fh * 2.6
+            // 有人臉：模擬後端的 Smart Crop
             const realCropH = faceData.h * 2.6;
             const realCropW = realCropH * currentRatio;
             
-            // 中心點
             const faceCx = faceData.x + faceData.w / 2;
-            const faceCy = faceData.y + faceData.h / 2;
-            
-            // 眼睛位置估算 (臉部框的 40% 處)
+            // 估算眼睛位置
             const eyeY = faceData.y + faceData.h * 0.4;
             
-            // 裁切框頂部：讓眼睛位於裁切框的 45% 處
+            // 頂部定位
             const realY = eyeY - (realCropH * 0.45);
             const realX = faceCx - realCropW / 2;
             
@@ -259,16 +301,19 @@
             cropX = realX * scale;
             cropY = realY * scale;
         } else {
-            // 沒人臉：居中裁切
+            // 沒人臉：居中
             const realH = img.naturalHeight;
-            const realW = realH * currentRatio;
-            cropH = img.height; // 佔滿高
+            cropH = img.height; 
             cropW = cropH * currentRatio;
+            if (cropW > img.width) {
+                // 如果太寬，就以寬為主
+                cropW = img.width;
+                cropH = cropW / currentRatio;
+            }
             cropX = (img.width - cropW) / 2;
-            cropY = 0;
+            cropY = (img.height - cropH) / 2;
         }
 
-        // 套用樣式
         mask.style.width = `${cropW}px`;
         mask.style.height = `${cropH}px`;
         mask.style.left = `${cropX}px`;
@@ -276,10 +321,9 @@
         mask.classList.remove('d-none');
     }
     
-    // 視窗縮放時重繪
     window.addEventListener('resize', drawMask);
 
-    // 3. 送出製作
+    // 4. 執行製作
     async function processImage() {
         showLoading(true, "AI 正在精修、去背、合成 (約15秒)...");
         try {
@@ -296,15 +340,13 @@
             if (data.photos) {
                 resultPhotos = data.photos;
                 
-                // 顯示結果區
                 document.getElementById('panel-specs').classList.add('d-none');
                 document.getElementById('panel-result').classList.remove('d-none');
                 
-                // 更新右側預覽
+                // 更新預覽
                 document.getElementById('previewImg').src = `data:image/jpeg;base64,${data.photos[0]}`;
-                document.getElementById('cropMask').classList.add('d-none'); // 隱藏遮罩
+                document.getElementById('cropMask').classList.add('d-none');
                 
-                // 下方縮圖
                 document.getElementById('img-white').src = `data:image/jpeg;base64,${data.photos[0]}`;
                 document.getElementById('img-blue').src = `data:image/jpeg;base64,${data.photos[1]}`;
                 
@@ -339,7 +381,7 @@
     }
 
     async function generateLayout() {
-        showLoading(true, "排版中...");
+        showLoading(true, "正在生成排版...");
         try {
             const res = await fetch(`${API_BASE_URL}/generate/layout`, {
                 method: 'POST',
@@ -353,7 +395,7 @@
                 link.download = `layout_4x6_${Date.now()}.jpg`;
                 link.click();
             }
-        } catch(e) { alert("錯誤"); } 
+        } catch(e) { alert("排版錯誤"); } 
         finally { showLoading(false); }
     }
 
@@ -362,7 +404,8 @@
     }
 
     function showLoading(show, text) {
-        document.getElementById('loading').style.display = show ? 'flex' : 'none';
+        const el = document.getElementById('loading');
+        el.style.display = show ? 'flex' : 'none';
         if(text) document.getElementById('loading-text').innerText = text;
     }
 </script>
