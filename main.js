@@ -9,14 +9,39 @@ let selectedResultBg = 0;
 let currentLayoutBase64 = null;
 let currentFeature = 'id-photo';
 let isImageLoaded = false;
+let currentZoom = 1.0; // 新增：縮放倍率
+
+// 1. 定義完整的預設規格 (解決首頁顯示不專業的問題)
+const DEFAULT_SPECS = {
+    "passport": { 
+        "name": "護照 / 身分證", 
+        "desc": "2吋 (35x45mm) - 頭部 3.2~3.6cm", 
+        "width_mm": 35, "height_mm": 45, 
+        "face_multiplier": 1.85, "top_margin": 0.09 
+    },
+    "resume": { 
+        "name": "健保卡 / 履歷 / 半身照", 
+        "desc": "2吋 (42x47mm)", 
+        "width_mm": 42, "height_mm": 47,
+        "face_multiplier": 2.5, "top_margin": 0.15 
+    },
+    "inch1": { 
+        "name": "駕照 / 執照 / 證書", 
+        "desc": "1吋 (28x35mm)", 
+        "width_mm": 28, "height_mm": 35,
+        "face_multiplier": 2.0, "top_margin": 0.12 
+    },
+    "visa_us": { 
+        "name": "美國簽證", 
+        "desc": "5x5cm (51x51mm)", 
+        "width_mm": 51, "height_mm": 51,
+        "face_multiplier": 2.2, "top_margin": 0.15 
+    }
+};
 
 window.onload = function() {
-    specConfig = {
-        "passport": { "name": "2吋大頭照", "width_mm": 35, "height_mm": 45 },
-        "inch1": { "name": "1吋證件照", "width_mm": 28, "height_mm": 35 },
-        "resume": { "name": "2吋半身照", "width_mm": 42, "height_mm": 47 },
-        "visa_us": { "name": "美國簽證", "width_mm": 51, "height_mm": 51 }
-    };
+    // 初始化使用完整規格
+    specConfig = DEFAULT_SPECS;
     renderSpecList();
     setTimeout(() => selectSpec('passport'), 100);
 };
@@ -88,11 +113,17 @@ function handleFileUpload(input) {
         document.getElementById('previewImg').src = originalBase64;
         document.getElementById('previewImg').classList.remove('d-none');
         isImageLoaded = true;
+        
+        // 重置縮放
+        setZoom(1.0);
+        document.getElementById('zoomRange').value = 1.0;
+
         document.querySelector('.upload-btn-wrapper').classList.add('d-none');
         document.getElementById('uploaded-status').classList.remove('d-none');
         document.getElementById('btn-process').classList.remove('d-none');
         showWorkspace();
         document.getElementById('cropMask').classList.remove('d-none');
+        
         try {
             const res = await fetch(`${API_BASE_URL}/generate/detect`, {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -101,11 +132,8 @@ function handleFileUpload(input) {
             if (res.ok) {
                 const data = await res.json();
                 faceData = data.found ? data : null;
-                if(data.specs) {
-                    specConfig = data.specs;
-                    renderSpecList();
-                    selectSpec(currentSpecId); 
-                }
+                // 這裡我們保留原本選擇的規格，不被後端可能回傳的空值覆蓋
+                selectSpec(currentSpecId); 
             }
         } catch (err) { console.log("偵測失敗"); } finally { showLoading(false); }
     };
@@ -114,6 +142,7 @@ function handleFileUpload(input) {
 
 function resetUpload() { location.reload(); }
 
+// 2. 修正渲染列表：用途(Name) 為主，尺寸(Desc) 為輔
 function renderSpecList() {
     const container = document.getElementById('specs-container');
     container.innerHTML = '';
@@ -122,7 +151,19 @@ function renderSpecList() {
         div.className = 'spec-card';
         div.id = `spec-${key}`;
         div.onclick = () => selectSpec(key);
-        div.innerHTML = `<div><div class="fw-bold" style="font-size: 0.95rem;">${val.name}</div><div class="text-muted" style="font-size: 0.75rem;">${val.width_mm} x ${val.height_mm} mm</div></div><i class="bi bi-check-circle-fill text-primary d-none check-icon"></i>`;
+        
+        // 這裡使用了 DEFAULT_SPECS 裡的 name (用途) 和 desc (尺寸)
+        // 如果是自訂或後端回傳沒有 desc，就自動組合
+        const title = val.name;
+        const subtitle = val.desc || `${val.width_mm} x ${val.height_mm} mm`;
+
+        div.innerHTML = `
+            <div>
+                <div class="fw-bold text-dark" style="font-size: 1rem;">${title}</div>
+                <div class="text-muted" style="font-size: 0.8rem;">${subtitle}</div>
+            </div>
+            <i class="bi bi-check-circle-fill text-primary d-none check-icon fs-5"></i>
+        `;
         container.appendChild(div);
     }
 }
@@ -168,14 +209,19 @@ function drawMask(mmW, mmH) {
     const mask = document.getElementById('cropMask');
     const label = document.getElementById('maskLabel');
     if (!img.naturalWidth) return;
+    
     label.innerText = `${mmW}x${mmH}mm`;
     const scale = img.width / img.naturalWidth;
     let targetRatio = mmW / mmH;
-    let faceMult = 2.0; let topMargin = 0.12;
+    
+    // 讀取各規格的專屬倍率
+    let faceMult = 2.0; 
+    let topMargin = 0.12;
     if (currentSpecId !== 'custom' && specConfig[currentSpecId]) {
         if(specConfig[currentSpecId].face_multiplier) faceMult = specConfig[currentSpecId].face_multiplier;
-        topMargin = specConfig[currentSpecId].top_margin;
+        if(specConfig[currentSpecId].top_margin) topMargin = specConfig[currentSpecId].top_margin;
     }
+
     let cropW, cropH, cropX, cropY;
     if (faceData && faceData.found) {
         const realCropH = faceData.h * faceMult;
@@ -194,6 +240,19 @@ function drawMask(mmW, mmH) {
     mask.classList.remove('d-none');
 }
 
+// 3. 新增縮放控制
+function setZoom(value) {
+    currentZoom = parseFloat(value);
+    const wrapper = document.querySelector('.image-wrapper');
+    if(wrapper) {
+        // 同時縮放圖片與遮罩，因為遮罩在 wrapper 內部
+        wrapper.style.transform = `scale(${currentZoom})`;
+        wrapper.style.transformOrigin = "center top"; // 從上方中間縮放比較自然
+    }
+    // 更新顯示數值
+    document.getElementById('zoomValue').innerText = Math.round(currentZoom * 100) + '%';
+}
+
 window.addEventListener('resize', () => {
     if (isImageLoaded) {
         if(currentSpecId === 'custom') updateCustom();
@@ -201,6 +260,7 @@ window.addEventListener('resize', () => {
     }
 });
 
+// ... (其餘後端串接函式保持不變：processImage, runCheck, applyFix, etc.) ...
 async function processImage() {
     showLoading(true, "AI 製作中...");
     try {
@@ -214,6 +274,10 @@ async function processImage() {
             document.getElementById('specs-section').classList.add('d-none');
             document.getElementById('result-section').classList.remove('d-none');
             document.getElementById('cropMask').classList.add('d-none');
+            // 製作完成後，重置縮放以便查看全圖
+            setZoom(1.0); document.getElementById('zoomRange').value = 1.0;
+            document.getElementById('zoom-toolbar').classList.add('d-none'); // 隱藏縮放列
+
             document.getElementById('img-white').src = `data:image/jpeg;base64,${data.photos[0]}`;
             document.getElementById('img-blue').src = `data:image/jpeg;base64,${data.photos[1]}`;
             selectResult('white');
@@ -230,98 +294,47 @@ function selectResult(color) {
     document.getElementById('previewImg').src = `data:image/jpeg;base64,${resultPhotos[idx]}`;
 }
 
-// 核心更新：智慧審查報告
 async function runCheck() {
     if (!resultPhotos[selectedResultBg]) return;
     showLoading(true, "AI 審查中...");
-    
     try {
         const res = await fetch(`${API_BASE_URL}/generate/check`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ 
-                image_base64: resultPhotos[selectedResultBg],
-                spec_id: currentSpecId
-            })
+            body: JSON.stringify({ image_base64: resultPhotos[selectedResultBg], spec_id: currentSpecId })
         });
-        
         const data = await res.json();
         if (data.error) { alert("後端錯誤: " + data.error); return; }
-
         if (data.results) {
             const list = document.getElementById('check-results-list');
             list.innerHTML = '';
-
-            // 統計數據
-            let failCount = 0;
-            let warningCount = 0;
-            let fixableCount = 0;
-            let passCount = 0;
-
+            let failCount = 0, warningCount = 0, fixableCount = 0, unfixableCount = 0;
             data.results.forEach(item => {
                 if(item.status === 'fail') failCount++;
                 if(item.status === 'warning') warningCount++;
-                if(item.status === 'pass') passCount++;
+                if ((item.status === 'fail' || item.status === 'warning') && !item.fix_action) unfixableCount++;
                 if(item.fix_action) fixableCount++;
             });
-
-            // 生成總結報告 (Summary Block)
             let summaryHtml = '';
             let totalIssues = failCount + warningCount;
-
             if (totalIssues === 0) {
-                // 完美通過
-                summaryHtml = `
-                    <div class="alert alert-success border-0 shadow-sm mb-3 text-center">
-                        <i class="bi bi-check-circle-fill fs-3 d-block mb-2"></i>
-                        <h5 class="fw-bold">照片符合標準</h5>
-                        <p class="mb-0 small">太棒了！這張照片符合 AI 初步審查標準。</p>
-                        <div class="mt-2 text-muted" style="font-size: 0.75rem;">(註：仍需以戶政機關臨櫃審查為準)</div>
-                    </div>`;
+                summaryHtml = `<div class="alert alert-success border-0 shadow-sm mb-3 text-center"><i class="bi bi-check-circle-fill fs-3 d-block mb-2"></i><h5 class="fw-bold">照片符合標準</h5><p class="mb-0 small">太棒了！這張照片符合 AI 初步審查標準。</p></div>`;
+            } else if (unfixableCount > 0) {
+                summaryHtml = `<div class="alert alert-danger border-0 shadow-sm mb-3"><h5 class="fw-bold text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>建議重新拍攝</h5><p class="mb-1 small">經審查發現 <strong>${totalIssues}</strong> 個缺失，其中包含無法修復的項目。</p><div class="mt-2"><button class="btn btn-sm btn-outline-danger w-100" onclick="document.getElementById('fileInput').click()">重新上傳</button></div></div>`;
             } else {
-                if (fixableCount > 0) {
-                    // 有問題但可修復
-                    summaryHtml = `
-                        <div class="alert alert-primary border-0 shadow-sm mb-3">
-                            <h5 class="fw-bold text-primary"><i class="bi bi-magic me-2"></i>發現可修復的問題</h5>
-                            <p class="mb-1 small">經審查發現 <strong>${totalIssues}</strong> 個缺失，建議您使用下方的「AI 修復」按鈕進行調整。</p>
-                        </div>`;
-                } else {
-                    // 有問題且無法修復
-                    summaryHtml = `
-                        <div class="alert alert-danger border-0 shadow-sm mb-3">
-                            <h5 class="fw-bold text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>建議重新拍攝</h5>
-                            <p class="mb-1 small">經審查發現 <strong>${totalIssues}</strong> 個缺失，且部分無法透過修圖解決 (如頭部傾斜或五官遮擋)。</p>
-                        </div>`;
-                }
+                summaryHtml = `<div class="alert alert-primary border-0 shadow-sm mb-3"><h5 class="fw-bold text-primary"><i class="bi bi-magic me-2"></i>發現可修復的問題</h5><p class="mb-1 small">發現 <strong>${totalIssues}</strong> 個可修復缺失，建議使用「AI 修復」。</p></div>`;
             }
-            list.innerHTML = summaryHtml; // 插入總結
-
-            // 列表生成
+            list.innerHTML = summaryHtml;
             data.results.forEach(item => {
-                let icon = 'bi-check-circle-fill text-success';
-                let bg = 'bg-light';
-                let actionBtn = '';
-
+                let icon = 'bi-check-circle-fill text-success'; let bg = 'bg-light'; let actionBtn = '';
                 if (item.status === 'warning') { icon = 'bi-exclamation-triangle-fill text-warning'; bg = 'bg-warning-subtle'; }
                 if (item.status === 'fail') { icon = 'bi-x-circle-fill text-danger'; bg = 'bg-danger-subtle'; }
-                
-                if (item.fix_action) {
-                    actionBtn = `<button class="btn btn-sm btn-primary ms-2 shadow-sm" onclick="applyFix('${item.fix_action}')"><i class="bi bi-magic"></i> AI 修復</button>`;
-                }
-
+                if (item.fix_action) actionBtn = `<button class="btn btn-sm btn-primary ms-2 shadow-sm" onclick="applyFix('${item.fix_action}')"><i class="bi bi-magic"></i> 修復</button>`;
                 const div = document.createElement('div');
                 div.className = `list-group-item d-flex justify-content-between align-items-center ${bg} mb-1 border-0 rounded`;
-                div.innerHTML = `
-                    <span><i class="bi ${icon} me-2"></i> ${item.item}</span>
-                    <div class="d-flex align-items-center">
-                        <span class="badge bg-white text-dark border me-1">${item.msg}</span>
-                        ${actionBtn}
-                    </div>
-                `;
+                div.innerHTML = `<span><i class="bi ${icon} me-2"></i> ${item.item}</span><div class="d-flex align-items-center"><span class="badge bg-white text-dark border me-1">${item.msg}</span>${actionBtn}</div>`;
                 list.appendChild(div);
             });
-            const modal = new bootstrap.Modal(document.getElementById('checkModal'));
-            modal.show();
+            new bootstrap.Modal(document.getElementById('checkModal')).show();
         }
     } catch(e) { alert("檢查失敗: " + e.message); } finally { showLoading(false); }
 }
@@ -330,15 +343,11 @@ async function applyFix(actionType) {
     const modalEl = document.getElementById('checkModal');
     const modal = bootstrap.Modal.getInstance(modalEl);
     if(modal) modal.hide();
-
     showLoading(true, "AI 修復中...");
     try {
         const res = await fetch(`${API_BASE_URL}/generate/fix`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ 
-                image_base64: resultPhotos[selectedResultBg],
-                action: actionType
-            })
+            body: JSON.stringify({ image_base64: resultPhotos[selectedResultBg], action: actionType })
         });
         const data = await res.json();
         if(data.image_base64) {
@@ -346,10 +355,8 @@ async function applyFix(actionType) {
             if(selectedResultBg === 0) document.getElementById('img-white').src = `data:image/jpeg;base64,${data.image_base64}`;
             else document.getElementById('img-blue').src = `data:image/jpeg;base64,${data.image_base64}`;
             selectResult(selectedResultBg === 0 ? 'white' : 'blue');
-            alert("✅ 修復完成！請重新執行合規檢查確認結果。");
-        } else {
-            alert("修復失敗: " + (data.error || "未知錯誤"));
-        }
+            alert("✅ 修復完成！");
+        } else { alert("修復失敗: " + (data.error || "未知錯誤")); }
     } catch(e) { alert("連線錯誤"); } finally { showLoading(false); }
 }
 
