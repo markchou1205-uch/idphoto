@@ -90,7 +90,24 @@ body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; height: 1
 .zoom-controls, .range-slider {
     display: none !important;
 }
+/* 強制覆蓋：預覽區背景設為白色，並使用 Flexbox 居中 */
+.image-wrapper {
+    background-color: #ffffff !important; /* 解決黑底問題 */
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    overflow: hidden !important;
+    border: 1px solid #eee !important; /* 淡淡的灰框就好 */
+}
 
+/* 圖片強制填滿且保持比例 */
+.image-wrapper img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important; /* 改為 contain 確保整張圖都看得到 */
+    transform: none !important; /* 移除 JS 的位移干擾 */
+    background-color: white !important;
+}
 /* Misc */
 .result-btn { cursor: pointer; transition: 0.2s; background: #fff; }
 .result-btn.active { border-color: var(--primary-color) !important; background: #e7f1ff; }
