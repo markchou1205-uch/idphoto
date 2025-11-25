@@ -16,18 +16,18 @@ window.onload = function() {
     UI.renderSpecList(selectSpec);
     setTimeout(() => selectSpec('passport'), 100);
 
-    // [新增] 版本標記 (左下角)
+    // [版本更新] V7.0
     const verTag = document.createElement('div');
     verTag.style.position = 'fixed';
     verTag.style.bottom = '10px';
     verTag.style.left = '10px';
     verTag.style.backgroundColor = 'rgba(0,0,0,0.7)';
-    verTag.style.color = '#00ff00';
+    verTag.style.color = '#00ffff'; // 改為青色區分
     verTag.style.padding = '5px 10px';
     verTag.style.borderRadius = '5px';
     verTag.style.fontSize = '12px';
     verTag.style.zIndex = '9999';
-    verTag.innerHTML = 'System Ver: 5.0 (Fixed)';
+    verTag.innerHTML = 'System Ver: 7.0 (Sobel Check)';
     document.body.appendChild(verTag);
 };
 
