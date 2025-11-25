@@ -75,6 +75,21 @@ body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; height: 1
     font-size: 10px; padding: 1px 4px; border-radius: 0 0 0 4px;
     float: right; font-weight: bold;
 }
+/* 隱藏裁切紅框與遮罩 */
+.crop-mask {
+    display: none !important;
+    border: none !important;
+}
+
+/* 隱藏縮放工具列 */
+#zoom-toolbar {
+    display: none !important;
+}
+
+/* 隱藏所有階段的縮放控制項 (若有其他 class) */
+.zoom-controls, .range-slider {
+    display: none !important;
+}
 
 /* Misc */
 .result-btn { cursor: pointer; transition: 0.2s; background: #fff; }
