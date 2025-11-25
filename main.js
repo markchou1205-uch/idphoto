@@ -45,7 +45,6 @@ window.handleFileUpload = function(input) {
     reader.onload = async function() {
         state.originalBase64 = reader.result;
         state.isImageLoaded = true;
-
         Editor.loadImageToEditor(state.originalBase64);
         
         document.querySelector('.upload-btn-wrapper').classList.add('d-none');
@@ -135,6 +134,8 @@ window.selectResult = function(color) {
     img.style.width = '100%';
     img.style.height = '100%';
     img.style.objectFit = 'contain';
+    // [修正] 強制白底，消除透明層造成的黑框錯覺
+    img.style.backgroundColor = '#ffffff'; 
     
     img.classList.remove('d-none');
 }
@@ -172,16 +173,18 @@ window.runCheck = async function() {
         const modalBody = document.querySelector('#checkModal .modal-body');
         modalBody.innerHTML = ''; 
 
-        // 1. 圖片 (修正線條位置)
-        // 頭頂 3.2mm~3.6mm (約 10~15%)，下巴約在 85%
+        // 1. 圖片容器
         const imgContainer = document.createElement('div');
         imgContainer.className = 'text-center mb-3 position-relative d-inline-block';
         
         const img = document.createElement('img');
         img.src = `data:image/jpeg;base64,${state.resultPhotos[state.selectedResultBg]}`;
-        img.className = 'img-fluid rounded border';
+        // [修正] 移除 border，增加白底
+        img.className = 'img-fluid rounded'; 
+        img.style.backgroundColor = '#ffffff';
         img.style.maxHeight = '300px';
         
+        // 輔助線 (頭頂 10%, 下巴 86%)
         const overlay = document.createElement('div');
         overlay.style.position = 'absolute';
         overlay.style.top = '0';
@@ -191,7 +194,6 @@ window.runCheck = async function() {
         overlay.style.pointerEvents = 'none';
         overlay.innerHTML = `
             <div style="position:absolute; top:10%; left:0; width:100%; border-top: 1px dashed cyan; text-align:right;"><span style="background:cyan; font-size:10px;">頭頂限制</span></div>
-            <div style="position:absolute; top:42%; left:0; width:100%; border-top: 1px solid rgba(255,0,0,0.5);"><span style="background:red; color:white; font-size:10px;">眼睛基準</span></div>
             <div style="position:absolute; top:86%; left:0; width:100%; border-top: 1px dashed cyan; text-align:right;"><span style="background:cyan; font-size:10px;">下巴限制</span></div>
         `;
         
