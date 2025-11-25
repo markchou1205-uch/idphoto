@@ -1,7 +1,7 @@
 :root { --sidebar-icon-width: 80px; --sidebar-panel-width: 340px; --primary-color: #0d6efd; }
 body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; height: 100vh; overflow: hidden; }
 
-/* Sidebars & Cards (保持不變) */
+/* Sidebars & Cards (不變) */
 #sidebar-icons { width: var(--sidebar-icon-width); min-width: var(--sidebar-icon-width); z-index: 1020; }
 .nav-item-icon { width: 100%; padding: 15px 0; cursor: pointer; color: rgba(255,255,255,0.5); transition: all 0.2s; }
 .nav-item-icon:hover { color: white; background: rgba(255,255,255,0.1); }
@@ -16,61 +16,78 @@ body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; height: 1
 .spec-card:hover { border-color: var(--primary-color); background: #f1f8ff; }
 .spec-card.active { border-color: var(--primary-color); background: #e7f1ff; border-left: 4px solid var(--primary-color); }
 
-/* --- 核心修正區：Image Editor --- */
+/* --- Image Editor --- */
 
-/* 1. 容器：扮演「視窗」或「裁切框」的角色 */
+/* 1. 工作區 (Flex 置中) */
+#workspace-area {
+    display: flex !important;
+    align-items: center; /* 垂直置中 */
+    justify-content: center; /* 水平置中 */
+    background-color: #212529; /* 深色背景讓紅框更明顯 */
+    overflow: hidden; /* 防止捲軸出現 */
+    position: relative;
+}
+
+/* 2. 容器 (視窗) */
 .image-wrapper { 
     position: relative !important; 
-    display: block; /* 改為 block 以便設定精確尺寸 */
-    margin: 0 auto; /* 水平置中 */
-    /* 移除 overflow: hidden，讓使用者能看到框外的暗色區域 (更有裁切感) */
-    /* 背景格線 */
+    display: block; 
+    /* 移除 margin: 0 auto，改由父層 Flex 控制 */
     background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><rect width="5" height="5" fill="%23eee"/><rect x="5" y="5" width="5" height="5" fill="%23eee"/></svg>');
-    transform-origin: center top; 
-    box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+    transform-origin: center center; /* 縮放基準改為中心 */
+    box-shadow: 0 0 50px rgba(0,0,0,0.5);
+    border: 2px solid rgba(255, 255, 255, 0.1);
 }
 
-/* 2. 圖片：在容器下方自由移動 */
+/* 3. 圖片 */
 .image-wrapper img { 
     display: block; 
-    position: absolute; /* 關鍵：絕對定位 */
+    position: absolute; 
     top: 0; left: 0;
-    max-width: none !important; /* 關鍵：解除限制，讓圖片可以比框大 */
+    max-width: none !important; 
     max-height: none !important;
-    /* 這裡不設 z-index，預設為 0 */
+    pointer-events: none; /* 讓滑鼠事件穿透給 wrapper 處理 */
 }
 
-/* 3. 遮罩：蓋在圖片上，顯示紅框與暗角 */
+/* 4. 遮罩 (紅框) */
 .crop-mask { 
     position: absolute; 
     top: 0; left: 0;
-    width: 100%; height: 100%; /* 關鍵：填滿容器 */
-    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.85); /* 暗房效果 */
-    pointer-events: none; /* 讓點擊穿透到下方的 wrapper/img */
+    width: 100%; height: 100%;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.8); /* 稍微調亮一點暗角，方便看周圍 */
+    pointer-events: none; 
     z-index: 10; 
     border: 2px dashed #ff3333; 
-    transition: none; /* 移除動畫以提升拖曳效能 */
 }
 
-/* 4. 標籤 */
+/* 5. 標籤 */
 .mask-label { 
-    position: absolute; bottom: -35px; left: 50%; transform: translateX(-50%); 
+    position: absolute; bottom: -40px; left: 50%; transform: translateX(-50%); 
     background: #ff3333; color: white; 
-    padding: 4px 10px; border-radius: 20px; font-size: 14px; white-space: nowrap; font-weight: bold;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    padding: 4px 12px; border-radius: 20px; font-size: 14px; white-space: nowrap; font-weight: bold;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
 }
 
-/* 5. 輔助線 (新增) */
+/* 6. 輔助線 (修正版：深藍粗線) */
 .guide-line {
     position: absolute; left: 0; width: 100%;
-    border-top: 1px dashed rgba(0, 255, 255, 0.7); /* 青色虛線 */
+    border-top: 2px solid #0056b3; /* 深藍色實線 */
+    box-shadow: 0 1px 0 rgba(255,255,255,0.3); /* 下陰影增加對比 */
     pointer-events: none;
     text-align: right;
 }
 .guide-line span {
-    background: rgba(0, 0, 0, 0.5); color: #00ffff;
-    font-size: 10px; padding: 1px 4px; border-radius: 2px;
-    margin-right: 2px;
+    background: #0056b3; color: white;
+    font-size: 11px; padding: 2px 6px; border-radius: 0 0 0 4px;
+    font-weight: bold;
+}
+
+/* 7. 縮放列 (修正版：Z-Index 提高) */
+#zoom-toolbar {
+    z-index: 100 !important; /* 確保蓋過遮罩 */
+    background-color: rgba(255, 255, 255, 0.95) !important;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2) !important;
+    margin-bottom: 30px; /* 離底部稍微遠一點 */
 }
 
 /* Misc */
