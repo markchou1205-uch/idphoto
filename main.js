@@ -15,6 +15,20 @@ window.onload = function() {
     Editor.initEditor();
     UI.renderSpecList(selectSpec);
     setTimeout(() => selectSpec('passport'), 100);
+
+    // [新增] 版本標記 (左下角)
+    const verTag = document.createElement('div');
+    verTag.style.position = 'fixed';
+    verTag.style.bottom = '10px';
+    verTag.style.left = '10px';
+    verTag.style.backgroundColor = 'rgba(0,0,0,0.7)';
+    verTag.style.color = '#00ff00';
+    verTag.style.padding = '5px 10px';
+    verTag.style.borderRadius = '5px';
+    verTag.style.fontSize = '12px';
+    verTag.style.zIndex = '9999';
+    verTag.innerHTML = 'System Ver: 5.0 (Fixed)';
+    document.body.appendChild(verTag);
 };
 
 window.goHome = function() {
@@ -134,7 +148,6 @@ window.selectResult = function(color) {
     img.style.width = '100%';
     img.style.height = '100%';
     img.style.objectFit = 'contain';
-    // [修正] 強制白底，消除透明層造成的黑框錯覺
     img.style.backgroundColor = '#ffffff'; 
     
     img.classList.remove('d-none');
@@ -163,7 +176,6 @@ window.generateLayout = async function() {
     } catch(e) { alert("排版錯誤"); } finally { UI.showLoading(false); }
 }
 
-// 修正後的檢查視窗
 window.runCheck = async function() {
     if (!state.resultPhotos[state.selectedResultBg]) return;
     UI.showLoading(true, "AI 審查中...");
@@ -173,18 +185,15 @@ window.runCheck = async function() {
         const modalBody = document.querySelector('#checkModal .modal-body');
         modalBody.innerHTML = ''; 
 
-        // 1. 圖片容器
         const imgContainer = document.createElement('div');
         imgContainer.className = 'text-center mb-3 position-relative d-inline-block';
         
         const img = document.createElement('img');
         img.src = `data:image/jpeg;base64,${state.resultPhotos[state.selectedResultBg]}`;
-        // [修正] 移除 border，增加白底
         img.className = 'img-fluid rounded'; 
         img.style.backgroundColor = '#ffffff';
         img.style.maxHeight = '300px';
         
-        // 輔助線 (頭頂 10%, 下巴 86%)
         const overlay = document.createElement('div');
         overlay.style.position = 'absolute';
         overlay.style.top = '0';
@@ -193,7 +202,7 @@ window.runCheck = async function() {
         overlay.style.height = '100%';
         overlay.style.pointerEvents = 'none';
         overlay.innerHTML = `
-            <div style="position:absolute; top:10%; left:0; width:100%; border-top: 1px dashed cyan; text-align:right;"><span style="background:cyan; font-size:10px;">頭頂限制</span></div>
+            <div style="position:absolute; top:12%; left:0; width:100%; border-top: 1px dashed cyan; text-align:right;"><span style="background:cyan; font-size:10px;">頭頂限制 (12%)</span></div>
             <div style="position:absolute; top:86%; left:0; width:100%; border-top: 1px dashed cyan; text-align:right;"><span style="background:cyan; font-size:10px;">下巴限制</span></div>
         `;
         
@@ -201,7 +210,6 @@ window.runCheck = async function() {
         imgContainer.appendChild(overlay);
         modalBody.appendChild(imgContainer);
 
-        // 2. 列表
         const listGroup = document.createElement('div');
         listGroup.className = 'list-group text-start';
         
