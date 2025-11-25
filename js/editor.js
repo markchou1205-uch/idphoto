@@ -4,23 +4,48 @@ let isDragging = false;
 let startX, startY;
 let initialPosX, initialPosY;
 
-// 初始化編輯器 (綁定事件)
+// 初始化編輯器
 export function initEditor() {
-    const overlay = document.getElementById('crop-overlay'); // 這是我們要在 html 新增的觸控層
-    if (!overlay) return;
+    // 監聽的是外層的 image-wrapper (即紅框區域)，因為它是事件的捕捉層
+    const wrapper = document.querySelector('.image-wrapper'); 
+    if (!wrapper) return;
 
     // 滑鼠事件
-    overlay.addEventListener('mousedown', onDragStart);
+    wrapper.addEventListener('mousedown', onDragStart);
     window.addEventListener('mousemove', onDragMove);
     window.addEventListener('mouseup', onDragEnd);
 
     // 觸控事件 (手機)
-    overlay.addEventListener('touchstart', onDragStart, {passive: false});
+    wrapper.addEventListener('touchstart', onDragStart, {passive: false});
     window.addEventListener('touchmove', onDragMove, {passive: false});
     window.addEventListener('touchend', onDragEnd);
     
     // 滾輪縮放
-    overlay.addEventListener('wheel', onWheel, {passive: false});
+    wrapper.addEventListener('wheel', onWheel, {passive: false});
+}
+
+// 更新遮罩比例 (修復報錯的關鍵函式)
+export function updateMaskRatio(width_mm, height_mm) {
+    const wrapper = document.querySelector('.image-wrapper');
+    if (!wrapper) return;
+    
+    // 我們固定高度，根據比例調整寬度，以適應螢幕
+    // 假設基礎高度為 450px (可根據 CSS 調整)
+    const baseHeight = 450; 
+    const ratio = width_mm / height_mm;
+    const newWidth = baseHeight * ratio;
+    
+    wrapper.style.height = `${baseHeight}px`;
+    wrapper.style.width = `${newWidth}px`;
+    
+    // 更新全域狀態中的容器尺寸，供邊界計算使用
+    state.editor.containerWidth = newWidth;
+    state.editor.containerHeight = baseHeight;
+    
+    // 如果圖片已載入，重新計算邊界以防圖片露白
+    if(state.isImageLoaded) {
+        setEditorZoom(state.editor.scale); 
+    }
 }
 
 // 載入圖片到編輯器
@@ -37,36 +62,34 @@ export function loadImageToEditor(base64) {
         state.editor.imageWidth = img.naturalWidth;
         state.editor.imageHeight = img.naturalHeight;
         
-        // 初始：將圖片縮放到適合容器大小 (Cover 模式)
+        // 初始：將圖片縮放到適合容器大小
         fitImageToContainer();
         updateTransform();
-        drawGuides(); // 畫輔助線
+        drawGuides(); 
     };
     img.src = base64;
     img.classList.remove('d-none');
 }
 
-// 自動縮放圖片以填滿紅框 (Contain/Cover logic)
+// 自動縮放圖片以填滿紅框
 function fitImageToContainer() {
     const container = document.querySelector('.image-wrapper');
-    const img = document.getElementById('previewImg');
     
-    // 容器尺寸 (即紅框尺寸)
     const cw = container.clientWidth;
     const ch = container.clientHeight;
     state.editor.containerWidth = cw;
     state.editor.containerHeight = ch;
 
-    const iw = img.naturalWidth;
-    const ih = img.naturalHeight;
+    const iw = state.editor.imageWidth;
+    const ih = state.editor.imageHeight;
 
-    // 計算最小縮放比例 (確保圖片永遠大於紅框)
+    // 計算最小縮放比例 (Cover 模式：確保填滿)
     const scaleW = cw / iw;
     const scaleH = ch / ih;
-    const minScale = Math.max(scaleW, scaleH); // 取較大者，確保填滿
+    const minScale = Math.max(scaleW, scaleH); 
     
     state.editor.minScale = minScale;
-    state.editor.scale = minScale; // 預設為填滿
+    state.editor.scale = minScale; 
     
     // 居中
     state.editor.posX = (cw - iw * state.editor.scale) / 2;
@@ -75,6 +98,7 @@ function fitImageToContainer() {
 
 // 拖曳邏輯
 function onDragStart(e) {
+    if(e.target.id !== 'previewImg' && !e.target.classList.contains('image-wrapper')) return;
     e.preventDefault();
     isDragging = true;
     
@@ -86,7 +110,7 @@ function onDragStart(e) {
     initialPosX = state.editor.posX;
     initialPosY = state.editor.posY;
     
-    document.getElementById('crop-overlay').style.cursor = 'grabbing';
+    document.querySelector('.image-wrapper').style.cursor = 'grabbing';
 }
 
 function onDragMove(e) {
@@ -102,19 +126,15 @@ function onDragMove(e) {
     let newX = initialPosX + dx;
     let newY = initialPosY + dy;
     
-    // 邊界限制 (Boundary Check)
-    // 圖片左邊緣不能超過容器左邊緣 (newX <= 0)
-    // 圖片右邊緣不能離開容器右邊緣 (newX + imgW*scale >= containerW)
+    // 邊界限制
     const containerW = state.editor.containerWidth;
     const containerH = state.editor.containerHeight;
     const currentW = state.editor.imageWidth * state.editor.scale;
     const currentH = state.editor.imageHeight * state.editor.scale;
     
-    // 限制 X
     if (newX > 0) newX = 0;
     if (newX + currentW < containerW) newX = containerW - currentW;
     
-    // 限制 Y
     if (newY > 0) newY = 0;
     if (newY + currentH < containerH) newY = containerH - currentH;
     
@@ -126,7 +146,8 @@ function onDragMove(e) {
 
 function onDragEnd() {
     isDragging = false;
-    document.getElementById('crop-overlay').style.cursor = 'grab';
+    const wrapper = document.querySelector('.image-wrapper');
+    if(wrapper) wrapper.style.cursor = 'default';
 }
 
 // 滾輪縮放
@@ -134,21 +155,20 @@ function onWheel(e) {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.95 : 1.05;
     const newScale = state.editor.scale * delta;
-    
     setEditorZoom(newScale);
 }
 
 // 公開給 Slider 用的縮放函式
 export function setEditorZoom(newScale) {
-    // 限制縮放範圍
+    if (!state.editor.imageWidth) return;
+
+    // 限制範圍
     if (newScale < state.editor.minScale) newScale = state.editor.minScale;
-    if (newScale > state.editor.minScale * 5) newScale = state.editor.minScale * 5; // 最大放大 5 倍
+    if (newScale > state.editor.minScale * 5) newScale = state.editor.minScale * 5;
     
-    // 縮放時要保持中心點，或者簡單點，重新計算邊界
-    // 這裡簡化：縮放後執行邊界檢查，如果出界就拉回來
     state.editor.scale = newScale;
     
-    // 重新觸發一次邊界檢查邏輯 (借用 onDragMove 的邏輯概念)
+    // 縮放後重新檢查邊界，如果出界要拉回來
     const containerW = state.editor.containerWidth;
     const containerH = state.editor.containerHeight;
     const currentW = state.editor.imageWidth * state.editor.scale;
@@ -165,45 +185,37 @@ export function setEditorZoom(newScale) {
 
 function updateTransform() {
     const img = document.getElementById('previewImg');
-    // 使用 translate3d 啟用硬體加速
-    img.style.transformOrigin = '0 0';
-    img.style.transform = `translate3d(${state.editor.posX}px, ${state.editor.posY}px, 0) scale(${state.editor.scale})`;
+    if(img) {
+        img.style.transformOrigin = '0 0';
+        img.style.transform = `translate3d(${state.editor.posX}px, ${state.editor.posY}px, 0) scale(${state.editor.scale})`;
+    }
 }
 
-// 更新輔助線與遮罩文字
 export function drawGuides() {
-    // 根據目前的 specId 更新文字
     const label = document.getElementById('maskLabel');
     const spec = state.specConfig[state.currentSpecId];
     if (spec && label) {
         label.innerText = `${spec.width_mm}x${spec.height_mm}mm`;
     }
-    
-    // 更新輔助線位置 (CSS 控制)
-    const guideBox = document.getElementById('guide-box');
-    if (!guideBox) return;
-    
-    // 顯示輔助線說明
-    guideBox.classList.remove('d-none');
+    // 這裡未來可以加入畫虛線的邏輯
 }
 
-// 【核心功能】產生裁切後的圖片 (Base64)
+// 產生裁切後的 Base64
 export function generateCroppedImage() {
     const img = document.getElementById('previewImg');
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
-    // 目標輸出尺寸 (與紅框比例一致，解析度設高一點以保證品質)
-    // 這裡我們輸出 2倍 紅框像素大小，確保夠清晰
+    // 輸出解析度：紅框尺寸 x 2 (提高畫質)
     const outputW = state.editor.containerWidth * 2; 
     const outputH = state.editor.containerHeight * 2;
     
     canvas.width = outputW;
     canvas.height = outputH;
     
-    // 計算來源圖片的裁切區域
-    // 概念：紅框在螢幕上是固定的，圖片在移動。
+    // 計算來源裁切區
     // sourceX = -posX / scale
+    // sourceW = containerW / scale
     const sourceX = -state.editor.posX / state.editor.scale;
     const sourceY = -state.editor.posY / state.editor.scale;
     const sourceW = state.editor.containerWidth / state.editor.scale;
