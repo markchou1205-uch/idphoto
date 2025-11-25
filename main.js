@@ -1,191 +1,156 @@
-const API_BASE_URL = "https://video.pdfsolution.dpdns.org"; 
-let originalBase64 = "";
-let faceData = null; 
-let specConfig = {}; 
-let currentSpecId = "passport"; 
-let currentCustomRatio = 0.77;
-let resultPhotos = [];
-let selectedResultBg = 0;
-let currentLayoutBase64 = null;
-let currentFeature = 'id-photo';
-let isImageLoaded = false;
-let currentZoom = 1.0; // 新增：縮放倍率
+// main.js - 核心入口與流程控制器
+import { state } from './js/state.js';
+import * as UI from './js/ui.js';
+import * as API from './js/api.js';
+import * as Editor from './js/editor.js';
 
-// 1. 定義完整的預設規格 (解決首頁顯示不專業的問題)
-const DEFAULT_SPECS = {
-    "passport": { 
-        "name": "護照 / 身分證", 
-        "desc": "2吋 (35x45mm) - 頭部 3.2~3.6cm", 
-        "width_mm": 35, "height_mm": 45, 
-        "face_multiplier": 1.85, "top_margin": 0.09 
-    },
-    "resume": { 
-        "name": "健保卡 / 履歷 / 半身照", 
-        "desc": "2吋 (42x47mm)", 
-        "width_mm": 42, "height_mm": 47,
-        "face_multiplier": 2.5, "top_margin": 0.15 
-    },
-    "inch1": { 
-        "name": "駕照 / 執照 / 證書", 
-        "desc": "1吋 (28x35mm)", 
-        "width_mm": 28, "height_mm": 35,
-        "face_multiplier": 2.0, "top_margin": 0.12 
-    },
-    "visa_us": { 
-        "name": "美國簽證", 
-        "desc": "5x5cm (51x51mm)", 
-        "width_mm": 51, "height_mm": 51,
-        "face_multiplier": 2.2, "top_margin": 0.15 
-    }
-};
-
+// --- 初始化與全域綁定 ---
+// 因為使用了 type="module"，函式不再是全域的，必須手動掛載到 window
 window.onload = function() {
-    // 初始化使用完整規格
-    specConfig = DEFAULT_SPECS;
-    renderSpecList();
+    // 1. 初始化編輯器事件 (拖曳、縮放)
+    Editor.initEditor();
+    
+    // 2. 渲染規格列表
+    UI.renderSpecList(selectSpec);
+    
+    // 3. 預設選中護照
     setTimeout(() => selectSpec('passport'), 100);
+    
+    console.log("System Initialized");
 };
 
-// --- Navigation ---
-function goHome() {
+// --- 導航與介面切換 (Navigation) ---
+
+window.goHome = function() {
     document.querySelectorAll('.nav-item-icon').forEach(el => el.classList.remove('active'));
     document.getElementById('dashboard-area').classList.remove('d-none');
     document.getElementById('intro-area').classList.add('d-none');
     document.getElementById('workspace-area').classList.add('d-none');
-    switchFeature('id-photo', false); 
+    
+    // 重置狀態
+    state.currentFeature = 'id-photo';
+    // 確保切回儀表板
     document.getElementById('dashboard-area').classList.remove('d-none');
 }
 
-function switchFeature(featureId, updateRightPanel = true) {
-    currentFeature = featureId;
+window.switchFeature = function(featureId) {
+    state.currentFeature = featureId;
+
+    // 左側選單高亮
     document.querySelectorAll('.nav-item-icon').forEach(el => el.classList.remove('active'));
     const navEl = document.getElementById(`nav-${featureId}`);
     if(navEl) navEl.classList.add('active');
 
+    // 面板切換
     document.querySelectorAll('.feature-panel').forEach(el => el.classList.add('d-none'));
     const panel = document.getElementById(`panel-${featureId}`);
     if (panel) panel.classList.remove('d-none');
+    // 若無面板則顯示通用(求職照)面板
     if (!panel) document.getElementById('panel-job-photo').classList.remove('d-none');
 
-    if (updateRightPanel) {
-        if (isImageLoaded && featureId === 'id-photo') showWorkspace();
-        else showIntro(featureId);
+    // 右側視圖切換
+    if (state.isImageLoaded && featureId === 'id-photo') {
+        UI.showWorkspace();
+    } else {
+        UI.showIntro(featureId);
     }
 }
 
-function showIntro(featureId) {
-    document.getElementById('dashboard-area').classList.add('d-none');
-    document.getElementById('workspace-area').classList.add('d-none');
-    const intro = document.getElementById('intro-area');
-    intro.classList.remove('d-none');
-    intro.className = "container py-5 h-100 d-flex align-items-center justify-content-center text-center animate-fade";
+// --- 檔案上傳與處理邏輯 (Core Logic) ---
 
-    const content = {
-        'id-photo': { title: '證件照製作', icon: 'bi-person-badge-fill', desc: '上傳生活照，AI 自動去背、裁切、排版。<br>支援護照、簽證、駕照等多國規格。' },
-        'job-photo': { title: '職場求職照', icon: 'bi-briefcase-fill', desc: 'AI 智慧換裝，一鍵生成專業形象照。<br>(需 RTX 3090 算力支援)' },
-        'grad-photo': { title: '畢業學士照', icon: 'bi-mortarboard-fill', desc: '雲端生成學士服照片，紀念青春時刻。<br>(需 RTX 3090 算力支援)' },
-        'beauty': { title: '智能美顏', icon: 'bi-magic', desc: '磨皮、瘦臉、大眼，自然美化不失真。' },
-        'restore': { title: '老圖翻新', icon: 'bi-hourglass-split', desc: '修復破損、去除噪點、黑白上色。' }
-    };
-    const data = content[featureId] || content['id-photo'];
-    document.getElementById('intro-title').innerText = data.title;
-    document.getElementById('intro-icon').className = `bi ${data.icon} fs-1 text-primary`;
-    document.getElementById('intro-desc').innerHTML = data.desc;
-}
-
-function showWorkspace() {
-    document.getElementById('dashboard-area').classList.add('d-none');
-    document.getElementById('intro-area').classList.add('d-none');
-    document.getElementById('workspace-area').classList.remove('d-none');
-    setTimeout(() => {
-        if(currentSpecId === 'custom') updateCustom();
-        else if(specConfig[currentSpecId]) drawMask(specConfig[currentSpecId].width_mm, specConfig[currentSpecId].height_mm);
-    }, 100);
-}
-
-// --- Logic ---
-function handleFileUpload(input) {
+window.handleFileUpload = function(input) {
     if (!input.files.length) return;
     const reader = new FileReader();
-    showLoading(true, "讀取照片中...");
+    
+    UI.showLoading(true, "載入照片中...");
+    
     reader.onload = async function() {
-        originalBase64 = reader.result;
-        document.getElementById('previewImg').src = originalBase64;
-        document.getElementById('previewImg').classList.remove('d-none');
-        isImageLoaded = true;
-        
-        // 重置縮放
-        setZoom(1.0);
-        document.getElementById('zoomRange').value = 1.0;
+        state.originalBase64 = reader.result;
+        state.isImageLoaded = true;
 
+        // 1. 載入圖片到編輯器 (Editor)
+        Editor.loadImageToEditor(state.originalBase64);
+        
+        // 2. 切換 UI 狀態
         document.querySelector('.upload-btn-wrapper').classList.add('d-none');
         document.getElementById('uploaded-status').classList.remove('d-none');
         document.getElementById('btn-process').classList.remove('d-none');
-        showWorkspace();
+        
+        // 3. 顯示工作區
+        UI.showWorkspace();
         document.getElementById('cropMask').classList.remove('d-none');
         
+        // 4. 更新當前規格的遮罩與輔助線
+        selectSpec(state.currentSpecId);
+
+        // 5. 背景呼叫偵測 (選擇性，用於輔助或未來自動對齊)
         try {
-            const res = await fetch(`${API_BASE_URL}/generate/detect`, {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ image_base64: originalBase64 })
-            });
-            if (res.ok) {
-                const data = await res.json();
-                faceData = data.found ? data : null;
-                // 這裡我們保留原本選擇的規格，不被後端可能回傳的空值覆蓋
-                selectSpec(currentSpecId); 
+            const data = await API.detectFace(state.originalBase64);
+            if (data && data.found) {
+                state.faceData = data;
+                // 如果未來想做「自動置中」，可以在這裡呼叫 Editor.autoPosition(data)
             }
-        } catch (err) { console.log("偵測失敗"); } finally { showLoading(false); }
+        } catch (err) {
+            console.log("背景偵測失敗，不影響手動操作");
+        } finally {
+            UI.showLoading(false);
+        }
     };
     reader.readAsDataURL(input.files[0]);
 }
 
-function resetUpload() { location.reload(); }
-
-// 2. 修正渲染列表：用途(Name) 為主，尺寸(Desc) 為輔
-function renderSpecList() {
-    const container = document.getElementById('specs-container');
-    container.innerHTML = '';
-    for (const [key, val] of Object.entries(specConfig)) {
-        const div = document.createElement('div');
-        div.className = 'spec-card';
-        div.id = `spec-${key}`;
-        div.onclick = () => selectSpec(key);
-        
-        // 這裡使用了 DEFAULT_SPECS 裡的 name (用途) 和 desc (尺寸)
-        // 如果是自訂或後端回傳沒有 desc，就自動組合
-        const title = val.name;
-        const subtitle = val.desc || `${val.width_mm} x ${val.height_mm} mm`;
-
-        div.innerHTML = `
-            <div>
-                <div class="fw-bold text-dark" style="font-size: 1rem;">${title}</div>
-                <div class="text-muted" style="font-size: 0.8rem;">${subtitle}</div>
-            </div>
-            <i class="bi bi-check-circle-fill text-primary d-none check-icon fs-5"></i>
-        `;
-        container.appendChild(div);
-    }
+window.resetUpload = function() {
+    // 重置 UI
+    document.querySelector('.upload-btn-wrapper').classList.remove('d-none');
+    document.getElementById('uploaded-status').classList.add('d-none');
+    document.getElementById('btn-process').classList.add('d-none');
+    document.getElementById('result-section').classList.add('d-none');
+    document.getElementById('specs-section').classList.remove('d-none');
+    
+    // 重置狀態
+    state.isImageLoaded = false;
+    state.originalBase64 = "";
+    state.resultPhotos = [];
+    
+    // 隱藏編輯器
+    document.getElementById('previewImg').classList.add('d-none');
+    document.getElementById('previewImg').src = "";
+    document.getElementById('cropMask').classList.add('d-none');
+    
+    // 回到說明頁
+    UI.showIntro(state.currentFeature);
 }
 
-function selectSpec(specId) {
-    currentSpecId = specId;
+// --- 規格選擇與編輯器連動 ---
+
+window.selectSpec = function(specId) {
+    state.currentSpecId = specId;
+    
+    // UI 更新 (卡片高亮)
     document.querySelectorAll('.spec-card').forEach(el => {
         el.classList.remove('active');
         const icon = el.querySelector('.check-icon');
         if (icon) icon.classList.add('d-none');
     });
     document.getElementById('custom-inputs').classList.add('d-none');
+
     const el = document.getElementById(`spec-${specId}`);
     if(el) {
         el.classList.add('active');
         const icon = el.querySelector('.check-icon');
         if (icon) icon.classList.remove('d-none');
     }
-    if(isImageLoaded && specConfig[specId]) drawMask(specConfig[specId].width_mm, specConfig[specId].height_mm);
+    
+    // 更新編輯器遮罩比例 (Editor)
+    const spec = state.specConfig[specId];
+    if(spec) {
+        Editor.updateMaskRatio(spec.width_mm, spec.height_mm);
+        // 如果圖片已載入，更新輔助線文字
+        if(state.isImageLoaded) Editor.drawGuides();
+    }
 }
 
-function toggleCustom() {
+window.toggleCustom = function() {
     document.querySelectorAll('.spec-card').forEach(el => {
         el.classList.remove('active');
         const icon = el.querySelector('.check-icon');
@@ -193,229 +158,200 @@ function toggleCustom() {
     });
     document.getElementById('spec-custom').classList.add('active');
     document.getElementById('custom-inputs').classList.remove('d-none');
-    currentSpecId = 'custom';
-    updateCustom();
+    
+    state.currentSpecId = 'custom';
+    window.updateCustom();
 }
 
-function updateCustom() {
+window.updateCustom = function() {
     const w = parseFloat(document.getElementById('custom-w').value) || 35;
     const h = parseFloat(document.getElementById('custom-h').value) || 45;
-    currentCustomRatio = w / h;
-    if(isImageLoaded) drawMask(w, h);
-}
-
-function drawMask(mmW, mmH) {
-    const img = document.getElementById('previewImg');
-    const mask = document.getElementById('cropMask');
-    const label = document.getElementById('maskLabel');
-    if (!img.naturalWidth) return;
+    state.currentCustomRatio = w / h;
     
-    label.innerText = `${mmW}x${mmH}mm`;
-    const scale = img.width / img.naturalWidth;
-    let targetRatio = mmW / mmH;
-    
-    // 讀取各規格的專屬倍率
-    let faceMult = 2.0; 
-    let topMargin = 0.12;
-    if (currentSpecId !== 'custom' && specConfig[currentSpecId]) {
-        if(specConfig[currentSpecId].face_multiplier) faceMult = specConfig[currentSpecId].face_multiplier;
-        if(specConfig[currentSpecId].top_margin) topMargin = specConfig[currentSpecId].top_margin;
-    }
-
-    let cropW, cropH, cropX, cropY;
-    if (faceData && faceData.found) {
-        const realCropH = faceData.h * faceMult;
-        const realCropW = realCropH * targetRatio;
-        const faceCx = faceData.x + faceData.w / 2;
-        const realX = faceCx - realCropW / 2;
-        const headTop = faceData.head_top_y || faceData.y;
-        const realY = headTop - (realCropH * topMargin);
-        cropW = realCropW * scale; cropH = realCropH * scale; cropX = realX * scale; cropY = realY * scale;
-    } else {
-        cropH = img.height; cropW = cropH * targetRatio;
-        if (cropW > img.width) { cropW = img.width; cropH = cropW / targetRatio; }
-        cropX = (img.width - cropW) / 2; cropY = (img.height - cropH) / 2;
-    }
-    mask.style.width = `${cropW}px`; mask.style.height = `${cropH}px`; mask.style.left = `${cropX}px`; mask.style.top = `${cropY}px`;
-    mask.classList.remove('d-none');
+    // 更新編輯器遮罩
+    Editor.updateMaskRatio(w, h);
+    if(state.isImageLoaded) Editor.drawGuides();
 }
 
-// 3. 新增縮放控制
-function setZoom(value) {
-    currentZoom = parseFloat(value);
-    const wrapper = document.querySelector('.image-wrapper');
-    if(wrapper) {
-        // 同時縮放圖片與遮罩，因為遮罩在 wrapper 內部
-        wrapper.style.transform = `scale(${currentZoom})`;
-        wrapper.style.transformOrigin = "center top"; // 從上方中間縮放比較自然
-    }
-    // 更新顯示數值
-    document.getElementById('zoomValue').innerText = Math.round(currentZoom * 100) + '%';
-}
+// --- 核心製作流程 (所見即所得) ---
 
-window.addEventListener('resize', () => {
-    if (isImageLoaded) {
-        if(currentSpecId === 'custom') updateCustom();
-        else if(specConfig[currentSpecId]) drawMask(specConfig[currentSpecId].width_mm, specConfig[currentSpecId].height_mm);
-    }
-});
-
-// ... (其餘後端串接函式保持不變：processImage, runCheck, applyFix, etc.) ...
-async function processImage() {
-    showLoading(true, "AI 製作中...");
+window.processImage = async function() {
+    UI.showLoading(true, "AI 製作中 (裁切/去背/修圖)...");
     try {
-        const res = await fetch(`${API_BASE_URL}/generate/preview`, {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ image_base64: originalBase64, spec_id: currentSpecId, custom_ratio: currentCustomRatio })
-        });
-        const data = await res.json();
+        // 1. 從編輯器取得當前裁切好的圖片 (Base64)
+        const croppedBase64 = Editor.generateCroppedImage();
+        
+        if (!croppedBase64) throw new Error("裁切失敗");
+
+        // 2. 發送給後端 (is_manual_crop = true)
+        // 注意：這裡我們傳送的是已經裁好的圖，後端只負責去背和美顏
+        const data = await API.processPreview(croppedBase64, true);
+        
         if (data.photos) {
-            resultPhotos = data.photos;
+            state.resultPhotos = data.photos;
+            
+            // UI 切換到結果頁
             document.getElementById('specs-section').classList.add('d-none');
             document.getElementById('result-section').classList.remove('d-none');
             document.getElementById('cropMask').classList.add('d-none');
-            // 製作完成後，重置縮放以便查看全圖
-            setZoom(1.0); document.getElementById('zoomRange').value = 1.0;
-            document.getElementById('zoom-toolbar').classList.add('d-none'); // 隱藏縮放列
-
+            
+            // 隱藏縮放工具列 (結果頁不需要)
+            document.getElementById('zoom-toolbar').classList.add('d-none');
+            
+            // 顯示結果圖
             document.getElementById('img-white').src = `data:image/jpeg;base64,${data.photos[0]}`;
             document.getElementById('img-blue').src = `data:image/jpeg;base64,${data.photos[1]}`;
-            selectResult('white');
-        } else { alert("錯誤: " + data.error); }
-    } catch (e) { alert("連線錯誤"); } finally { showLoading(false); }
+            window.selectResult('white');
+            
+        } else { 
+            alert("錯誤: " + data.error); 
+        }
+    } catch (e) { 
+        alert("連線錯誤: " + e.message); 
+    } finally { 
+        UI.showLoading(false); 
+    }
 }
 
-function selectResult(color) {
+window.selectResult = function(color) {
     const idx = color === 'white' ? 0 : 1;
-    selectedResultBg = idx;
+    state.selectedResultBg = idx;
+    
     document.getElementById('res-white').classList.remove('active');
     document.getElementById('res-blue').classList.remove('active');
     document.getElementById(`res-${color}`).classList.add('active');
-    document.getElementById('previewImg').src = `data:image/jpeg;base64,${resultPhotos[idx]}`;
+    
+    // 顯示預覽圖
+    const img = document.getElementById('previewImg');
+    img.src = `data:image/jpeg;base64,${state.resultPhotos[idx]}`;
+    
+    // 結果頁時，圖片不應該再被拖曳或縮放，重置 Transform
+    img.style.transform = 'none';
+    // 確保圖片顯示
+    img.classList.remove('d-none');
 }
 
-async function runCheck() {
-    if (!resultPhotos[selectedResultBg]) return;
-    showLoading(true, "AI 審查中...");
+// --- 合規檢查與修復 ---
+
+window.runCheck = async function() {
+    if (!state.resultPhotos[state.selectedResultBg]) return;
+    UI.showLoading(true, "AI 審查中...");
+    
     try {
-        const res = await fetch(`${API_BASE_URL}/generate/check`, {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ image_base64: resultPhotos[selectedResultBg], spec_id: currentSpecId })
-        });
-        const data = await res.json();
+        // 呼叫 Check API
+        const data = await API.runCheckApi(state.resultPhotos[state.selectedResultBg]);
+        
         if (data.error) { alert("後端錯誤: " + data.error); return; }
+
         if (data.results) {
-            const list = document.getElementById('check-results-list');
-            list.innerHTML = '';
-            let failCount = 0, warningCount = 0, fixableCount = 0, unfixableCount = 0;
-            data.results.forEach(item => {
-                if(item.status === 'fail') failCount++;
-                if(item.status === 'warning') warningCount++;
-                if ((item.status === 'fail' || item.status === 'warning') && !item.fix_action) unfixableCount++;
-                if(item.fix_action) fixableCount++;
-            });
-            let summaryHtml = '';
-            let totalIssues = failCount + warningCount;
-            if (totalIssues === 0) {
-                summaryHtml = `<div class="alert alert-success border-0 shadow-sm mb-3 text-center"><i class="bi bi-check-circle-fill fs-3 d-block mb-2"></i><h5 class="fw-bold">照片符合標準</h5><p class="mb-0 small">太棒了！這張照片符合 AI 初步審查標準。</p></div>`;
-            } else if (unfixableCount > 0) {
-                summaryHtml = `<div class="alert alert-danger border-0 shadow-sm mb-3"><h5 class="fw-bold text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>建議重新拍攝</h5><p class="mb-1 small">經審查發現 <strong>${totalIssues}</strong> 個缺失，其中包含無法修復的項目。</p><div class="mt-2"><button class="btn btn-sm btn-outline-danger w-100" onclick="document.getElementById('fileInput').click()">重新上傳</button></div></div>`;
-            } else {
-                summaryHtml = `<div class="alert alert-primary border-0 shadow-sm mb-3"><h5 class="fw-bold text-primary"><i class="bi bi-magic me-2"></i>發現可修復的問題</h5><p class="mb-1 small">發現 <strong>${totalIssues}</strong> 個可修復缺失，建議使用「AI 修復」。</p></div>`;
-            }
-            list.innerHTML = summaryHtml;
-            data.results.forEach(item => {
-                let icon = 'bi-check-circle-fill text-success'; let bg = 'bg-light'; let actionBtn = '';
-                if (item.status === 'warning') { icon = 'bi-exclamation-triangle-fill text-warning'; bg = 'bg-warning-subtle'; }
-                if (item.status === 'fail') { icon = 'bi-x-circle-fill text-danger'; bg = 'bg-danger-subtle'; }
-                if (item.fix_action) actionBtn = `<button class="btn btn-sm btn-primary ms-2 shadow-sm" onclick="applyFix('${item.fix_action}')"><i class="bi bi-magic"></i> 修復</button>`;
-                const div = document.createElement('div');
-                div.className = `list-group-item d-flex justify-content-between align-items-center ${bg} mb-1 border-0 rounded`;
-                div.innerHTML = `<span><i class="bi ${icon} me-2"></i> ${item.item}</span><div class="d-flex align-items-center"><span class="badge bg-white text-dark border me-1">${item.msg}</span>${actionBtn}</div>`;
-                list.appendChild(div);
-            });
-            new bootstrap.Modal(document.getElementById('checkModal')).show();
+            // 渲染檢查結果列表
+            UI.renderCheckResults(data.results);
         }
-    } catch(e) { alert("檢查失敗: " + e.message); } finally { showLoading(false); }
+    } catch(e) { 
+        alert("檢查失敗: " + e.message); 
+    } finally { 
+        UI.showLoading(false); 
+    }
 }
 
-async function applyFix(actionType) {
+window.applyFix = async function(actionType) {
+    // 關閉 Modal
     const modalEl = document.getElementById('checkModal');
     const modal = bootstrap.Modal.getInstance(modalEl);
     if(modal) modal.hide();
-    showLoading(true, "AI 修復中...");
+
+    UI.showLoading(true, "AI 修復中...");
     try {
-        const res = await fetch(`${API_BASE_URL}/generate/fix`, {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ image_base64: resultPhotos[selectedResultBg], action: actionType })
-        });
-        const data = await res.json();
+        // 呼叫 Fix API
+        const data = await API.fixImageApi(state.resultPhotos[state.selectedResultBg], actionType);
+        
         if(data.image_base64) {
-            resultPhotos[selectedResultBg] = data.image_base64;
-            if(selectedResultBg === 0) document.getElementById('img-white').src = `data:image/jpeg;base64,${data.image_base64}`;
-            else document.getElementById('img-blue').src = `data:image/jpeg;base64,${data.image_base64}`;
-            selectResult(selectedResultBg === 0 ? 'white' : 'blue');
-            alert("✅ 修復完成！");
-        } else { alert("修復失敗: " + (data.error || "未知錯誤")); }
-    } catch(e) { alert("連線錯誤"); } finally { showLoading(false); }
+            // 更新結果
+            state.resultPhotos[state.selectedResultBg] = data.image_base64;
+            
+            const color = state.selectedResultBg === 0 ? 'white' : 'blue';
+            document.getElementById(`img-${color}`).src = `data:image/jpeg;base64,${data.image_base64}`;
+            
+            window.selectResult(color);
+            alert("✅ 修復完成！請重新執行合規檢查確認結果。");
+        } else {
+            alert("修復失敗: " + (data.error || "未知錯誤"));
+        }
+    } catch(e) { 
+        alert("連線錯誤"); 
+    } finally { 
+        UI.showLoading(false); 
+    }
 }
 
-function downloadImage() {
+// --- 下載與輸出 ---
+
+window.downloadImage = function() {
     const link = document.createElement('a');
-    link.href = `data:image/jpeg;base64,${resultPhotos[selectedResultBg]}`;
+    link.href = `data:image/jpeg;base64,${state.resultPhotos[state.selectedResultBg]}`;
     link.download = `id_photo_high_res_${Date.now()}.jpg`;
     link.click();
 }
 
-async function generateLayout() {
-    showLoading(true, "排版生成中...");
+window.generateLayout = async function() {
+    UI.showLoading(true, "排版生成中...");
     try {
-        const res = await fetch(`${API_BASE_URL}/generate/layout`, {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ image_base64: resultPhotos[selectedResultBg] })
-        });
-        const data = await res.json();
+        const data = await API.generateLayoutApi(state.resultPhotos[state.selectedResultBg]);
         if (data.layout_image) {
-            currentLayoutBase64 = data.layout_image;
-            const imgUrl = `data:image/jpeg;base64,${data.layout_image}`;
-            document.getElementById('previewImg').src = imgUrl;
+            state.currentLayoutBase64 = data.layout_image;
+            
+            // 直接下載
             const link = document.createElement('a');
-            link.href = imgUrl;
+            link.href = `data:image/jpeg;base64,${data.layout_image}`;
             link.download = `layout_4x6_${Date.now()}.jpg`;
             link.click();
-        } else { alert(data.error || "排版失敗"); }
-    } catch(e) { alert("排版錯誤"); } finally { showLoading(false); }
+            
+            // 也可以選擇顯示在畫面上(看需求)，目前邏輯是直接下載
+        } else { 
+            alert(data.error || "排版失敗"); 
+        }
+    } catch(e) { 
+        alert("排版錯誤"); 
+    } finally { 
+        UI.showLoading(false); 
+    }
 }
 
-function toggleEmailInput() { document.getElementById('email-group').classList.toggle('d-none'); }
-async function sendEmail() {
+window.toggleEmailInput = function() {
+    document.getElementById('email-group').classList.toggle('d-none');
+}
+
+window.sendEmail = async function() {
     const email = document.getElementById('user-email').value;
     if (!email || !email.includes("@")) { alert("請輸入有效的 Email"); return; }
-    showLoading(true, "正在寄送...");
+    
+    UI.showLoading(true, "正在寄送...");
     try {
-        let imgToSend = currentLayoutBase64;
+        // 如果還沒生成排版，先生成
+        let imgToSend = state.currentLayoutBase64;
         if (!imgToSend) {
-            const resLayout = await fetch(`${API_BASE_URL}/generate/layout`, {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ image_base64: resultPhotos[selectedResultBg] })
-            });
-            const dataLayout = await resLayout.json();
-            imgToSend = dataLayout.layout_image;
+            const layoutData = await API.generateLayoutApi(state.resultPhotos[state.selectedResultBg]);
+            if(layoutData.layout_image) imgToSend = layoutData.layout_image;
+            else throw new Error("無法生成排版圖");
         }
-        const resEmail = await fetch(`${API_BASE_URL}/send-email`, {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ email: email, image_base64: imgToSend })
-        });
-        const dataEmail = await resEmail.json();
-        if (dataEmail.status === "SUCCESS") {
+        
+        const data = await API.sendEmailApi(email, imgToSend);
+        
+        if (data.status === "SUCCESS") {
             alert("✅ 郵件已發送！");
             document.getElementById('email-group').classList.add('d-none');
-        } else { alert("❌ 發送失敗: " + (dataEmail.error || "未知錯誤")); }
-    } catch (e) { alert("錯誤: " + e.message); } finally { showLoading(false); }
+        } else { 
+            alert("❌ 發送失敗: " + (data.error || "未知錯誤")); 
+        }
+    } catch (e) { 
+        alert("錯誤: " + e.message); 
+    } finally { 
+        UI.showLoading(false); 
+    }
 }
 
-function showLoading(show, text="處理中...") {
-    const el = document.getElementById('loading');
-    if(show) { el.querySelector('div.text-dark').innerText = text; el.style.display = 'flex'; }
-    else { el.style.display = 'none'; }
+// --- Zoom Control 橋接 ---
+window.setZoom = function(value) {
+    Editor.setEditorZoom(value);
+    document.getElementById('zoomValue').innerText = Math.round(parseFloat(value) * 100) + '%';
 }
