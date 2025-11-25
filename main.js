@@ -182,9 +182,67 @@ window.generateLayout = async function() {
 window.runCheck = async function() {
     if (!state.resultPhotos[state.selectedResultBg]) return;
     UI.showLoading(true, "AI 審查中...");
+    
     try {
         const data = await API.runCheckApi(state.resultPhotos[state.selectedResultBg]);
-        if (data.results) UI.renderCheckResults(data.results);
+        
+        // --- 新增：在 Modal 中顯示帶有輔助線的圖片 ---
+        const modalBody = document.querySelector('#checkModal .modal-body');
+        
+        // 1. 清空舊內容
+        modalBody.innerHTML = '';
+        
+        // 2. 建立圖片容器與輔助線
+        const imgContainer = document.createElement('div');
+        imgContainer.style.position = 'relative';
+        imgContainer.style.display = 'inline-block';
+        imgContainer.style.textAlign = 'center';
+        imgContainer.style.marginBottom = '15px';
+
+        const img = document.createElement('img');
+        img.src = `data:image/jpeg;base64,${state.resultPhotos[state.selectedResultBg]}`;
+        img.className = 'img-fluid rounded border';
+        img.style.maxHeight = '300px';
+        
+        // 3. 繪製輔助線 (頭頂線、下巴線、中線)
+        // 證件照標準：頭頂約在 10%~15%，下巴約在 80%~85%
+        const overlay = document.createElement('div');
+        overlay.style.position = 'absolute';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.pointerEvents = 'none';
+        overlay.innerHTML = `
+            <div style="position:absolute; top:12%; left:0; width:100%; border-top: 1px dashed cyan; text-align:right;"><span style="background:cyan; font-size:10px; padding:2px;">頭頂限制</span></div>
+            <div style="position:absolute; top:45%; left:0; width:100%; border-top: 1px solid rgba(255,0,0,0.5); text-align:right;"><span style="background:rgba(255,0,0,0.5); color:#fff; font-size:10px; padding:2px;">眼睛基準</span></div>
+            <div style="position:absolute; top:82%; left:0; width:100%; border-top: 1px dashed cyan; text-align:right;"><span style="background:cyan; font-size:10px; padding:2px;">下巴限制</span></div>
+        `;
+
+        imgContainer.appendChild(img);
+        imgContainer.appendChild(overlay);
+        modalBody.appendChild(imgContainer);
+
+        // 4. 顯示檢查結果列表
+        const listGroup = document.createElement('div');
+        listGroup.className = 'list-group';
+        if (data.results) {
+            UI.renderCheckResultsToElement(data.results, listGroup); // 需確認 ui.js 有支援傳入 element，若無可手動渲染
+            // 若 UI.renderCheckResults 是寫死的，這裡改用簡單迴圈渲染：
+            data.results.forEach(res => {
+                const item = document.createElement('div');
+                item.className = `list-group-item list-group-item-${res.status === 'pass' ? 'success' : res.status === 'warn' ? 'warning' : 'danger'} d-flex justify-content-between align-items-center`;
+                item.innerHTML = `<span><i class="bi ${res.status==='pass'?'bi-check-circle-fill':'bi-exclamation-circle-fill'}"></i> ${res.item}</span> <small>${res.msg}</small>`;
+                listGroup.appendChild(item);
+            });
+        }
+        modalBody.appendChild(listGroup);
+
+        // 顯示 Modal
+        const modalEl = document.getElementById('checkModal');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+
     } catch(e) { alert(e.message); } finally { UI.showLoading(false); }
 }
 
