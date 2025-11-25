@@ -1,7 +1,7 @@
 :root { --sidebar-icon-width: 80px; --sidebar-panel-width: 340px; --primary-color: #0d6efd; }
 body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; height: 100vh; overflow: hidden; }
 
-/* Sidebars */
+/* Sidebars & Cards (保持不變) */
 #sidebar-icons { width: var(--sidebar-icon-width); min-width: var(--sidebar-icon-width); z-index: 1020; }
 .nav-item-icon { width: 100%; padding: 15px 0; cursor: pointer; color: rgba(255,255,255,0.5); transition: all 0.2s; }
 .nav-item-icon:hover { color: white; background: rgba(255,255,255,0.1); }
@@ -9,8 +9,6 @@ body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; height: 1
 .nav-item-icon i { font-size: 1.6rem; display: block; margin-bottom: 4px; }
 .nav-item-icon span { font-size: 11px; }
 #sidebar-panels { width: var(--sidebar-panel-width); min-width: var(--sidebar-panel-width); z-index: 1010; background: #fff; box-shadow: 2px 0 5px rgba(0,0,0,0.05); }
-
-/* Cards */
 .feature-card { cursor: pointer; transition: transform 0.3s, box-shadow 0.3s; }
 .feature-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
 .icon-circle { width: 60px; height: 60px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 1.8rem; }
@@ -18,17 +16,62 @@ body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; height: 1
 .spec-card:hover { border-color: var(--primary-color); background: #f1f8ff; }
 .spec-card.active { border-color: var(--primary-color); background: #e7f1ff; border-left: 4px solid var(--primary-color); }
 
-/* Image & Mask */
+/* --- 核心修正區：Image Editor --- */
+
+/* 1. 容器：扮演「視窗」或「裁切框」的角色 */
 .image-wrapper { 
     position: relative !important; 
-    display: inline-block; 
-    line-height: 0; 
+    display: block; /* 改為 block 以便設定精確尺寸 */
+    margin: 0 auto; /* 水平置中 */
+    /* 移除 overflow: hidden，讓使用者能看到框外的暗色區域 (更有裁切感) */
+    /* 背景格線 */
     background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><rect width="5" height="5" fill="%23eee"/><rect x="5" y="5" width="5" height="5" fill="%23eee"/></svg>');
-    transform-origin: center top; /* 縮放基準點 */
+    transform-origin: center top; 
+    box-shadow: 0 20px 50px rgba(0,0,0,0.2);
 }
-.image-wrapper img { display: block; max-width: 100%; }
-.crop-mask { position: absolute; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.85); pointer-events: none; z-index: 10; border: 2px dashed #ff3333; transition: all 0.2s ease; }
-.mask-label { position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%); background: #ff3333; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; font-weight: bold; }
+
+/* 2. 圖片：在容器下方自由移動 */
+.image-wrapper img { 
+    display: block; 
+    position: absolute; /* 關鍵：絕對定位 */
+    top: 0; left: 0;
+    max-width: none !important; /* 關鍵：解除限制，讓圖片可以比框大 */
+    max-height: none !important;
+    /* 這裡不設 z-index，預設為 0 */
+}
+
+/* 3. 遮罩：蓋在圖片上，顯示紅框與暗角 */
+.crop-mask { 
+    position: absolute; 
+    top: 0; left: 0;
+    width: 100%; height: 100%; /* 關鍵：填滿容器 */
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.85); /* 暗房效果 */
+    pointer-events: none; /* 讓點擊穿透到下方的 wrapper/img */
+    z-index: 10; 
+    border: 2px dashed #ff3333; 
+    transition: none; /* 移除動畫以提升拖曳效能 */
+}
+
+/* 4. 標籤 */
+.mask-label { 
+    position: absolute; bottom: -35px; left: 50%; transform: translateX(-50%); 
+    background: #ff3333; color: white; 
+    padding: 4px 10px; border-radius: 20px; font-size: 14px; white-space: nowrap; font-weight: bold;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+/* 5. 輔助線 (新增) */
+.guide-line {
+    position: absolute; left: 0; width: 100%;
+    border-top: 1px dashed rgba(0, 255, 255, 0.7); /* 青色虛線 */
+    pointer-events: none;
+    text-align: right;
+}
+.guide-line span {
+    background: rgba(0, 0, 0, 0.5); color: #00ffff;
+    font-size: 10px; padding: 1px 4px; border-radius: 2px;
+    margin-right: 2px;
+}
 
 /* Misc */
 .result-btn { cursor: pointer; transition: 0.2s; background: #fff; }
@@ -36,6 +79,4 @@ body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; height: 1
 .loading-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.95); z-index: 2000; display: none; flex-direction: column; align-items: center; justify-content: center; }
 .animate-fade { animation: fadeIn 0.4s ease-in-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-/* Range Slider Style */
 input[type=range] { cursor: pointer; }
