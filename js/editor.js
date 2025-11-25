@@ -12,55 +12,32 @@ export function initEditor() {
 // 自動對齊
 export function autoAlignImage() {
     const img = document.getElementById('previewImg');
+    // 如果沒有偵測到人臉，使用預設置中 (Cover 模式)
     if (!img || !state.faceData || !state.faceData.found) {
         centerImageDefault();
         return;
     }
 
-    const spec = state.specConfig[state.currentSpecId];
-    if (!spec) return;
-
-    // 規格參數
-    let targetHeadRatio = 0.76; 
-    let targetTopMargin = 0.09;
-    let targetRatio = spec.width_mm / spec.height_mm;
-
-    if (state.currentSpecId === 'inch1') { targetHeadRatio = 0.70; targetTopMargin = 0.12; }
-    else if (state.currentSpecId === 'resume') { targetHeadRatio = 0.60; targetTopMargin = 0.15; }
-    else if (state.currentSpecId === 'visa_us') { targetHeadRatio = 0.65; targetTopMargin = 0.15; }
-
-    const face = state.faceData;
-    const chinY = face.y + face.h + (face.h * 0.05);
-    const headTopY = face.head_top_y;
-    let headH = chinY - headTopY;
-    if (headH <= 0) headH = face.h * 1.5;
-
-    const cropH = headH / targetHeadRatio;
-    const cropW = cropH * targetRatio;
-    const cropY = headTopY - (cropH * targetTopMargin);
-    const faceCenterX = face.x + face.w / 2;
-    const cropX = faceCenterX - (cropW / 2);
-
-    const containerW = state.editor.containerWidth;
-    const scale = containerW / cropW;
-    const translateX = -cropX * scale;
-    const translateY = -cropY * scale;
-
-    // 儲存狀態供匯出使用
-    state.editor.scale = scale;
-    state.editor.posX = translateX;
-    state.editor.posY = translateY;
-
-    img.style.transform = `translate3d(${translateX}px, ${translateY}px, 0) scale(${scale})`;
+    // 雖然我們有臉部數據，但為了讓預覽好看，
+    // 我們還是希望圖片能盡量填滿框框，而不是縮很小
+    // 所以這裡我們也使用 centerImageDefault 來做初始顯示
+    // 因為實際裁切是後端做，前端只是給使用者確認 "圖片有上傳成功"
+    centerImageDefault();
 }
 
 function centerImageDefault() {
     const img = document.getElementById('previewImg');
+    if (!img) return;
+    
     const cw = state.editor.containerWidth;
     const ch = state.editor.containerHeight;
     const iw = img.naturalWidth;
     const ih = img.naturalHeight;
+    
+    // [修正] 使用 Math.max 確保圖片 "Cover" (填滿) 容器
+    // 這樣小圖片會被放大，大圖片會被縮小，但都不會留黑邊
     const scale = Math.max(cw / iw, ch / ih);
+    
     const x = (cw - iw * scale) / 2;
     const y = (ch - ih * scale) / 2;
     
@@ -77,7 +54,8 @@ export function loadImageToEditor(base64) {
         state.editor.imageWidth = img.naturalWidth;
         state.editor.imageHeight = img.naturalHeight;
         updateMaskRatio(); 
-        autoAlignImage();
+        // 圖片載入後，強制執行一次對齊
+        centerImageDefault();
     };
     img.src = base64;
     img.classList.remove('d-none');
@@ -102,46 +80,20 @@ export function updateMaskRatio(width_mm, height_mm) {
     state.editor.containerWidth = newWidth;
     state.editor.containerHeight = baseHeight;
     
-    mask.innerHTML = ``;
-    if(state.isImageLoaded) autoAlignImage();
+    // 清空遮罩內容 (不顯示紅框)
+    mask.innerHTML = '';
+    
+    if(state.isImageLoaded) centerImageDefault();
 }
 
-export function drawGuides() {
-    const label = document.getElementById('maskLabel');
-    const topGuide = document.getElementById('guide-top');
-    const chinGuide = document.getElementById('guide-chin');
-    const spec = state.specConfig[state.currentSpecId];
-    if (spec) {
-        if(label) label.innerText = `${spec.width_mm}x${spec.height_mm}mm`;
-        let topPercent = 9; let headPercent = 76; 
-        if (state.currentSpecId === 'inch1') { topPercent = 12; headPercent = 70; }
-        else if (state.currentSpecId === 'resume') { topPercent = 15; headPercent = 60; }
-        else if (state.currentSpecId === 'visa_us') { topPercent = 15; headPercent = 65; }
-        const bottomPercent = topPercent + headPercent;
-        if(topGuide) topGuide.style.top = `${topPercent}%`;
-        if(chinGuide) chinGuide.style.top = `${bottomPercent}%`;
-    }
-}
-
-// 【核心新增】匯出裁切參數給後端
+// 取得裁切參數 (其實後端 V6.0 已經不看這個了，但保留格式以防萬一)
 export function getCropParams() {
-    // 計算相對裁切參數
-    // 1. 實際顯示的 Scale = state.editor.scale
-    // 2. 實際位移 = state.editor.posX, posY
-    // 3. 容器大小 = state.editor.containerWidth, Height
-    
-    // 我們需要告訴後端：請從原圖 (0,0) 開始，以 (scale) 縮放後，擷取 (x, y, w, h) 區域
-    // 轉換公式：
-    // CropX = -posX / scale
-    // CropY = -posY / scale
-    // CropW = containerW / scale
-    
     const scale = state.editor.scale;
     return {
         x: -state.editor.posX / scale,
         y: -state.editor.posY / scale,
         w: state.editor.containerWidth / scale,
         h: state.editor.containerHeight / scale,
-        is_manual: true // 標記這是已經算好的參數
+        is_manual: true 
     };
 }
