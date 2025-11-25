@@ -1,6 +1,5 @@
 import { API_BASE_URL } from './config.js';
 import { state } from './state.js';
-import { showLoading } from './ui.js';
 
 export async function detectFace(base64) {
     try {
@@ -13,16 +12,19 @@ export async function detectFace(base64) {
     return null;
 }
 
-export async function processPreview(base64, isManual = false) {
+// 修改：接收 cropParams
+export async function processPreview(base64, cropParams) {
     try {
+        const payload = { 
+            image_base64: base64, 
+            spec_id: state.currentSpecId,
+            // 如果有傳入裁切參數，就打包進去
+            manual_crop: cropParams ? cropParams : null
+        };
+
         const res = await fetch(`${API_BASE_URL}/generate/preview`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ 
-                image_base64: base64, 
-                spec_id: state.currentSpecId, 
-                custom_ratio: state.currentCustomRatio,
-                is_manual_crop: isManual // 告訴後端這是手動裁切的
-            })
+            body: JSON.stringify(payload)
         });
         return await res.json();
     } catch (e) { throw new Error("連線錯誤"); }
@@ -48,4 +50,22 @@ export async function fixImageApi(imgBase64, action) {
     } catch (e) { throw e; }
 }
 
-// Layout & Email 省略，邏輯同上...
+export async function generateLayoutApi(imgBase64) {
+    try {
+        const res = await fetch(`${API_BASE_URL}/generate/layout`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ image_base64: imgBase64 })
+        });
+        return await res.json();
+    } catch (e) { throw e; }
+}
+
+export async function sendEmailApi(email, imgBase64) {
+    try {
+        const res = await fetch(`${API_BASE_URL}/send-email`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ email: email, image_base64: imgBase64 })
+        });
+        return await res.json();
+    } catch (e) { throw e; }
+}
