@@ -3,7 +3,6 @@ import * as UI from './js/ui.js';
 import * as API from './js/api.js';
 import * as Editor from './js/editor.js';
 
-// 1. 定義規格
 const DEFAULT_SPECS = {
     "passport": { "name": "護照 / 身分證", "desc": "2吋 (35x45mm) - 頭部 3.2~3.6cm", "width_mm": 35, "height_mm": 45 },
     "resume": { "name": "健保卡 / 履歷 / 半身照", "desc": "2吋 (42x47mm)", "width_mm": 42, "height_mm": 47 },
@@ -18,14 +17,12 @@ window.onload = function() {
     setTimeout(() => selectSpec('passport'), 100);
 };
 
-// --- Navigation ---
 window.goHome = function() {
     document.querySelectorAll('.nav-item-icon').forEach(el => el.classList.remove('active'));
     document.getElementById('dashboard-area').classList.remove('d-none');
     document.getElementById('intro-area').classList.add('d-none');
     document.getElementById('workspace-area').classList.add('d-none');
     state.currentFeature = 'id-photo';
-    document.getElementById('dashboard-area').classList.remove('d-none');
 }
 
 window.switchFeature = function(featureId) {
@@ -36,7 +33,6 @@ window.switchFeature = function(featureId) {
     document.querySelectorAll('.feature-panel').forEach(el => el.classList.add('d-none'));
     const panel = document.getElementById(`panel-${featureId}`);
     if (panel) panel.classList.remove('d-none');
-    if (!panel) document.getElementById('panel-job-photo').classList.remove('d-none');
     if (state.isImageLoaded && featureId === 'id-photo') UI.showWorkspace();
     else UI.showIntro(featureId);
 }
@@ -57,7 +53,6 @@ window.handleFileUpload = function(input) {
         document.getElementById('btn-process').classList.remove('d-none');
         
         UI.showWorkspace();
-        // 隱藏紅框 (配合 CSS display:none)
         document.getElementById('cropMask').classList.add('d-none'); 
         
         try {
@@ -105,7 +100,6 @@ window.updateCustom = function() {
     Editor.updateMaskRatio(w, h);
 }
 
-// --- 製作流程 ---
 window.processImage = async function() {
     UI.showLoading(true, "AI 製作中...");
     try {
@@ -146,9 +140,7 @@ window.selectResult = function(color) {
 }
 
 window.downloadImage = function() {
-    if(!state.resultPhotos || state.resultPhotos.length === 0) {
-        alert("無可下載的圖片"); return;
-    }
+    if(!state.resultPhotos || state.resultPhotos.length === 0) { alert("無可下載的圖片"); return; }
     const link = document.createElement('a');
     link.href = `data:image/jpeg;base64,${state.resultPhotos[state.selectedResultBg]}`;
     link.download = `id_photo_${Date.now()}.jpg`;
@@ -170,18 +162,18 @@ window.generateLayout = async function() {
     } catch(e) { alert("排版錯誤"); } finally { UI.showLoading(false); }
 }
 
-// --- 修正後的 Check 邏輯 ---
+// 修正後的檢查視窗
 window.runCheck = async function() {
     if (!state.resultPhotos[state.selectedResultBg]) return;
     UI.showLoading(true, "AI 審查中...");
     try {
         const data = await API.runCheckApi(state.resultPhotos[state.selectedResultBg]);
         
-        // 直接操作 DOM，解決 UI 函式缺失問題
         const modalBody = document.querySelector('#checkModal .modal-body');
-        modalBody.innerHTML = ''; // 清空
+        modalBody.innerHTML = ''; 
 
-        // 1. 圖片容器 (含輔助線)
+        // 1. 圖片 (修正線條位置)
+        // 頭頂 3.2mm~3.6mm (約 10~15%)，下巴約在 85%
         const imgContainer = document.createElement('div');
         imgContainer.className = 'text-center mb-3 position-relative d-inline-block';
         
@@ -190,7 +182,6 @@ window.runCheck = async function() {
         img.className = 'img-fluid rounded border';
         img.style.maxHeight = '300px';
         
-        // 輔助線層
         const overlay = document.createElement('div');
         overlay.style.position = 'absolute';
         overlay.style.top = '0';
@@ -199,16 +190,16 @@ window.runCheck = async function() {
         overlay.style.height = '100%';
         overlay.style.pointerEvents = 'none';
         overlay.innerHTML = `
-            <div style="position:absolute; top:12%; left:0; width:100%; border-top: 1px dashed cyan;"><span style="background:cyan; font-size:10px;">頭頂</span></div>
-            <div style="position:absolute; top:45%; left:0; width:100%; border-top: 1px solid rgba(255,0,0,0.6);"><span style="background:red; color:white; font-size:10px;">眼睛</span></div>
-            <div style="position:absolute; top:82%; left:0; width:100%; border-top: 1px dashed cyan;"><span style="background:cyan; font-size:10px;">下巴</span></div>
+            <div style="position:absolute; top:10%; left:0; width:100%; border-top: 1px dashed cyan; text-align:right;"><span style="background:cyan; font-size:10px;">頭頂限制</span></div>
+            <div style="position:absolute; top:42%; left:0; width:100%; border-top: 1px solid rgba(255,0,0,0.5);"><span style="background:red; color:white; font-size:10px;">眼睛基準</span></div>
+            <div style="position:absolute; top:86%; left:0; width:100%; border-top: 1px dashed cyan; text-align:right;"><span style="background:cyan; font-size:10px;">下巴限制</span></div>
         `;
         
         imgContainer.appendChild(img);
         imgContainer.appendChild(overlay);
         modalBody.appendChild(imgContainer);
 
-        // 2. 結果列表
+        // 2. 列表
         const listGroup = document.createElement('div');
         listGroup.className = 'list-group text-start';
         
