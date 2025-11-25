@@ -102,8 +102,7 @@ export function updateMaskRatio(width_mm, height_mm) {
     state.editor.containerWidth = newWidth;
     state.editor.containerHeight = baseHeight;
     
-    mask.innerHTML = `<div class="mask-label" id="maskLabel"></div><div class="guide-line" id="guide-top"><span>頭頂</span></div><div class="guide-line" id="guide-chin"><span>下巴</span></div>`;
-    drawGuides();
+    mask.innerHTML = ``;
     if(state.isImageLoaded) autoAlignImage();
 }
 
