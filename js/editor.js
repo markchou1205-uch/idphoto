@@ -19,13 +19,11 @@ export function initEditor() {
     wrapper.addEventListener('wheel', onWheel, {passive: false});
 }
 
-// 更新遮罩比例與輔助線
 export function updateMaskRatio(width_mm, height_mm) {
     const wrapper = document.querySelector('.image-wrapper');
     const mask = document.querySelector('.crop-mask');
     if (!wrapper || !mask) return;
     
-    // 設定容器尺寸 (固定高度，寬度自適應)
     const baseHeight = 450; 
     const ratio = width_mm / height_mm;
     const newWidth = baseHeight * ratio;
@@ -36,23 +34,15 @@ export function updateMaskRatio(width_mm, height_mm) {
     state.editor.containerWidth = newWidth;
     state.editor.containerHeight = baseHeight;
     
-    // 插入輔助線元素 (如果還沒有)
-    if (!mask.querySelector('.guide-line')) {
-        mask.innerHTML = `
-            <div class="mask-label" id="maskLabel"></div>
-            <div class="guide-line" id="guide-top"><span>頭頂</span></div>
-            <div class="guide-line" id="guide-chin"><span>下巴</span></div>
-        `;
-    }
+    // 重繪輔助線結構
+    mask.innerHTML = `
+        <div class="mask-label" id="maskLabel"></div>
+        <div class="guide-line" id="guide-top"><span>頭頂上限</span></div>
+        <div class="guide-line" id="guide-chin"><span>下巴下限</span></div>
+    `;
     
-    // 如果圖片已載入，更新位置與輔助線
     if(state.isImageLoaded) {
-        // 重新適應邊界 (因為框大小變了)
-        const img = document.getElementById('previewImg');
-        if (img.naturalWidth) {
-             // 保持圖片中心點不變的邏輯比較複雜，這裡簡單做：重新檢查邊界即可
-             setEditorZoom(state.editor.scale);
-        }
+        setEditorZoom(state.editor.scale); // 重新校正位置
         drawGuides();
     }
 }
@@ -74,27 +64,36 @@ export function loadImageToEditor(base64) {
     img.classList.remove('d-none');
 }
 
+// 核心修改：預設放大 1.15 倍，創造移動空間
 function fitImageToContainer() {
     const cw = state.editor.containerWidth;
     const ch = state.editor.containerHeight;
     const iw = state.editor.imageWidth;
     const ih = state.editor.imageHeight;
 
-    // Cover 模式 (圖片要大於框)
+    // 計算剛好填滿的比例
     const scaleW = cw / iw;
     const scaleH = ch / ih;
     const minScale = Math.max(scaleW, scaleH); 
     
+    // 設定最小縮放為「剛好填滿」
     state.editor.minScale = minScale;
-    state.editor.scale = minScale; 
+    
+    // 設定預設縮放為「填滿的 1.15 倍」
+    state.editor.scale = minScale * 1.15; 
     
     // 居中
     state.editor.posX = (cw - iw * state.editor.scale) / 2;
     state.editor.posY = (ch - ih * state.editor.scale) / 2;
+    
+    // 同步更新滑桿數值 (如果有的話)
+    const zoomRange = document.getElementById('zoomRange');
+    if(zoomRange) zoomRange.value = state.editor.scale;
+    const zoomVal = document.getElementById('zoomValue');
+    if(zoomVal) zoomVal.innerText = Math.round(state.editor.scale * 100) + '%';
 }
 
 function onDragStart(e) {
-    // 允許點擊 wrapper 或 img
     if(!e.target.closest('.image-wrapper')) return;
     e.preventDefault();
     isDragging = true;
@@ -123,17 +122,14 @@ function onDragMove(e) {
     let newX = initialPosX + dx;
     let newY = initialPosY + dy;
     
-    // 邊界限制：圖片不能脫離紅框 (不能露白)
+    // 邊界限制
     const cw = state.editor.containerWidth;
     const ch = state.editor.containerHeight;
     const imgW = state.editor.imageWidth * state.editor.scale;
     const imgH = state.editor.imageHeight * state.editor.scale;
     
-    // X軸：newX 必須 <= 0 (左邊界), 且 newX + imgW >= cw (右邊界)
     if (newX > 0) newX = 0;
     if (newX + imgW < cw) newX = cw - imgW;
-    
-    // Y軸同理
     if (newY > 0) newY = 0;
     if (newY + imgH < ch) newY = ch - imgH;
     
@@ -159,13 +155,12 @@ function onWheel(e) {
 export function setEditorZoom(newScale) {
     if (!state.editor.imageWidth) return;
 
-    // 限制
+    // 寬鬆限制：最小不能小於 minScale (確保不露白)，最大 5 倍
     if (newScale < state.editor.minScale) newScale = state.editor.minScale;
     if (newScale > state.editor.minScale * 5) newScale = state.editor.minScale * 5;
     
     state.editor.scale = newScale;
     
-    // 縮放後檢查邊界
     const cw = state.editor.containerWidth;
     const ch = state.editor.containerHeight;
     const imgW = state.editor.imageWidth * state.editor.scale;
@@ -173,7 +168,6 @@ export function setEditorZoom(newScale) {
     
     if (state.editor.posX > 0) state.editor.posX = 0;
     if (state.editor.posX + imgW < cw) state.editor.posX = cw - imgW;
-    
     if (state.editor.posY > 0) state.editor.posY = 0;
     if (state.editor.posY + imgH < ch) state.editor.posY = ch - imgH;
     
@@ -187,7 +181,6 @@ function updateTransform() {
     }
 }
 
-// 繪製輔助線 (根據內政部規定)
 export function drawGuides() {
     const label = document.getElementById('maskLabel');
     const topGuide = document.getElementById('guide-top');
@@ -197,17 +190,12 @@ export function drawGuides() {
     if (spec) {
         if(label) label.innerText = `${spec.width_mm}x${spec.height_mm}mm`;
         
-        // 計算輔助線位置 (%)
-        // 護照/身分證：頭頂留白約 3mm ~ 5mm -> 10% ~ 12%
-        // 頭長 3.2~3.6cm -> 71% ~ 80%
-        // 下巴位置 = 頭頂位置 + 頭長
-        
-        let topPercent = 10; // 預設
-        let headPercent = 75; // 預設頭高佔比
+        let topPercent = 10; 
+        let headPercent = 76; 
         
         if (state.currentSpecId === 'passport') {
-            topPercent = 10; // 4.5mm
-            headPercent = 76; // 3.4cm (34/45)
+            topPercent = 10; 
+            headPercent = 76; 
         } else if (state.currentSpecId === 'inch1') {
             topPercent = 12;
             headPercent = 70;
@@ -225,25 +213,18 @@ export function generateCroppedImage() {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
-    // 輸出高解析度 (3倍紅框大小)
-    const outputW = state.editor.containerWidth * 3; 
-    const outputH = state.editor.containerHeight * 3;
+    const outputW = state.editor.containerWidth * 2; 
+    const outputH = state.editor.containerHeight * 2;
     
     canvas.width = outputW;
     canvas.height = outputH;
     
-    // 繪製背景 (白)
     ctx.fillStyle = "#FFFFFF";
     ctx.fillRect(0, 0, outputW, outputH);
     
     const scale = state.editor.scale;
     const posX = state.editor.posX;
     const posY = state.editor.posY;
-    
-    // 算法：
-    // Canvas 上的繪製目標是 (0, 0, outputW, outputH)
-    // 圖片在 Canvas 上的大小 = natural * scale * (output / container)
-    // 圖片在 Canvas 上的位置 = pos * (output / container)
     
     const ratio = outputW / state.editor.containerWidth;
     
