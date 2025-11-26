@@ -21,12 +21,12 @@ window.onload = function() {
     verTag.style.bottom = '10px';
     verTag.style.left = '10px';
     verTag.style.backgroundColor = '#000000';
-    verTag.style.color = '#00ff00';
+    verTag.style.color = '#FFD700'; // 金色代表商業版
     verTag.style.padding = '5px 10px';
     verTag.style.borderRadius = '5px';
     verTag.style.fontSize = '12px';
     verTag.style.zIndex = '9999';
-    verTag.innerHTML = 'System Ver: 10.0 (BOCA Standard)';
+    verTag.innerHTML = 'System Ver: 11.0 (Commercial Flow)';
     document.body.appendChild(verTag);
 };
 
@@ -130,10 +130,8 @@ window.processImage = async function() {
             
             document.getElementById('img-white').src = `data:image/jpeg;base64,${data.photos[0]}`;
             
-            // [修正] 如果是 passport，隱藏藍底選項
             if (state.currentSpecId === 'passport') {
                 document.getElementById('res-blue').classList.add('d-none');
-                // 雖然隱藏，但 img 還是設一下避免報錯
                 document.getElementById('img-blue').src = `data:image/jpeg;base64,${data.photos[0]}`; 
             } else {
                 document.getElementById('res-blue').classList.remove('d-none');
@@ -141,6 +139,11 @@ window.processImage = async function() {
             }
             
             window.selectResult('white');
+            
+            // 修改按鈕文字
+            const btnCheck = document.querySelector('button[onclick="runCheck()"]');
+            if(btnCheck) btnCheck.innerHTML = '<i class="bi bi-shield-check"></i> 進階審查與智能修復';
+            
         } else { alert("錯誤: " + (data.error || "未知錯誤")); }
     } catch (e) { alert("連線錯誤: " + e.message); } finally { UI.showLoading(false); }
 }
@@ -169,128 +172,181 @@ window.downloadImage = function() {
     if(!state.resultPhotos || state.resultPhotos.length === 0) {
         alert("無可下載的圖片"); return;
     }
-    const link = document.createElement('a');
-    link.href = `data:image/jpeg;base64,${state.resultPhotos[state.selectedResultBg]}`;
-    link.download = `id_photo_${Date.now()}.jpg`;
-    link.click();
+    // 免責聲明
+    if(confirm("【免責聲明】\n\n本免費服務僅提供基礎裁切與去背，不保證符合所有證件照審查標準。\n若需高合規性照片，建議使用「進階審查與修復」功能。\n\n是否確認下載？")) {
+        const link = document.createElement('a');
+        link.href = `data:image/jpeg;base64,${state.resultPhotos[state.selectedResultBg]}`;
+        link.download = `id_photo_${Date.now()}.jpg`;
+        link.click();
+    }
 }
 
 window.generateLayout = async function() {
-    if(!state.resultPhotos[state.selectedResultBg]) return;
-    UI.showLoading(true, "排版生成中...");
-    try {
-        const data = await API.generateLayoutApi(state.resultPhotos[state.selectedResultBg]);
-        if (data.layout_image) {
-            state.currentLayoutBase64 = data.layout_image;
-            const link = document.createElement('a');
-            link.href = `data:image/jpeg;base64,${data.layout_image}`;
-            link.download = `layout_4x6_${Date.now()}.jpg`;
-            link.click();
-        } else { alert(data.error || "排版失敗"); }
-    } catch(e) { alert("排版錯誤"); } finally { UI.showLoading(false); }
+    alert("此為付費功能 (模擬)");
 }
 
-// --- [新版] 表格化審查報告 ---
+// --- 商業流程：進階審查 ---
 window.runCheck = async function() {
     if (!state.resultPhotos[state.selectedResultBg]) return;
-    UI.showLoading(true, "AI 審查中...");
-    try {
-        const data = await API.runCheckApi(state.resultPhotos[state.selectedResultBg]);
-        
-        const modalBody = document.querySelector('#checkModal .modal-body');
-        modalBody.innerHTML = ''; 
-
-        // 1. 圖片容器
-        const imgContainer = document.createElement('div');
-        imgContainer.className = 'text-center mb-3 position-relative d-inline-block';
-        
-        const img = document.createElement('img');
-        img.src = `data:image/jpeg;base64,${state.resultPhotos[state.selectedResultBg]}`;
-        img.className = 'img-fluid rounded'; 
-        img.style.backgroundColor = '#ffffff';
-        img.style.maxHeight = '300px';
-        
-        // 標準輔助線
-        const overlay = document.createElement('div');
-        overlay.style.position = 'absolute';
-        overlay.style.top = '0';
-        overlay.style.left = '0';
-        overlay.style.width = '100%';
-        overlay.style.height = '100%';
-        overlay.style.pointerEvents = 'none';
-        overlay.innerHTML = `
-            <div style="position:absolute; top:12%; left:0; width:100%; border-top: 1px dashed cyan; text-align:right;"><span style="background:cyan; font-size:10px;">頭頂 (12%)</span></div>
-            <div style="position:absolute; top:86%; left:0; width:100%; border-top: 1px dashed cyan; text-align:right;"><span style="background:cyan; font-size:10px;">下巴</span></div>
-        `;
-        
-        imgContainer.appendChild(img);
-        imgContainer.appendChild(overlay);
-        modalBody.appendChild(imgContainer);
-
-        // 2. 表格化報告
-        // Table Header
-        const table = document.createElement('table');
-        table.className = 'table table-bordered table-sm small';
-        table.innerHTML = `
-            <thead class="table-light">
-                <tr>
-                    <th width="25%">檢查項目</th>
-                    <th width="35%">規範標準</th>
-                    <th width="40%">審查結果</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        `;
-        const tbody = table.querySelector('tbody');
-
-        if (data.results) {
-            data.results.forEach(res => {
-                const row = document.createElement('tr');
-                
-                // 燈號邏輯
-                let bgClass = '';
-                let icon = '';
-                let statusText = '';
-                
-                if (res.status === 'pass') {
-                    bgClass = 'table-success';
-                    icon = '<i class="bi bi-check-circle-fill text-success"></i>';
-                    statusText = '通過';
-                } else if (res.status === 'warn') {
-                    bgClass = 'table-warning';
-                    icon = '<i class="bi bi-exclamation-triangle-fill text-warning"></i>';
-                    statusText = '有疑慮';
-                } else {
-                    bgClass = 'table-danger';
-                    icon = '<i class="bi bi-x-circle-fill text-danger"></i>';
-                    statusText = '不合格';
-                }
-
-                row.innerHTML = `
-                    <td class="fw-bold">${res.item}</td>
-                    <td class="text-muted">${res.standard || '-'}</td>
-                    <td class="${bgClass}">
-                        ${icon} <strong>${res.value}</strong>
-                    </td>
-                `;
-                tbody.appendChild(row);
-            });
+    
+    // 1. 顯示 Modal 與進度條
+    const modalEl = document.getElementById('checkModal');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+    
+    const modalBody = document.querySelector('#checkModal .modal-body');
+    modalBody.innerHTML = `
+        <div class="text-center py-5">
+            <h5 class="mb-3">AI 智能審查中...</h5>
+            <div class="progress mb-2" style="height: 20px;">
+                <div id="check-progress" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%"></div>
+            </div>
+            <small class="text-muted" id="check-status-text">正在掃描五官定位...</small>
+        </div>
+    `;
+    
+    // 2. 模擬進度條動畫 (2秒)
+    const steps = [
+        { pct: 30, text: "正在掃描五官定位..." },
+        { pct: 60, text: "正在分析光線與陰影..." },
+        { pct: 90, text: "正在比對 BOCA 規範..." },
+        { pct: 100, text: "生成報告中..." }
+    ];
+    
+    let stepIdx = 0;
+    const interval = setInterval(async () => {
+        if (stepIdx >= steps.length) {
+            clearInterval(interval);
+            // 3. 真正呼叫後端
+            try {
+                const data = await API.runCheckApi(state.resultPhotos[state.selectedResultBg]);
+                renderCheckResult(data);
+            } catch(e) { modalBody.innerHTML = `<div class="alert alert-danger">${e.message}</div>`; }
+            return;
         }
-        modalBody.appendChild(table);
-        
-        // 底部警語
-        const footer = document.createElement('div');
-        footer.className = 'alert alert-secondary small mt-2 mb-0 p-2';
-        footer.innerHTML = '<i class="bi bi-info-circle"></i> 本系統依據外交部晶片護照相片規格進行 AI 預審，最終結果仍以主管機關（領事事務局/戶政事務所）人工審核為準。';
-        modalBody.appendChild(footer);
-
-        const modalEl = document.getElementById('checkModal');
-        const modal = new bootstrap.Modal(modalEl);
-        modal.show();
-
-    } catch(e) { alert(e.message); } finally { UI.showLoading(false); }
+        const s = steps[stepIdx];
+        document.getElementById('check-progress').style.width = `${s.pct}%`;
+        document.getElementById('check-status-text').innerText = s.text;
+        stepIdx++;
+    }, 500);
 }
 
-window.applyFix = async function(action) { /* ... */ };
+function renderCheckResult(data) {
+    const modalBody = document.querySelector('#checkModal .modal-body');
+    modalBody.innerHTML = ''; 
+
+    // 圖片
+    const imgContainer = document.createElement('div');
+    imgContainer.className = 'text-center mb-3 position-relative d-inline-block';
+    const img = document.createElement('img');
+    img.src = `data:image/jpeg;base64,${state.resultPhotos[state.selectedResultBg]}`;
+    img.className = 'img-fluid rounded'; 
+    img.style.backgroundColor = '#ffffff';
+    img.style.maxHeight = '250px';
+    imgContainer.appendChild(img);
+    modalBody.appendChild(imgContainer);
+
+    // 表格 (分區)
+    const table = document.createElement('table');
+    table.className = 'table table-bordered table-sm small';
+    table.innerHTML = `
+        <thead class="table-light"><tr><th>項目</th><th>結果</th></tr></thead>
+        <tbody></tbody>
+    `;
+    const tbody = table.querySelector('tbody');
+    
+    // 分類標題
+    const categories = {
+        'basic': '🔹 基礎處理 (免費)',
+        'compliance': '🔸 合規檢查 (BOCA)',
+        'quality': '✨ 進階畫質分析 (加值)'
+    };
+    
+    let currentCat = '';
+    let hasIssue = false;
+
+    if (data.results) {
+        // 排序：basic -> compliance -> quality
+        const sorted = data.results.sort((a,b) => {
+            const order = {'basic':1, 'compliance':2, 'quality':3};
+            return order[a.category] - order[b.category];
+        });
+
+        sorted.forEach(res => {
+            if (res.category !== currentCat) {
+                currentCat = res.category;
+                const tr = document.createElement('tr');
+                tr.className = 'table-secondary';
+                tr.innerHTML = `<td colspan="2" class="fw-bold">${categories[currentCat]}</td>`;
+                tbody.appendChild(tr);
+            }
+            
+            const tr = document.createElement('tr');
+            let icon = res.status === 'pass' ? '✅' : (res.status === 'warn' ? '⚠️' : '❌');
+            let color = res.status === 'pass' ? 'text-success' : (res.status === 'warn' ? 'text-warning' : 'text-danger');
+            
+            if (res.status !== 'pass') hasIssue = true;
+
+            tr.innerHTML = `
+                <td>${res.item}</td>
+                <td class="${color}">${icon} ${res.value}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+    modalBody.appendChild(table);
+    
+    // 按鈕區
+    const btnArea = document.createElement('div');
+    btnArea.className = 'd-grid gap-2 mt-3';
+    
+    if (hasIssue) {
+        btnArea.innerHTML = `<button class="btn btn-warning fw-bold" onclick="applyFix()"><i class="bi bi-magic"></i> ✨ 一鍵智能修復 (預覽)</button>`;
+    } else {
+        btnArea.innerHTML = `<button class="btn btn-success fw-bold" onclick="alert('進入付費流程')"><i class="bi bi-download"></i> 下載無浮水印高畫質圖</button>`;
+    }
+    btnArea.innerHTML += `<button class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>`;
+    modalBody.appendChild(btnArea);
+}
+
+// --- 商業流程：修復與預覽 ---
+window.applyFix = async function() {
+    const modalBody = document.querySelector('#checkModal .modal-body');
+    modalBody.innerHTML = `
+        <div class="text-center py-5">
+            <h5 class="mb-3">AI 正在修復中...</h5>
+            <div class="spinner-border text-warning" role="status"></div>
+            <p class="text-muted mt-2">消除紅眼、補光、畫質增強...</p>
+        </div>
+    `;
+    
+    try {
+        // 呼叫修復 API (帶浮水印參數)
+        const data = await API.fixImageApi(state.resultPhotos[state.selectedResultBg], 'all', true); // 需要修改 API.js 支援第三參數? 不，我們直接改 API.js
+        // 為了方便，這裡直接 fetch
+        const res = await fetch(`${API.API_BASE_URL}/generate/fix`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ image_base64: state.resultPhotos[state.selectedResultBg], action: 'all', watermark: true })
+        });
+        const fixData = await res.json();
+        
+        if (fixData.image_base64) {
+            modalBody.innerHTML = `
+                <div class="text-center">
+                    <h5 class="text-success">✨ 修復完成！</h5>
+                    <p class="small text-muted">請預覽修復效果 (已加浮水印)</p>
+                    <img src="data:image/jpeg;base64,${fixData.image_base64}" class="img-fluid rounded mb-3 border">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary btn-lg" onclick="alert('付款成功！下載無浮水印圖...')">🔓 解鎖並下載 ($NT 99)</button>
+                        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">再考慮一下</button>
+                    </div>
+                </div>
+            `;
+        }
+    } catch(e) {
+        alert("修復失敗");
+    }
+}
+
 window.toggleEmailInput = function() { document.getElementById('email-group').classList.toggle('d-none'); };
 window.sendEmail = async function() { /* ... */ };
