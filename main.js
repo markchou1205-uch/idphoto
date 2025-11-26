@@ -16,22 +16,20 @@ window.onload = function() {
     UI.renderSpecList(selectSpec);
     setTimeout(() => selectSpec('passport'), 100);
 
-    // [更新] V9.0 AI Face Parsing
     const verTag = document.createElement('div');
     verTag.style.position = 'fixed';
     verTag.style.bottom = '10px';
     verTag.style.left = '10px';
-    verTag.style.backgroundColor = '#6f42c1'; // 紫色
-    verTag.style.color = '#ffffff';
+    verTag.style.backgroundColor = '#000000';
+    verTag.style.color = '#00ff00';
     verTag.style.padding = '5px 10px';
     verTag.style.borderRadius = '5px';
     verTag.style.fontSize = '12px';
     verTag.style.zIndex = '9999';
-    verTag.innerHTML = 'System Ver: 9.0 (Semantic AI)';
+    verTag.innerHTML = 'System Ver: 10.0 (BOCA Standard)';
     document.body.appendChild(verTag);
 };
 
-// --- Navigation ---
 window.goHome = function() {
     document.querySelectorAll('.nav-item-icon').forEach(el => el.classList.remove('active'));
     document.getElementById('dashboard-area').classList.remove('d-none');
@@ -62,7 +60,6 @@ window.handleFileUpload = function(input) {
     reader.onload = async function() {
         state.originalBase64 = reader.result;
         state.isImageLoaded = true;
-
         Editor.loadImageToEditor(state.originalBase64);
         
         document.querySelector('.upload-btn-wrapper').classList.add('d-none');
@@ -78,7 +75,6 @@ window.handleFileUpload = function(input) {
                 state.faceData = data;
                 Editor.autoAlignImage();
             } else {
-                // 即使沒偵測到，也要執行對齊(填滿)
                 Editor.autoAlignImage();
             }
         } catch (err) { console.log("偵測失敗"); } finally { UI.showLoading(false); }
@@ -120,7 +116,6 @@ window.updateCustom = function() {
     Editor.updateMaskRatio(w, h);
 }
 
-// --- 製作流程 ---
 window.processImage = async function() {
     UI.showLoading(true, "AI 製作中...");
     try {
@@ -134,7 +129,16 @@ window.processImage = async function() {
             document.getElementById('cropMask').classList.add('d-none');
             
             document.getElementById('img-white').src = `data:image/jpeg;base64,${data.photos[0]}`;
-            document.getElementById('img-blue').src = `data:image/jpeg;base64,${data.photos[1]}`;
+            
+            // [修正] 如果是 passport，隱藏藍底選項
+            if (state.currentSpecId === 'passport') {
+                document.getElementById('res-blue').classList.add('d-none');
+                // 雖然隱藏，但 img 還是設一下避免報錯
+                document.getElementById('img-blue').src = `data:image/jpeg;base64,${data.photos[0]}`; 
+            } else {
+                document.getElementById('res-blue').classList.remove('d-none');
+                document.getElementById('img-blue').src = `data:image/jpeg;base64,${data.photos[1]}`;
+            }
             
             window.selectResult('white');
         } else { alert("錯誤: " + (data.error || "未知錯誤")); }
@@ -156,7 +160,7 @@ window.selectResult = function(color) {
     img.style.width = '100%';
     img.style.height = '100%';
     img.style.objectFit = 'contain';
-    img.style.backgroundColor = '#ffffff'; // 強制白底
+    img.style.backgroundColor = '#ffffff'; 
     
     img.classList.remove('d-none');
 }
@@ -186,7 +190,7 @@ window.generateLayout = async function() {
     } catch(e) { alert("排版錯誤"); } finally { UI.showLoading(false); }
 }
 
-// --- 合規檢查 ---
+// --- [新版] 表格化審查報告 ---
 window.runCheck = async function() {
     if (!state.resultPhotos[state.selectedResultBg]) return;
     UI.showLoading(true, "AI 審查中...");
@@ -196,7 +200,7 @@ window.runCheck = async function() {
         const modalBody = document.querySelector('#checkModal .modal-body');
         modalBody.innerHTML = ''; 
 
-        // 1. 圖片容器 (含 V6.0+ 的標準檢查線)
+        // 1. 圖片容器
         const imgContainer = document.createElement('div');
         imgContainer.className = 'text-center mb-3 position-relative d-inline-block';
         
@@ -206,6 +210,7 @@ window.runCheck = async function() {
         img.style.backgroundColor = '#ffffff';
         img.style.maxHeight = '300px';
         
+        // 標準輔助線
         const overlay = document.createElement('div');
         overlay.style.position = 'absolute';
         overlay.style.top = '0';
@@ -214,30 +219,70 @@ window.runCheck = async function() {
         overlay.style.height = '100%';
         overlay.style.pointerEvents = 'none';
         overlay.innerHTML = `
-            <div style="position:absolute; top:12%; left:0; width:100%; border-top: 1px dashed cyan; text-align:right;"><span style="background:cyan; font-size:10px;">頭頂限制 (12%)</span></div>
-            <div style="position:absolute; top:86%; left:0; width:100%; border-top: 1px dashed cyan; text-align:right;"><span style="background:cyan; font-size:10px;">下巴限制</span></div>
+            <div style="position:absolute; top:12%; left:0; width:100%; border-top: 1px dashed cyan; text-align:right;"><span style="background:cyan; font-size:10px;">頭頂 (12%)</span></div>
+            <div style="position:absolute; top:86%; left:0; width:100%; border-top: 1px dashed cyan; text-align:right;"><span style="background:cyan; font-size:10px;">下巴</span></div>
         `;
         
         imgContainer.appendChild(img);
         imgContainer.appendChild(overlay);
         modalBody.appendChild(imgContainer);
 
-        // 2. 結果列表
-        const listGroup = document.createElement('div');
-        listGroup.className = 'list-group text-start';
-        
+        // 2. 表格化報告
+        // Table Header
+        const table = document.createElement('table');
+        table.className = 'table table-bordered table-sm small';
+        table.innerHTML = `
+            <thead class="table-light">
+                <tr>
+                    <th width="25%">檢查項目</th>
+                    <th width="35%">規範標準</th>
+                    <th width="40%">審查結果</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        `;
+        const tbody = table.querySelector('tbody');
+
         if (data.results) {
             data.results.forEach(res => {
-                const item = document.createElement('div');
-                const colorClass = res.status === 'pass' ? 'list-group-item-success' : (res.status === 'warn' ? 'list-group-item-warning' : 'list-group-item-danger');
-                const icon = res.status === 'pass' ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill';
+                const row = document.createElement('tr');
                 
-                item.className = `list-group-item ${colorClass} d-flex justify-content-between align-items-center`;
-                item.innerHTML = `<span><i class="bi ${icon}"></i> ${res.item}</span> <small>${res.msg}</small>`;
-                listGroup.appendChild(item);
+                // 燈號邏輯
+                let bgClass = '';
+                let icon = '';
+                let statusText = '';
+                
+                if (res.status === 'pass') {
+                    bgClass = 'table-success';
+                    icon = '<i class="bi bi-check-circle-fill text-success"></i>';
+                    statusText = '通過';
+                } else if (res.status === 'warn') {
+                    bgClass = 'table-warning';
+                    icon = '<i class="bi bi-exclamation-triangle-fill text-warning"></i>';
+                    statusText = '有疑慮';
+                } else {
+                    bgClass = 'table-danger';
+                    icon = '<i class="bi bi-x-circle-fill text-danger"></i>';
+                    statusText = '不合格';
+                }
+
+                row.innerHTML = `
+                    <td class="fw-bold">${res.item}</td>
+                    <td class="text-muted">${res.standard || '-'}</td>
+                    <td class="${bgClass}">
+                        ${icon} <strong>${res.value}</strong>
+                    </td>
+                `;
+                tbody.appendChild(row);
             });
         }
-        modalBody.appendChild(listGroup);
+        modalBody.appendChild(table);
+        
+        // 底部警語
+        const footer = document.createElement('div');
+        footer.className = 'alert alert-secondary small mt-2 mb-0 p-2';
+        footer.innerHTML = '<i class="bi bi-info-circle"></i> 本系統依據外交部晶片護照相片規格進行 AI 預審，最終結果仍以主管機關（領事事務局/戶政事務所）人工審核為準。';
+        modalBody.appendChild(footer);
 
         const modalEl = document.getElementById('checkModal');
         const modal = new bootstrap.Modal(modalEl);
