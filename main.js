@@ -16,18 +16,18 @@ window.onload = function() {
     UI.renderSpecList(selectSpec);
     setTimeout(() => selectSpec('passport'), 100);
 
-    // [版本更新] V8.0
+    // [更新] V9.0 AI Face Parsing
     const verTag = document.createElement('div');
     verTag.style.position = 'fixed';
     verTag.style.bottom = '10px';
     verTag.style.left = '10px';
-    verTag.style.backgroundColor = 'rgba(255,0,0,0.8)'; // 紅色底代表 V8
+    verTag.style.backgroundColor = '#6f42c1'; // 紫色
     verTag.style.color = '#ffffff';
     verTag.style.padding = '5px 10px';
     verTag.style.borderRadius = '5px';
     verTag.style.fontSize = '12px';
     verTag.style.zIndex = '9999';
-    verTag.innerHTML = 'System Ver: 8.0 (Lighting & Mouth)';
+    verTag.innerHTML = 'System Ver: 9.0 (Semantic AI)';
     document.body.appendChild(verTag);
 };
 
