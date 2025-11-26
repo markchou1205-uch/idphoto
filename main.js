@@ -21,12 +21,12 @@ window.onload = function() {
     verTag.style.bottom = '10px';
     verTag.style.left = '10px';
     verTag.style.backgroundColor = '#000000';
-    verTag.style.color = '#FFD700'; // 金色代表商業版
+    verTag.style.color = '#FFD700';
     verTag.style.padding = '5px 10px';
     verTag.style.borderRadius = '5px';
     verTag.style.fontSize = '12px';
     verTag.style.zIndex = '9999';
-    verTag.innerHTML = 'System Ver: 11.0 (Commercial Flow)';
+    verTag.innerHTML = 'System Ver: 12.0 (Horizontal UI)';
     document.body.appendChild(verTag);
 };
 
@@ -36,7 +36,6 @@ window.goHome = function() {
     document.getElementById('intro-area').classList.add('d-none');
     document.getElementById('workspace-area').classList.add('d-none');
     state.currentFeature = 'id-photo';
-    document.getElementById('dashboard-area').classList.remove('d-none');
 }
 
 window.switchFeature = function(featureId) {
@@ -68,7 +67,6 @@ window.handleFileUpload = function(input) {
         
         UI.showWorkspace();
         document.getElementById('cropMask').classList.add('d-none');
-        
         try {
             const data = await API.detectFace(state.originalBase64);
             if (data && data.found) {
@@ -121,15 +119,12 @@ window.processImage = async function() {
     try {
         const cropParams = Editor.getCropParams();
         const data = await API.processPreview(state.originalBase64, cropParams);
-        
         if (data.photos) {
             state.resultPhotos = data.photos;
             document.getElementById('specs-section').classList.add('d-none');
             document.getElementById('result-section').classList.remove('d-none');
             document.getElementById('cropMask').classList.add('d-none');
-            
             document.getElementById('img-white').src = `data:image/jpeg;base64,${data.photos[0]}`;
-            
             if (state.currentSpecId === 'passport') {
                 document.getElementById('res-blue').classList.add('d-none');
                 document.getElementById('img-blue').src = `data:image/jpeg;base64,${data.photos[0]}`; 
@@ -137,13 +132,10 @@ window.processImage = async function() {
                 document.getElementById('res-blue').classList.remove('d-none');
                 document.getElementById('img-blue').src = `data:image/jpeg;base64,${data.photos[1]}`;
             }
-            
             window.selectResult('white');
             
-            // 修改按鈕文字
             const btnCheck = document.querySelector('button[onclick="runCheck()"]');
             if(btnCheck) btnCheck.innerHTML = '<i class="bi bi-shield-check"></i> 進階審查與智能修復';
-            
         } else { alert("錯誤: " + (data.error || "未知錯誤")); }
     } catch (e) { alert("連線錯誤: " + e.message); } finally { UI.showLoading(false); }
 }
@@ -151,20 +143,16 @@ window.processImage = async function() {
 window.selectResult = function(color) {
     const idx = color === 'white' ? 0 : 1;
     state.selectedResultBg = idx;
-    
     document.getElementById('res-white').classList.remove('active');
     document.getElementById('res-blue').classList.remove('active');
     document.getElementById(`res-${color}`).classList.add('active');
-    
     const img = document.getElementById('previewImg');
     img.src = `data:image/jpeg;base64,${state.resultPhotos[idx]}`;
-    
     img.style.transform = 'none';
     img.style.width = '100%';
     img.style.height = '100%';
     img.style.objectFit = 'contain';
     img.style.backgroundColor = '#ffffff'; 
-    
     img.classList.remove('d-none');
 }
 
@@ -172,7 +160,6 @@ window.downloadImage = function() {
     if(!state.resultPhotos || state.resultPhotos.length === 0) {
         alert("無可下載的圖片"); return;
     }
-    // 免責聲明
     if(confirm("【免責聲明】\n\n本免費服務僅提供基礎裁切與去背，不保證符合所有證件照審查標準。\n若需高合規性照片，建議使用「進階審查與修復」功能。\n\n是否確認下載？")) {
         const link = document.createElement('a');
         link.href = `data:image/jpeg;base64,${state.resultPhotos[state.selectedResultBg]}`;
@@ -185,27 +172,29 @@ window.generateLayout = async function() {
     alert("此為付費功能 (模擬)");
 }
 
-// --- 商業流程：進階審查 ---
+// --- [新版] 橫式 Modal 與按鈕邏輯 ---
 window.runCheck = async function() {
     if (!state.resultPhotos[state.selectedResultBg]) return;
     
-    // 1. 顯示 Modal 與進度條
+    // 設定 Modal 大小為 XL
     const modalEl = document.getElementById('checkModal');
+    const modalDialog = modalEl.querySelector('.modal-dialog');
+    modalDialog.classList.add('modal-xl');
+    
     const modal = new bootstrap.Modal(modalEl);
     modal.show();
     
-    const modalBody = document.querySelector('#checkModal .modal-body');
+    const modalBody = modalEl.querySelector('.modal-body');
     modalBody.innerHTML = `
         <div class="text-center py-5">
             <h5 class="mb-3">AI 智能審查中...</h5>
-            <div class="progress mb-2" style="height: 20px;">
+            <div class="progress mb-2 w-50 mx-auto" style="height: 20px;">
                 <div id="check-progress" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%"></div>
             </div>
             <small class="text-muted" id="check-status-text">正在掃描五官定位...</small>
         </div>
     `;
     
-    // 2. 模擬進度條動畫 (2秒)
     const steps = [
         { pct: 30, text: "正在掃描五官定位..." },
         { pct: 60, text: "正在分析光線與陰影..." },
@@ -217,10 +206,9 @@ window.runCheck = async function() {
     const interval = setInterval(async () => {
         if (stepIdx >= steps.length) {
             clearInterval(interval);
-            // 3. 真正呼叫後端
             try {
                 const data = await API.runCheckApi(state.resultPhotos[state.selectedResultBg]);
-                renderCheckResult(data);
+                renderCheckResultHorizontal(data);
             } catch(e) { modalBody.innerHTML = `<div class="alert alert-danger">${e.message}</div>`; }
             return;
         }
@@ -231,42 +219,73 @@ window.runCheck = async function() {
     }, 500);
 }
 
-function renderCheckResult(data) {
+function renderCheckResultHorizontal(data) {
     const modalBody = document.querySelector('#checkModal .modal-body');
     modalBody.innerHTML = ''; 
 
-    // 圖片
+    // 使用 Bootstrap Grid 橫式排列
+    const row = document.createElement('div');
+    row.className = 'row';
+    
+    // 左側：圖片 (佔 5)
+    const colImg = document.createElement('div');
+    colImg.className = 'col-md-5 text-center border-end d-flex flex-column justify-content-center align-items-center';
+    colImg.innerHTML = '<h6 class="text-muted mb-3">預覽結果</h6>';
+    
     const imgContainer = document.createElement('div');
-    imgContainer.className = 'text-center mb-3 position-relative d-inline-block';
+    imgContainer.className = 'position-relative d-inline-block';
     const img = document.createElement('img');
     img.src = `data:image/jpeg;base64,${state.resultPhotos[state.selectedResultBg]}`;
-    img.className = 'img-fluid rounded'; 
-    img.style.backgroundColor = '#ffffff';
-    img.style.maxHeight = '250px';
+    img.className = 'img-fluid rounded border';
+    img.style.maxHeight = '400px'; // 放大一點
+    
+    // 輔助線
+    const overlay = document.createElement('div');
+    overlay.style.position = 'absolute';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.pointerEvents = 'none';
+    overlay.innerHTML = `
+        <div style="position:absolute; top:12%; left:0; width:100%; border-top: 1px dashed cyan; text-align:right;"><span style="background:cyan; font-size:10px;">頭頂 (12%)</span></div>
+        <div style="position:absolute; top:86%; left:0; width:100%; border-top: 1px dashed cyan; text-align:right;"><span style="background:cyan; font-size:10px;">下巴</span></div>
+    `;
     imgContainer.appendChild(img);
-    modalBody.appendChild(imgContainer);
+    imgContainer.appendChild(overlay);
+    colImg.appendChild(imgContainer);
+    row.appendChild(colImg);
 
-    // 表格 (分區)
+    // 右側：表格 (佔 7)
+    const colTable = document.createElement('div');
+    colTable.className = 'col-md-7';
+    
+    // 報告摘要 (Header)
+    let hasFatal = false;
+    let hasFixable = false;
+    
+    if(data.results) {
+        data.results.forEach(r => {
+            if (r.status === 'fail') hasFatal = true;
+            // 假設 Quality 類別都是可修復的 (紅眼、光線)
+            if (r.category === 'quality' && r.status !== 'pass') hasFixable = true;
+        });
+    }
+
     const table = document.createElement('table');
-    table.className = 'table table-bordered table-sm small';
+    table.className = 'table table-hover table-bordered small';
     table.innerHTML = `
-        <thead class="table-light"><tr><th>項目</th><th>結果</th></tr></thead>
+        <thead class="table-light">
+            <tr><th width="25%">項目</th><th width="35%">標準</th><th width="40%">結果</th></tr>
+        </thead>
         <tbody></tbody>
     `;
     const tbody = table.querySelector('tbody');
     
-    // 分類標題
-    const categories = {
-        'basic': '🔹 基礎處理 (免費)',
-        'compliance': '🔸 合規檢查 (BOCA)',
-        'quality': '✨ 進階畫質分析 (加值)'
-    };
-    
+    const categories = { 'basic': '🔹 基礎處理 (免費)', 'compliance': '🔸 合規檢查 (BOCA)', 'quality': '✨ 進階畫質分析 (加值)' };
     let currentCat = '';
-    let hasIssue = false;
 
     if (data.results) {
-        // 排序：basic -> compliance -> quality
         const sorted = data.results.sort((a,b) => {
             const order = {'basic':1, 'compliance':2, 'quality':3};
             return order[a.category] - order[b.category];
@@ -277,7 +296,7 @@ function renderCheckResult(data) {
                 currentCat = res.category;
                 const tr = document.createElement('tr');
                 tr.className = 'table-secondary';
-                tr.innerHTML = `<td colspan="2" class="fw-bold">${categories[currentCat]}</td>`;
+                tr.innerHTML = `<td colspan="3" class="fw-bold">${categories[currentCat]}</td>`;
                 tbody.appendChild(tr);
             }
             
@@ -285,31 +304,59 @@ function renderCheckResult(data) {
             let icon = res.status === 'pass' ? '✅' : (res.status === 'warn' ? '⚠️' : '❌');
             let color = res.status === 'pass' ? 'text-success' : (res.status === 'warn' ? 'text-warning' : 'text-danger');
             
-            if (res.status !== 'pass') hasIssue = true;
-
-            tr.innerHTML = `
-                <td>${res.item}</td>
-                <td class="${color}">${icon} ${res.value}</td>
-            `;
+            tr.innerHTML = `<td>${res.item}</td><td class="text-muted">${res.standard||'-'}</td><td class="${color}">${icon} ${res.value}</td>`;
             tbody.appendChild(tr);
         });
     }
-    modalBody.appendChild(table);
+    colTable.appendChild(table);
     
-    // 按鈕區
-    const btnArea = document.createElement('div');
-    btnArea.className = 'd-grid gap-2 mt-3';
+    // 按鈕與警語區域
+    const actionArea = document.createElement('div');
+    actionArea.className = 'mt-3 p-3 bg-light rounded border';
     
-    if (hasIssue) {
-        btnArea.innerHTML = `<button class="btn btn-warning fw-bold" onclick="applyFix()"><i class="bi bi-magic"></i> ✨ 一鍵智能修復 (預覽)</button>`;
+    if (hasFatal) {
+        actionArea.innerHTML = `
+            <div class="alert alert-danger mb-2">
+                <strong>❌ 檢測到不合格項目 (無法修復)</strong><br>
+                建議您重新拍攝照片，以確保符合護照規範。
+            </div>
+        `;
+        if (hasFixable) {
+            actionArea.innerHTML += `
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-secondary w-100" data-bs-dismiss="modal">取消</button>
+                    <button class="btn btn-warning w-100" onclick="applyFix()"><i class="bi bi-magic"></i> 嘗試修復畫質 (無法修復遮擋)</button>
+                </div>
+            `;
+        } else {
+            actionArea.innerHTML += `<button class="btn btn-secondary w-100" data-bs-dismiss="modal">關閉並重拍</button>`;
+        }
+    } else if (hasFixable) {
+        actionArea.innerHTML = `
+            <div class="alert alert-warning mb-2">
+                <strong>⚠️ 發現畫質或光線問題</strong><br>
+                建議使用智能修復功能優化照片。
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" data-bs-dismiss="modal">略過</button>
+                <button class="btn btn-warning w-100 fw-bold" onclick="applyFix()"><i class="bi bi-magic"></i> ✨ 一鍵智能修復 (預覽)</button>
+            </div>
+        `;
     } else {
-        btnArea.innerHTML = `<button class="btn btn-success fw-bold" onclick="alert('進入付費流程')"><i class="bi bi-download"></i> 下載無浮水印高畫質圖</button>`;
+        actionArea.innerHTML = `
+            <div class="alert alert-success mb-2">
+                <strong>✅ 審查通過！</strong><br>
+                照片符合規範，可直接下載。
+            </div>
+            <button class="btn btn-success w-100 fw-bold" onclick="alert('進入付費流程')"><i class="bi bi-download"></i> 下載無浮水印高畫質圖</button>
+        `;
     }
-    btnArea.innerHTML += `<button class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>`;
-    modalBody.appendChild(btnArea);
+    
+    colTable.appendChild(actionArea);
+    row.appendChild(colTable);
+    modalBody.appendChild(row);
 }
 
-// --- 商業流程：修復與預覽 ---
 window.applyFix = async function() {
     const modalBody = document.querySelector('#checkModal .modal-body');
     modalBody.innerHTML = `
@@ -319,33 +366,26 @@ window.applyFix = async function() {
             <p class="text-muted mt-2">消除紅眼、補光、畫質增強...</p>
         </div>
     `;
-    
     try {
-        // 呼叫修復 API (帶浮水印參數)
-        const data = await API.fixImageApi(state.resultPhotos[state.selectedResultBg], 'all', true); // 需要修改 API.js 支援第三參數? 不，我們直接改 API.js
-        // 為了方便，這裡直接 fetch
         const res = await fetch(`${API.API_BASE_URL}/generate/fix`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ image_base64: state.resultPhotos[state.selectedResultBg], action: 'all', watermark: true })
         });
         const fixData = await res.json();
-        
         if (fixData.image_base64) {
             modalBody.innerHTML = `
                 <div class="text-center">
                     <h5 class="text-success">✨ 修復完成！</h5>
                     <p class="small text-muted">請預覽修復效果 (已加浮水印)</p>
-                    <img src="data:image/jpeg;base64,${fixData.image_base64}" class="img-fluid rounded mb-3 border">
-                    <div class="d-grid gap-2">
+                    <img src="data:image/jpeg;base64,${fixData.image_base64}" class="img-fluid rounded mb-3 border" style="max-height:400px;">
+                    <div class="d-grid gap-2 col-6 mx-auto">
                         <button class="btn btn-primary btn-lg" onclick="alert('付款成功！下載無浮水印圖...')">🔓 解鎖並下載 ($NT 99)</button>
                         <button class="btn btn-outline-secondary" data-bs-dismiss="modal">再考慮一下</button>
                     </div>
                 </div>
             `;
         }
-    } catch(e) {
-        alert("修復失敗");
-    }
+    } catch(e) { alert("修復失敗"); }
 }
 
 window.toggleEmailInput = function() { document.getElementById('email-group').classList.toggle('d-none'); };
