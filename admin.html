@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 參數後台管理</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f8f9fa; padding: 20px; }
+        .card { margin-bottom: 20px; }
+        .param-row { padding: 10px 0; border-bottom: 1px solid #eee; }
+        .param-desc { font-size: 0.85rem; color: #666; }
+    </style>
+</head>
+<body>
+
+<div class="container" style="max-width: 800px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="fw-bold">⚙️ AI 參數動態調整</h3>
+        <div>
+            <button class="btn btn-outline-danger me-2" onclick="resetConfig()">重置預設值</button>
+            <button class="btn btn-primary" onclick="saveConfig()">儲存設定</button>
+        </div>
+    </div>
+
+    <div id="config-container">Loading...</div>
+</div>
+
+<script>
+    // 請將此處 URL 改為您的 GPU Server IP (同 config.js)
+    const API_URL = "https://video.pdfsolution.dpdns.org"; 
+
+    let currentConfig = {};
+
+    async function loadConfig() {
+        try {
+            const res = await fetch(`${API_URL}/admin/config`);
+            const data = await res.json();
+            currentConfig = data;
+            renderConfig(data);
+        } catch (e) {
+            alert("無法載入設定: " + e.message);
+        }
+    }
+
+    function renderConfig(config) {
+        const container = document.getElementById('config-container');
+        container.innerHTML = '';
+        
+        // Grouping
+        const groups = {};
+        for (const key in config) {
+            const item = config[key];
+            if (!groups[item.group]) groups[item.group] = [];
+            groups[item.group].push({ key, ...item });
+        }
+
+        for (const groupName in groups) {
+            const card = document.createElement('div');
+            card.className = 'card shadow-sm';
+            let rowsHtml = '';
+            
+            groups[groupName].forEach(item => {
+                rowsHtml += `
+                    <div class="param-row row align-items-center mx-2">
+                        <div class="col-md-4">
+                            <label class="fw-bold">${item.key}</label>
+                            <div class="param-desc">${item.desc}</div>
+                        </div>
+                        <div class="col-md-6">
+                            <input type="${item.type === 'int' || item.type === 'float' ? 'number' : 'text'}" 
+                                   class="form-control" 
+                                   id="input-${item.key}" 
+                                   value="${item.value}" 
+                                   step="${item.type === 'float' ? '0.01' : '1'}">
+                        </div>
+                        <div class="col-md-2 text-end">
+                            <span class="badge bg-secondary">${item.type}</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            card.innerHTML = `
+                <div class="card-header bg-white fw-bold text-primary">${groupName}</div>
+                <div class="card-body">${rowsHtml}</div>
+            `;
+            container.appendChild(card);
+        }
+    }
+
+    async function saveConfig() {
+        const newValues = {};
+        for (const key in currentConfig) {
+            const input = document.getElementById(`input-${key}`);
+            if (input) {
+                newValues[key] = input.value;
+            }
+        }
+
+        try {
+            const res = await fetch(`${API_URL}/admin/config`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newValues)
+            });
+            if (res.ok) {
+                alert("✅ 設定已儲存並即時生效！");
+                loadConfig();
+            } else {
+                alert("儲存失敗");
+            }
+        } catch (e) {
+            alert("連線錯誤");
+        }
+    }
+
+    async function resetConfig() {
+        if (!confirm("確定要重置所有參數為預設值嗎？")) return;
+        try {
+            const res = await fetch(`${API_URL}/admin/config/reset`, { method: 'POST' });
+            if (res.ok) {
+                alert("已重置！");
+                loadConfig();
+            }
+        } catch (e) { alert("錯誤"); }
+    }
+
+    window.onload = loadConfig;
+</script>
+
+</body>
+</html>
