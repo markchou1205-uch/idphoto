@@ -16,17 +16,18 @@ window.onload = function() {
     UI.renderSpecList(selectSpec);
     setTimeout(() => selectSpec('passport'), 100);
 
+    // [版本更新] V13.0
     const verTag = document.createElement('div');
     verTag.style.position = 'fixed';
     verTag.style.bottom = '10px';
     verTag.style.left = '10px';
-    verTag.style.backgroundColor = '#000000';
-    verTag.style.color = '#FFD700';
+    verTag.style.backgroundColor = '#28a745'; // 綠色
+    verTag.style.color = '#ffffff';
     verTag.style.padding = '5px 10px';
     verTag.style.borderRadius = '5px';
     verTag.style.fontSize = '12px';
     verTag.style.zIndex = '9999';
-    verTag.innerHTML = 'System Ver: 12.0 (Horizontal UI)';
+    verTag.innerHTML = 'System Ver: 13.0 (Email Fixed)';
     document.body.appendChild(verTag);
 };
 
@@ -36,6 +37,7 @@ window.goHome = function() {
     document.getElementById('intro-area').classList.add('d-none');
     document.getElementById('workspace-area').classList.add('d-none');
     state.currentFeature = 'id-photo';
+    document.getElementById('dashboard-area').classList.remove('d-none');
 }
 
 window.switchFeature = function(featureId) {
@@ -67,6 +69,7 @@ window.handleFileUpload = function(input) {
         
         UI.showWorkspace();
         document.getElementById('cropMask').classList.add('d-none');
+        
         try {
             const data = await API.detectFace(state.originalBase64);
             if (data && data.found) {
@@ -119,12 +122,15 @@ window.processImage = async function() {
     try {
         const cropParams = Editor.getCropParams();
         const data = await API.processPreview(state.originalBase64, cropParams);
+        
         if (data.photos) {
             state.resultPhotos = data.photos;
             document.getElementById('specs-section').classList.add('d-none');
             document.getElementById('result-section').classList.remove('d-none');
             document.getElementById('cropMask').classList.add('d-none');
+            
             document.getElementById('img-white').src = `data:image/jpeg;base64,${data.photos[0]}`;
+            
             if (state.currentSpecId === 'passport') {
                 document.getElementById('res-blue').classList.add('d-none');
                 document.getElementById('img-blue').src = `data:image/jpeg;base64,${data.photos[0]}`; 
@@ -132,10 +138,12 @@ window.processImage = async function() {
                 document.getElementById('res-blue').classList.remove('d-none');
                 document.getElementById('img-blue').src = `data:image/jpeg;base64,${data.photos[1]}`;
             }
+            
             window.selectResult('white');
             
             const btnCheck = document.querySelector('button[onclick="runCheck()"]');
             if(btnCheck) btnCheck.innerHTML = '<i class="bi bi-shield-check"></i> 進階審查與智能修復';
+            
         } else { alert("錯誤: " + (data.error || "未知錯誤")); }
     } catch (e) { alert("連線錯誤: " + e.message); } finally { UI.showLoading(false); }
 }
@@ -143,16 +151,20 @@ window.processImage = async function() {
 window.selectResult = function(color) {
     const idx = color === 'white' ? 0 : 1;
     state.selectedResultBg = idx;
+    
     document.getElementById('res-white').classList.remove('active');
     document.getElementById('res-blue').classList.remove('active');
     document.getElementById(`res-${color}`).classList.add('active');
+    
     const img = document.getElementById('previewImg');
     img.src = `data:image/jpeg;base64,${state.resultPhotos[idx]}`;
+    
     img.style.transform = 'none';
     img.style.width = '100%';
     img.style.height = '100%';
     img.style.objectFit = 'contain';
     img.style.backgroundColor = '#ffffff'; 
+    
     img.classList.remove('d-none');
 }
 
@@ -172,11 +184,9 @@ window.generateLayout = async function() {
     alert("此為付費功能 (模擬)");
 }
 
-// --- [新版] 橫式 Modal 與按鈕邏輯 ---
 window.runCheck = async function() {
     if (!state.resultPhotos[state.selectedResultBg]) return;
     
-    // 設定 Modal 大小為 XL
     const modalEl = document.getElementById('checkModal');
     const modalDialog = modalEl.querySelector('.modal-dialog');
     modalDialog.classList.add('modal-xl');
@@ -223,11 +233,9 @@ function renderCheckResultHorizontal(data) {
     const modalBody = document.querySelector('#checkModal .modal-body');
     modalBody.innerHTML = ''; 
 
-    // 使用 Bootstrap Grid 橫式排列
     const row = document.createElement('div');
     row.className = 'row';
     
-    // 左側：圖片 (佔 5)
     const colImg = document.createElement('div');
     colImg.className = 'col-md-5 text-center border-end d-flex flex-column justify-content-center align-items-center';
     colImg.innerHTML = '<h6 class="text-muted mb-3">預覽結果</h6>';
@@ -237,9 +245,8 @@ function renderCheckResultHorizontal(data) {
     const img = document.createElement('img');
     img.src = `data:image/jpeg;base64,${state.resultPhotos[state.selectedResultBg]}`;
     img.className = 'img-fluid rounded border';
-    img.style.maxHeight = '400px'; // 放大一點
+    img.style.maxHeight = '400px'; 
     
-    // 輔助線
     const overlay = document.createElement('div');
     overlay.style.position = 'absolute';
     overlay.style.top = '0';
@@ -256,18 +263,15 @@ function renderCheckResultHorizontal(data) {
     colImg.appendChild(imgContainer);
     row.appendChild(colImg);
 
-    // 右側：表格 (佔 7)
     const colTable = document.createElement('div');
     colTable.className = 'col-md-7';
     
-    // 報告摘要 (Header)
     let hasFatal = false;
     let hasFixable = false;
     
     if(data.results) {
         data.results.forEach(r => {
             if (r.status === 'fail') hasFatal = true;
-            // 假設 Quality 類別都是可修復的 (紅眼、光線)
             if (r.category === 'quality' && r.status !== 'pass') hasFixable = true;
         });
     }
@@ -310,7 +314,6 @@ function renderCheckResultHorizontal(data) {
     }
     colTable.appendChild(table);
     
-    // 按鈕與警語區域
     const actionArea = document.createElement('div');
     actionArea.className = 'mt-3 p-3 bg-light rounded border';
     
@@ -366,12 +369,14 @@ window.applyFix = async function() {
             <p class="text-muted mt-2">消除紅眼、補光、畫質增強...</p>
         </div>
     `;
+    
     try {
         const res = await fetch(`${API.API_BASE_URL}/generate/fix`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ image_base64: state.resultPhotos[state.selectedResultBg], action: 'all', watermark: true })
         });
         const fixData = await res.json();
+        
         if (fixData.image_base64) {
             modalBody.innerHTML = `
                 <div class="text-center">
@@ -385,8 +390,50 @@ window.applyFix = async function() {
                 </div>
             `;
         }
-    } catch(e) { alert("修復失敗"); }
+    } catch(e) {
+        alert("修復失敗");
+    }
 }
 
 window.toggleEmailInput = function() { document.getElementById('email-group').classList.toggle('d-none'); };
-window.sendEmail = async function() { /* ... */ };
+
+// [核心修正] 實作完整的發信功能
+window.sendEmail = async function() {
+    const emailInput = document.getElementById('user-email');
+    const email = emailInput.value;
+    
+    // 1. 驗證 Email
+    if (!email || !email.includes('@')) { 
+        alert("請輸入有效的 Email 地址"); 
+        return; 
+    }
+
+    const btn = document.querySelector('#email-group button');
+    const originalText = btn.innerText;
+    btn.disabled = true;
+    btn.innerText = "發送中...";
+
+    try {
+        if (!state.resultPhotos || !state.resultPhotos[state.selectedResultBg]) {
+            throw new Error("無圖片可發送");
+        }
+
+        // 2. 呼叫 API
+        const res = await API.sendEmailApi(email, state.resultPhotos[state.selectedResultBg]);
+
+        // 3. 處理結果
+        if (res && (res.status === 'SUCCESS' || res.message === '郵件已發送')) {
+            alert("您的相片已經送至指定信箱，感謝您的使用");
+            // 隱藏輸入框
+            document.getElementById('email-group').classList.add('d-none');
+            emailInput.value = '';
+        } else {
+            alert("發送失敗: " + (res.error || "未知錯誤"));
+        }
+    } catch (e) {
+        alert("發送錯誤: " + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerText = originalText;
+    }
+};
