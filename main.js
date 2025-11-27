@@ -10,7 +10,6 @@ const DEFAULT_SPECS = {
     "visa_us": { "name": "美國簽證", "desc": "5x5cm (51x51mm)", "width_mm": 51, "height_mm": 51 }
 };
 
-// 會員狀態模擬
 let userPlan = localStorage.getItem('userPlan') || 'free'; 
 
 window.onload = function() {
@@ -19,20 +18,19 @@ window.onload = function() {
     UI.renderSpecList(selectSpec);
     setTimeout(() => selectSpec('passport'), 100);
     
-    // 初始化會員 UI
-    // updateUserUI(); // 若無此函式可暫時註解
+    // updateUserUI(); 
 
     const verTag = document.createElement('div');
     verTag.style.position = 'fixed';
     verTag.style.bottom = '10px';
     verTag.style.left = '10px';
-    verTag.style.backgroundColor = '#6610f2'; // 深紫色
+    verTag.style.backgroundColor = '#198754'; // 綠色
     verTag.style.color = '#fff';
     verTag.style.padding = '5px 10px';
     verTag.style.borderRadius = '5px';
     verTag.style.fontSize = '12px';
     verTag.style.zIndex = '9999';
-    verTag.innerHTML = 'System Ver: 14.2 (Preview Scale Fix)';
+    verTag.innerHTML = 'System Ver: 14.3 (Spinner Fix)';
     document.body.appendChild(verTag);
 };
 
@@ -78,11 +76,8 @@ window.handleFileUpload = function(input) {
 
 window.resetUpload = function() { location.reload(); }
 
-// [修正] 加入 DOM 安全檢查的 selectSpec
 window.selectSpec = function(specId) {
     state.currentSpecId = specId;
-    
-    // 1. 移除舊的 active
     document.querySelectorAll('.spec-card').forEach(el => {
         if(el) {
             el.classList.remove('active');
@@ -90,19 +85,14 @@ window.selectSpec = function(specId) {
             if (icon) icon.classList.add('d-none');
         }
     });
-
-    // 2. 隱藏自訂輸入框 (如果存在)
     const customInputs = document.getElementById('custom-inputs');
     if (customInputs) customInputs.classList.add('d-none');
-
-    // 3. 設定新的 active
     const el = document.getElementById(`spec-${specId}`);
     if(el) {
         el.classList.add('active');
         const icon = el.querySelector('.check-icon');
         if (icon) icon.classList.remove('d-none');
     }
-    
     Editor.updateMaskRatio();
 }
 
@@ -110,10 +100,8 @@ window.toggleCustom = function() {
     document.querySelectorAll('.spec-card').forEach(el => el.classList.remove('active'));
     const specCustom = document.getElementById('spec-custom');
     if(specCustom) specCustom.classList.add('active');
-    
     const customInputs = document.getElementById('custom-inputs');
     if(customInputs) customInputs.classList.remove('d-none');
-    
     state.currentSpecId = 'custom';
     window.updateCustom();
 }
@@ -129,7 +117,6 @@ window.updateCustom = function() {
     }
 }
 
-// --- 製作流程 ---
 window.processImage = async function() {
     UI.showLoading(true, "AI 製作中...");
     try {
@@ -159,12 +146,10 @@ window.processImage = async function() {
             } else {
                 const resBlue = document.getElementById('res-blue');
                 if(resBlue) resBlue.classList.remove('d-none');
-                
                 const imgBlue = document.getElementById('img-blue');
                 if(imgBlue) imgBlue.src = `data:image/jpeg;base64,${data.photos[1]}`;
             }
             
-            // 更新小圖
             const imgWhite = document.getElementById('img-white');
             if(imgWhite) imgWhite.src = `data:image/jpeg;base64,${data.photos[0]}`;
             
@@ -182,13 +167,13 @@ window.processImage = async function() {
     }
 }
 
+// [修正] 進度條防卡死
 async function startCheckProcess() {
     const loadingDiv = document.getElementById('report-loading');
     const contentDiv = document.getElementById('report-content');
     if(loadingDiv) loadingDiv.classList.remove('d-none');
     if(contentDiv) contentDiv.classList.add('d-none');
     
-    // 重置進度條
     const bar = document.getElementById('local-progress-bar');
     const text = document.getElementById('local-progress-text');
     if(bar) bar.style.width = '0%';
@@ -214,13 +199,16 @@ async function startCheckProcess() {
 
     try {
         const data = await API.runCheckApi(state.resultPhotos[0]); 
+        
+        // 成功後延遲顯示
         setTimeout(() => {
             renderReport(data);
             if(loadingDiv) loadingDiv.classList.add('d-none');
             if(contentDiv) contentDiv.classList.remove('d-none');
         }, 1600); 
     } catch(e) { 
-        if(loadingDiv) loadingDiv.innerHTML = `<div class="alert alert-danger">審查失敗: ${e.message}</div>`; 
+        // 失敗時直接顯示錯誤訊息 (不要卡住)
+        if(loadingDiv) loadingDiv.innerHTML = `<div class="alert alert-danger">審查失敗: ${e.message || "伺服器錯誤"}</div>`; 
     }
 }
 
@@ -357,7 +345,6 @@ window.selectResult = function(color) {
         img.classList.remove('d-none');
     }
     
-    // Update main dashboard image too if active
     const mainImg = document.getElementById('main-preview-img');
     if(mainImg) mainImg.src = `data:image/jpeg;base64,${state.resultPhotos[idx]}`;
 }
@@ -397,14 +384,11 @@ window.processPayment = function(plan) {
         const modalEl = document.getElementById('paymentModal');
         const modal = bootstrap.Modal.getInstance(modalEl);
         modal.hide();
-        
         alert("付款成功！");
-        
-        const compareView = document.getElementById('compare-view');
-        if (compareView && !compareView.classList.contains('d-none')) {
-             cancelFix(); // Reset to main view, user can now download unlocked layout
+        if (!document.getElementById('compare-view').classList.contains('d-none')) {
+             cancelFix(); 
         } else {
-             renderActionButtons(false, false); // Refresh buttons
+             renderActionButtons(false, false); 
         }
     }
 }
