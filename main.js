@@ -13,6 +13,7 @@ const DEFAULT_SPECS = {
 let userPlan = localStorage.getItem('userPlan') || 'free'; 
 
 window.onload = function() {
+    console.log("[DEBUG] System Init: Window Loaded");
     state.specConfig = DEFAULT_SPECS;
     Editor.initEditor();
     UI.renderSpecList(selectSpec);
@@ -22,13 +23,13 @@ window.onload = function() {
     verTag.style.position = 'fixed';
     verTag.style.bottom = '10px';
     verTag.style.left = '10px';
-    verTag.style.backgroundColor = '#fd7e14'; // 橘色
+    verTag.style.backgroundColor = '#6f42c1'; // 紫色 Debug
     verTag.style.color = '#fff';
     verTag.style.padding = '5px 10px';
     verTag.style.borderRadius = '5px';
     verTag.style.fontSize = '12px';
     verTag.style.zIndex = '9999';
-    verTag.innerHTML = 'System Ver: 14.5 (UI Restore)';
+    verTag.innerHTML = 'System Ver: 14.6 (Console Debug)';
     document.body.appendChild(verTag);
 };
 
@@ -37,30 +38,38 @@ window.switchFeature = function(featureId) { /* 略 */ }
 
 window.handleFileUpload = function(input) {
     if (!input.files.length) return;
+    console.log("[DEBUG] File Upload Triggered");
     const reader = new FileReader();
     UI.showLoading(true, "AI 識別中...");
+    
     reader.onload = async function() {
+        console.log("[DEBUG] File Read Complete");
         state.originalBase64 = reader.result;
         state.isImageLoaded = true;
         Editor.loadImageToEditor(state.originalBase64);
-        const uploadWrapper = document.querySelector('.upload-btn-wrapper');
-        if (uploadWrapper) uploadWrapper.classList.add('d-none');
-        const statusEl = document.getElementById('uploaded-status');
-        if (statusEl) statusEl.classList.remove('d-none');
-        const btnProcess = document.getElementById('btn-process');
-        if (btnProcess) btnProcess.classList.remove('d-none');
+        
+        document.querySelector('.upload-btn-wrapper')?.classList.add('d-none');
+        document.getElementById('uploaded-status')?.classList.remove('d-none');
+        document.getElementById('btn-process')?.classList.remove('d-none');
+        
         UI.showWorkspace();
-        const cropMask = document.getElementById('cropMask');
-        if (cropMask) cropMask.classList.add('d-none');
+        document.getElementById('cropMask')?.classList.add('d-none');
+        
         try {
+            console.log("[DEBUG] Calling API.detectFace...");
             const data = await API.detectFace(state.originalBase64);
+            console.log("[DEBUG] Detect Result:", data);
             if (data && data.found) {
                 state.faceData = data;
                 Editor.autoAlignImage();
             } else {
                 Editor.autoAlignImage();
             }
-        } catch (err) { console.log("偵測失敗"); } finally { UI.showLoading(false); }
+        } catch (err) { 
+            console.error("[DEBUG] Detect Failed:", err); 
+        } finally { 
+            UI.showLoading(false); 
+        }
     };
     reader.readAsDataURL(input.files[0]);
 }
@@ -68,13 +77,12 @@ window.handleFileUpload = function(input) {
 window.resetUpload = function() { location.reload(); }
 
 window.selectSpec = function(specId) {
+    console.log("[DEBUG] Select Spec:", specId);
     state.currentSpecId = specId;
     document.querySelectorAll('.spec-card').forEach(el => {
-        if(el) {
-            el.classList.remove('active');
-            const icon = el.querySelector('.check-icon');
-            if (icon) icon.classList.add('d-none');
-        }
+        el.classList.remove('active');
+        const icon = el.querySelector('.check-icon');
+        if (icon) icon.classList.add('d-none');
     });
     const customInputs = document.getElementById('custom-inputs');
     if (customInputs) customInputs.classList.add('d-none');
@@ -91,8 +99,7 @@ window.toggleCustom = function() {
     document.querySelectorAll('.spec-card').forEach(el => el.classList.remove('active'));
     const specCustom = document.getElementById('spec-custom');
     if(specCustom) specCustom.classList.add('active');
-    const customInputs = document.getElementById('custom-inputs');
-    if(customInputs) customInputs.classList.remove('d-none');
+    document.getElementById('custom-inputs')?.classList.remove('d-none');
     state.currentSpecId = 'custom';
     window.updateCustom();
 }
@@ -109,21 +116,26 @@ window.updateCustom = function() {
 }
 
 window.processImage = async function() {
+    console.log("[DEBUG] Step 1: Start Process Image");
     UI.showLoading(true, "AI 製作中...");
     try {
         const cropParams = Editor.getCropParams();
+        console.log("[DEBUG] calling API.processPreview...");
         const data = await API.processPreview(state.originalBase64, cropParams);
         
+        console.log("[DEBUG] Step 2: Preview Data Received", data);
         UI.showLoading(false);
         
         if (data.photos) {
             state.resultPhotos = data.photos;
             
-            const dashboard = document.getElementById('dashboard-area');
-            if(dashboard) dashboard.classList.add('d-none');
+            // DOM check
+            const dash = document.getElementById('dashboard-area');
+            const resDash = document.getElementById('result-dashboard');
+            console.log("[DEBUG] DOM Check:", { dash, resDash });
             
-            const resultDash = document.getElementById('result-dashboard');
-            if(resultDash) resultDash.classList.remove('d-none');
+            if(dash) dash.classList.add('d-none');
+            if(resDash) resDash.classList.remove('d-none');
             
             const img = document.getElementById('main-preview-img');
             if(img) {
@@ -131,9 +143,12 @@ window.processImage = async function() {
                 img.classList.remove('d-none');
             }
             
+            // Background selection logic
             if (state.currentSpecId === 'passport') {
                 const resBlue = document.getElementById('res-blue');
                 if(resBlue) resBlue.classList.add('d-none');
+                const imgBlue = document.getElementById('img-blue');
+                if(imgBlue) imgBlue.src = `data:image/jpeg;base64,${data.photos[0]}`; 
             } else {
                 const resBlue = document.getElementById('res-blue');
                 if(resBlue) resBlue.classList.remove('d-none');
@@ -149,23 +164,33 @@ window.processImage = async function() {
             const btnCheck = document.querySelector('button[onclick="runCheck()"]');
             if(btnCheck) btnCheck.innerHTML = '<i class="bi bi-shield-check"></i> 進階審查與智能修復';
             
+            console.log("[DEBUG] Step 3: Starting Check Process...");
             startCheckProcess();
             
-        } else { alert("錯誤: " + (data.error || "未知錯誤")); }
+        } else { 
+            alert("錯誤: " + (data.error || "未知錯誤")); 
+        }
     } catch (e) { 
+        console.error("[DEBUG] Process Error:", e);
         UI.showLoading(false);
         alert("連線錯誤: " + e.message); 
     }
 }
 
-// [修正] 補回被遺漏的 HTML 注入代碼
 async function startCheckProcess() {
+    console.log("[DEBUG] Step 4: startCheckProcess() called");
     const loadingDiv = document.getElementById('report-loading');
     const contentDiv = document.getElementById('report-content');
+    
+    if(!loadingDiv) {
+        console.error("[DEBUG] Critical: #report-loading not found!");
+        return;
+    }
+
     if(loadingDiv) loadingDiv.classList.remove('d-none');
     if(contentDiv) contentDiv.classList.add('d-none');
     
-    // [關鍵] 注入進度條結構 (解決 Spinner 卡住問題)
+    console.log("[DEBUG] Injecting Progress Bar HTML...");
     loadingDiv.innerHTML = `
         <div class="text-center py-5">
             <h5 class="mb-3 text-primary"><i class="bi bi-cpu-fill"></i> AI 智能審查中...</h5>
@@ -200,7 +225,8 @@ async function startCheckProcess() {
     }, 400);
 
     try {
-        // Timeout 20s
+        console.log("[DEBUG] Calling API.runCheckApi...");
+        
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 20000);
         
@@ -211,21 +237,25 @@ async function startCheckProcess() {
             signal: controller.signal
         });
         clearTimeout(timeoutId);
+        
+        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+        
         const data = await res.json();
+        console.log("[DEBUG] Check Result Received:", data);
 
         setTimeout(() => {
+            console.log("[DEBUG] Step 5: Rendering Report...");
             renderReport(data);
             if(loadingDiv) loadingDiv.classList.add('d-none');
             if(contentDiv) contentDiv.classList.remove('d-none');
         }, 1600); 
     } catch(e) { 
-        console.error(e);
-        // [修正] 錯誤時不再顯示進度條，改為錯誤訊息
+        console.error("[DEBUG] Check Process Failed:", e);
         if(loadingDiv) loadingDiv.innerHTML = `
             <div class="alert alert-danger text-center">
                 <i class="bi bi-exclamation-triangle-fill fs-1"></i><br>
-                <strong>審查連線逾時</strong><br>
-                <small>伺服器忙碌中，請稍後再試。</small><br>
+                <strong>審查失敗</strong><br>
+                <small>${e.message}</small><br>
                 <button class="btn btn-sm btn-outline-danger mt-2" onclick="startCheckProcess()">重試</button>
             </div>
         `; 
@@ -266,6 +296,7 @@ function renderReport(data) {
                 html += `<tr><td>${res.item}</td><td class="text-muted">${res.standard||''}</td><td class="${color}">${icon} ${res.value}</td></tr>`;
             });
         } else {
+            console.warn("[DEBUG] Invalid results format:", data);
             html += `<tr><td colspan="3" class="text-danger">無效的檢查結果格式</td></tr>`;
         }
         html += `</tbody></table>`;
@@ -281,7 +312,7 @@ function renderReport(data) {
         container.innerHTML = html;
         renderActionButtons(hasFatal, hasFixable);
     } catch(e) {
-        console.error("Render Report Error:", e);
+        console.error("[DEBUG] Render Report Exception:", e);
         const container = document.getElementById('report-content');
         if(container) container.innerHTML = `<div class="alert alert-danger">報告渲染失敗: ${e.message}</div>`;
     }
@@ -314,6 +345,7 @@ function renderActionButtons(hasFatal, hasFixable) {
 }
 
 window.startSmartFix = async function() {
+    console.log("[DEBUG] startSmartFix called");
     const btn = document.querySelector('button[onclick="startSmartFix()"]');
     if(btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 修復中...'; }
     
@@ -345,7 +377,11 @@ window.startSmartFix = async function() {
                 </div>
             `;
         }
-    } catch(e) { alert("修復失敗"); if(btn) btn.disabled=false; }
+    } catch(e) { 
+        console.error(e); 
+        alert("修復失敗"); 
+        if(btn) btn.disabled=false; 
+    }
 }
 
 window.cancelFix = function() {
@@ -413,9 +449,7 @@ window.processPayment = function(plan) {
         const modalEl = document.getElementById('paymentModal');
         const modal = bootstrap.Modal.getInstance(modalEl);
         modal.hide();
-        
         alert("付款成功！");
-        
         if (!document.getElementById('compare-view').classList.contains('d-none')) {
              cancelFix(); 
         } else {
