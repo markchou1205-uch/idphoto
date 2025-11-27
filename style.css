@@ -158,3 +158,28 @@ body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; height: 1
     font-size: 12px;
     font-weight: bold;
 }
+/* [修正] 右側儀表板預覽圖強制放大 */
+#preview-container {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f8f9fa; /* 淺灰背景，突顯照片 */
+    padding: 20px;
+}
+
+#main-preview-img {
+    width: 100% !important;       /* 寬度佔滿 */
+    height: 100% !important;      /* 高度佔滿 */
+    max-height: 85vh !important;  /* 限制最大高度，避免超出螢幕 */
+    object-fit: contain !important; /* 保持比例縮放，不會變形 */
+    background-color: white;      /* 照片本身白底 */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* 加點陰影增加立體感 */
+}
+
+/* 確保儀表板高度足夠 */
+#result-dashboard {
+    height: 100vh;
+    overflow: hidden;
+}
