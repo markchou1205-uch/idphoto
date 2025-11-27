@@ -22,13 +22,13 @@ window.onload = function() {
     verTag.style.position = 'fixed';
     verTag.style.bottom = '10px';
     verTag.style.left = '10px';
-    verTag.style.backgroundColor = '#ff0000';
+    verTag.style.backgroundColor = '#fd7e14'; // 橘色
     verTag.style.color = '#fff';
     verTag.style.padding = '5px 10px';
     verTag.style.borderRadius = '5px';
     verTag.style.fontSize = '12px';
     verTag.style.zIndex = '9999';
-    verTag.innerHTML = 'System Ver: 14.4 (Debug Mode)';
+    verTag.innerHTML = 'System Ver: 14.5 (UI Restore)';
     document.body.appendChild(verTag);
 };
 
@@ -158,11 +158,23 @@ window.processImage = async function() {
     }
 }
 
+// [修正] 補回被遺漏的 HTML 注入代碼
 async function startCheckProcess() {
     const loadingDiv = document.getElementById('report-loading');
     const contentDiv = document.getElementById('report-content');
     if(loadingDiv) loadingDiv.classList.remove('d-none');
     if(contentDiv) contentDiv.classList.add('d-none');
+    
+    // [關鍵] 注入進度條結構 (解決 Spinner 卡住問題)
+    loadingDiv.innerHTML = `
+        <div class="text-center py-5">
+            <h5 class="mb-3 text-primary"><i class="bi bi-cpu-fill"></i> AI 智能審查中...</h5>
+            <div class="progress w-75 mx-auto shadow-sm" style="height: 10px;">
+                <div id="local-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 0%"></div>
+            </div>
+            <p class="mt-3 small text-muted" id="local-progress-text">正在初始化模型...</p>
+        </div>
+    `;
     
     const bar = document.getElementById('local-progress-bar');
     const text = document.getElementById('local-progress-text');
@@ -188,7 +200,7 @@ async function startCheckProcess() {
     }, 400);
 
     try {
-        // 設定 20秒 Timeout 防止卡死
+        // Timeout 20s
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 20000);
         
@@ -208,7 +220,15 @@ async function startCheckProcess() {
         }, 1600); 
     } catch(e) { 
         console.error(e);
-        if(loadingDiv) loadingDiv.innerHTML = `<div class="alert alert-danger">審查連線失敗: ${e.message || "請檢查 Console"}</div>`; 
+        // [修正] 錯誤時不再顯示進度條，改為錯誤訊息
+        if(loadingDiv) loadingDiv.innerHTML = `
+            <div class="alert alert-danger text-center">
+                <i class="bi bi-exclamation-triangle-fill fs-1"></i><br>
+                <strong>審查連線逾時</strong><br>
+                <small>伺服器忙碌中，請稍後再試。</small><br>
+                <button class="btn btn-sm btn-outline-danger mt-2" onclick="startCheckProcess()">重試</button>
+            </div>
+        `; 
     }
 }
 
@@ -393,7 +413,9 @@ window.processPayment = function(plan) {
         const modalEl = document.getElementById('paymentModal');
         const modal = bootstrap.Modal.getInstance(modalEl);
         modal.hide();
+        
         alert("付款成功！");
+        
         if (!document.getElementById('compare-view').classList.contains('d-none')) {
              cancelFix(); 
         } else {
