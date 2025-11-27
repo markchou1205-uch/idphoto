@@ -17,20 +17,18 @@ window.onload = function() {
     Editor.initEditor();
     UI.renderSpecList(selectSpec);
     setTimeout(() => selectSpec('passport'), 100);
-    
-    // updateUserUI(); 
 
     const verTag = document.createElement('div');
     verTag.style.position = 'fixed';
     verTag.style.bottom = '10px';
     verTag.style.left = '10px';
-    verTag.style.backgroundColor = '#198754'; // 綠色
+    verTag.style.backgroundColor = '#ff0000';
     verTag.style.color = '#fff';
     verTag.style.padding = '5px 10px';
     verTag.style.borderRadius = '5px';
     verTag.style.fontSize = '12px';
     verTag.style.zIndex = '9999';
-    verTag.innerHTML = 'System Ver: 14.3 (Spinner Fix)';
+    verTag.innerHTML = 'System Ver: 14.4 (Debug Mode)';
     document.body.appendChild(verTag);
 };
 
@@ -41,26 +39,19 @@ window.handleFileUpload = function(input) {
     if (!input.files.length) return;
     const reader = new FileReader();
     UI.showLoading(true, "AI 識別中...");
-    
     reader.onload = async function() {
         state.originalBase64 = reader.result;
         state.isImageLoaded = true;
         Editor.loadImageToEditor(state.originalBase64);
-        
         const uploadWrapper = document.querySelector('.upload-btn-wrapper');
         if (uploadWrapper) uploadWrapper.classList.add('d-none');
-        
         const statusEl = document.getElementById('uploaded-status');
         if (statusEl) statusEl.classList.remove('d-none');
-        
         const btnProcess = document.getElementById('btn-process');
         if (btnProcess) btnProcess.classList.remove('d-none');
-        
         UI.showWorkspace();
-        
         const cropMask = document.getElementById('cropMask');
         if (cropMask) cropMask.classList.add('d-none');
-        
         try {
             const data = await API.detectFace(state.originalBase64);
             if (data && data.found) {
@@ -167,7 +158,6 @@ window.processImage = async function() {
     }
 }
 
-// [修正] 進度條防卡死
 async function startCheckProcess() {
     const loadingDiv = document.getElementById('report-loading');
     const contentDiv = document.getElementById('report-content');
@@ -198,65 +188,83 @@ async function startCheckProcess() {
     }, 400);
 
     try {
-        const data = await API.runCheckApi(state.resultPhotos[0]); 
+        // 設定 20秒 Timeout 防止卡死
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 20000);
         
-        // 成功後延遲顯示
+        const res = await fetch(`${API.API_BASE_URL}/generate/check`, {
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ image_base64: state.resultPhotos[0], spec_id: state.currentSpecId }),
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        const data = await res.json();
+
         setTimeout(() => {
             renderReport(data);
             if(loadingDiv) loadingDiv.classList.add('d-none');
             if(contentDiv) contentDiv.classList.remove('d-none');
         }, 1600); 
     } catch(e) { 
-        // 失敗時直接顯示錯誤訊息 (不要卡住)
-        if(loadingDiv) loadingDiv.innerHTML = `<div class="alert alert-danger">審查失敗: ${e.message || "伺服器錯誤"}</div>`; 
+        console.error(e);
+        if(loadingDiv) loadingDiv.innerHTML = `<div class="alert alert-danger">審查連線失敗: ${e.message || "請檢查 Console"}</div>`; 
     }
 }
 
 function renderReport(data) {
-    const container = document.getElementById('report-content');
-    if(!container) return;
-
-    let html = `<h5 class="fw-bold mb-3"><i class="bi bi-clipboard-check"></i> AI 審查報告</h5>`;
-    html += `<table class="table table-hover small"><tbody>`;
+    try {
+        const container = document.getElementById('report-content');
+        if(!container) return;
     
-    const categories = { 'basic': '🔹 基礎處理', 'compliance': '🔸 合規檢查', 'quality': '✨ 進階畫質' };
-    let currentCat = '';
-    let hasFatal = false;
-    let hasFixable = false;
-
-    if (data.results) {
-        const sorted = data.results.sort((a,b) => {
-            const order = {'basic':1, 'compliance':2, 'quality':3};
-            return order[a.category] - order[b.category];
-        });
-
-        sorted.forEach(res => {
-            if (res.category !== currentCat) {
-                currentCat = res.category;
-                html += `<tr class="table-light"><td colspan="3" class="fw-bold">${categories[currentCat]}</td></tr>`;
-            }
-            let icon = res.status === 'pass' ? '✅' : (res.status === 'warn' ? '⚠️' : '❌');
-            let color = res.status === 'pass' ? 'text-success' : (res.status === 'warn' ? 'text-warning' : 'text-danger');
-            
-            if (res.status === 'fail') hasFatal = true;
-            if (res.category === 'quality' && res.status !== 'pass') hasFixable = true;
-            if (res.status !== 'pass') hasFixable = true;
-
-            html += `<tr><td>${res.item}</td><td class="text-muted">${res.standard||''}</td><td class="${color}">${icon} ${res.value}</td></tr>`;
-        });
+        let html = `<h5 class="fw-bold mb-3"><i class="bi bi-clipboard-check"></i> AI 審查報告</h5>`;
+        html += `<table class="table table-hover small"><tbody>`;
+        
+        const categories = { 'basic': '🔹 基礎處理', 'compliance': '🔸 合規檢查', 'quality': '✨ 進階畫質' };
+        let currentCat = '';
+        let hasFatal = false;
+        let hasFixable = false;
+    
+        if (data.results && Array.isArray(data.results)) {
+            const sorted = data.results.sort((a,b) => {
+                const order = {'basic':1, 'compliance':2, 'quality':3};
+                return (order[a.category] || 99) - (order[b.category] || 99);
+            });
+    
+            sorted.forEach(res => {
+                if (res.category !== currentCat) {
+                    currentCat = res.category;
+                    html += `<tr class="table-light"><td colspan="3" class="fw-bold">${categories[currentCat] || '其他'}</td></tr>`;
+                }
+                let icon = res.status === 'pass' ? '✅' : (res.status === 'warn' ? '⚠️' : '❌');
+                let color = res.status === 'pass' ? 'text-success' : (res.status === 'warn' ? 'text-warning' : 'text-danger');
+                
+                if (res.status === 'fail') hasFatal = true;
+                if (res.category === 'quality' && res.status !== 'pass') hasFixable = true;
+                if (res.status !== 'pass') hasFixable = true;
+    
+                html += `<tr><td>${res.item}</td><td class="text-muted">${res.standard||''}</td><td class="${color}">${icon} ${res.value}</td></tr>`;
+            });
+        } else {
+            html += `<tr><td colspan="3" class="text-danger">無效的檢查結果格式</td></tr>`;
+        }
+        html += `</tbody></table>`;
+        
+        if (hasFatal) {
+            html += `<div class="alert alert-danger"><i class="bi bi-x-circle-fill"></i> <strong>未通過：</strong> 建議重新拍攝或嘗試修復。</div>`;
+        } else if (hasFixable) {
+            html += `<div class="alert alert-warning"><i class="bi bi-exclamation-triangle-fill"></i> <strong>有疑慮：</strong> 建議使用智能修復。</div>`;
+        } else {
+            html += `<div class="alert alert-success"><i class="bi bi-check-circle-fill"></i> <strong>恭喜通過！</strong> 照片符合規範。</div>`;
+        }
+        
+        container.innerHTML = html;
+        renderActionButtons(hasFatal, hasFixable);
+    } catch(e) {
+        console.error("Render Report Error:", e);
+        const container = document.getElementById('report-content');
+        if(container) container.innerHTML = `<div class="alert alert-danger">報告渲染失敗: ${e.message}</div>`;
     }
-    html += `</tbody></table>`;
-    
-    if (hasFatal) {
-        html += `<div class="alert alert-danger"><i class="bi bi-x-circle-fill"></i> <strong>未通過：</strong> 建議重新拍攝或嘗試修復。</div>`;
-    } else if (hasFixable) {
-        html += `<div class="alert alert-warning"><i class="bi bi-exclamation-triangle-fill"></i> <strong>有疑慮：</strong> 建議使用智能修復。</div>`;
-    } else {
-        html += `<div class="alert alert-success"><i class="bi bi-check-circle-fill"></i> <strong>恭喜通過！</strong> 照片符合規範。</div>`;
-    }
-    
-    container.innerHTML = html;
-    renderActionButtons(hasFatal, hasFixable);
 }
 
 function renderActionButtons(hasFatal, hasFixable) {
@@ -326,7 +334,6 @@ window.cancelFix = function() {
     startCheckProcess();
 }
 
-// 付費與其他 UI 函式...
 window.selectResult = function(color) {
     const idx = color === 'white' ? 0 : 1;
     state.selectedResultBg = idx;
@@ -346,7 +353,9 @@ window.selectResult = function(color) {
     }
     
     const mainImg = document.getElementById('main-preview-img');
-    if(mainImg) mainImg.src = `data:image/jpeg;base64,${state.resultPhotos[idx]}`;
+    if(mainImg) {
+        mainImg.src = `data:image/jpeg;base64,${state.resultPhotos[idx]}`;
+    }
 }
 
 window.showPaymentModal = function() {
