@@ -23,13 +23,13 @@ window.onload = function() {
     verTag.style.position = 'fixed';
     verTag.style.bottom = '10px';
     verTag.style.left = '10px';
-    verTag.style.backgroundColor = '#0dcaf0'; // 青色 Auto
+    verTag.style.backgroundColor = '#0dcaf0'; // 青色 Fixed
     verTag.style.color = '#000';
     verTag.style.padding = '5px 10px';
     verTag.style.borderRadius = '5px';
     verTag.style.fontSize = '12px';
     verTag.style.zIndex = '9999';
-    verTag.innerHTML = 'System Ver: 14.7 (Auto Start)';
+    verTag.innerHTML = 'System Ver: 14.8 (URL Fixed)';
     document.body.appendChild(verTag);
 };
 
@@ -38,43 +38,33 @@ window.switchFeature = function(featureId) { /* 略 */ }
 
 window.handleFileUpload = function(input) {
     if (!input.files.length) return;
-    console.log("[DEBUG] File Upload Triggered");
     const reader = new FileReader();
     UI.showLoading(true, "AI 識別中...");
     
     reader.onload = async function() {
-        console.log("[DEBUG] File Read Complete");
         state.originalBase64 = reader.result;
         state.isImageLoaded = true;
         Editor.loadImageToEditor(state.originalBase64);
         
-        // 隱藏上傳按鈕
         document.querySelector('.upload-btn-wrapper')?.classList.add('d-none');
         document.getElementById('uploaded-status')?.classList.remove('d-none');
-        
-        // [修正] 不再顯示 "開始製作" 按鈕，因為我們要自動開始
-        // document.getElementById('btn-process')?.classList.remove('d-none');
         
         UI.showWorkspace();
         document.getElementById('cropMask')?.classList.add('d-none');
         
         try {
-            console.log("[DEBUG] Calling API.detectFace...");
             const data = await API.detectFace(state.originalBase64);
-            console.log("[DEBUG] Detect Result:", data);
             if (data && data.found) {
                 state.faceData = data;
+                Editor.autoAlignImage();
+            } else {
+                Editor.autoAlignImage();
             }
-            // 無論是否偵測到臉，都自動對齊並開始製作
-            Editor.autoAlignImage();
-            
-            // [關鍵修正] 自動觸發製作流程！
-            console.log("[DEBUG] Auto-triggering processImage...");
+            // 自動開始
             processImage();
-            
         } catch (err) { 
             console.error("[DEBUG] Detect Failed:", err); 
-            UI.showLoading(false); // 只有出錯才在這裡關閉，正常情況 processImage 會接手
+            UI.showLoading(false); 
         }
     };
     reader.readAsDataURL(input.files[0]);
@@ -83,7 +73,6 @@ window.handleFileUpload = function(input) {
 window.resetUpload = function() { location.reload(); }
 
 window.selectSpec = function(specId) {
-    console.log("[DEBUG] Select Spec:", specId);
     state.currentSpecId = specId;
     document.querySelectorAll('.spec-card').forEach(el => {
         if(el) {
@@ -125,17 +114,11 @@ window.updateCustom = function() {
 }
 
 window.processImage = async function() {
-    console.log("[DEBUG] Step 1: Start Process Image");
-    // 確保 Loading 顯示
     UI.showLoading(true, "AI 製作中...");
-    
     try {
         const cropParams = Editor.getCropParams();
-        console.log("[DEBUG] calling API.processPreview...");
         const data = await API.processPreview(state.originalBase64, cropParams);
         
-        console.log("[DEBUG] Step 2: Preview Data Received", data);
-        // 資料回來後，關閉全域 Loading，準備顯示局部進度條
         UI.showLoading(false);
         
         if (data.photos) {
@@ -173,21 +156,16 @@ window.processImage = async function() {
             const btnCheck = document.querySelector('button[onclick="runCheck()"]');
             if(btnCheck) btnCheck.innerHTML = '<i class="bi bi-shield-check"></i> 進階審查與智能修復';
             
-            console.log("[DEBUG] Step 3: Starting Check Process...");
             startCheckProcess();
             
-        } else { 
-            alert("錯誤: " + (data.error || "未知錯誤")); 
-        }
+        } else { alert("錯誤: " + (data.error || "未知錯誤")); }
     } catch (e) { 
-        console.error("[DEBUG] Process Error:", e);
         UI.showLoading(false);
         alert("連線錯誤: " + e.message); 
     }
 }
 
 async function startCheckProcess() {
-    console.log("[DEBUG] Step 4: startCheckProcess() called");
     const loadingDiv = document.getElementById('report-loading');
     const contentDiv = document.getElementById('report-content');
     
@@ -196,7 +174,6 @@ async function startCheckProcess() {
     if(loadingDiv) loadingDiv.classList.remove('d-none');
     if(contentDiv) contentDiv.classList.add('d-none');
     
-    // 確保進度條 HTML 存在
     loadingDiv.innerHTML = `
         <div class="text-center py-5">
             <h5 class="mb-3 text-primary"><i class="bi bi-cpu-fill"></i> AI 智能審查中...</h5>
@@ -231,26 +208,14 @@ async function startCheckProcess() {
     }, 400);
 
     try {
-        console.log("[DEBUG] Calling API.runCheckApi...");
+        console.log("[DEBUG] Calling API.runCheckApi via wrapper...");
         
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20000);
+        // [修正] 使用 API wrapper 函式，它內部有正確的 URL
+        const data = await API.runCheckApi(state.resultPhotos[0]);
         
-        const res = await fetch(`${API.API_BASE_URL}/generate/check`, {
-            method: 'POST', 
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ image_base64: state.resultPhotos[0], spec_id: state.currentSpecId }),
-            signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-        
-        if (!res.ok) throw new Error(`Server returned ${res.status}`);
-        
-        const data = await res.json();
         console.log("[DEBUG] Check Result Received:", data);
 
         setTimeout(() => {
-            console.log("[DEBUG] Step 5: Rendering Report...");
             renderReport(data);
             if(loadingDiv) loadingDiv.classList.add('d-none');
             if(contentDiv) contentDiv.classList.remove('d-none');
@@ -260,7 +225,7 @@ async function startCheckProcess() {
         if(loadingDiv) loadingDiv.innerHTML = `
             <div class="alert alert-danger text-center">
                 <i class="bi bi-exclamation-triangle-fill fs-1"></i><br>
-                <strong>審查連線逾時</strong><br>
+                <strong>審查失敗</strong><br>
                 <small>${e.message}</small><br>
                 <button class="btn btn-sm btn-outline-danger mt-2" onclick="startCheckProcess()">重試</button>
             </div>
@@ -302,7 +267,6 @@ function renderReport(data) {
                 html += `<tr><td>${res.item}</td><td class="text-muted">${res.standard||''}</td><td class="${color}">${icon} ${res.value}</td></tr>`;
             });
         } else {
-            console.warn("[DEBUG] Invalid results format:", data);
             html += `<tr><td colspan="3" class="text-danger">無效的檢查結果格式</td></tr>`;
         }
         html += `</tbody></table>`;
@@ -351,7 +315,6 @@ function renderActionButtons(hasFatal, hasFixable) {
 }
 
 window.startSmartFix = async function() {
-    console.log("[DEBUG] startSmartFix called");
     const btn = document.querySelector('button[onclick="startSmartFix()"]');
     if(btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 修復中...'; }
     
@@ -383,11 +346,7 @@ window.startSmartFix = async function() {
                 </div>
             `;
         }
-    } catch(e) { 
-        console.error(e); 
-        alert("修復失敗"); 
-        if(btn) btn.disabled=false; 
-    }
+    } catch(e) { alert("修復失敗"); if(btn) btn.disabled=false; }
 }
 
 window.cancelFix = function() {
@@ -455,7 +414,9 @@ window.processPayment = function(plan) {
         const modalEl = document.getElementById('paymentModal');
         const modal = bootstrap.Modal.getInstance(modalEl);
         modal.hide();
+        
         alert("付款成功！");
+        
         if (!document.getElementById('compare-view').classList.contains('d-none')) {
              cancelFix(); 
         } else {
