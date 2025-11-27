@@ -23,13 +23,13 @@ window.onload = function() {
     verTag.style.position = 'fixed';
     verTag.style.bottom = '10px';
     verTag.style.left = '10px';
-    verTag.style.backgroundColor = '#6f42c1'; // 紫色 Debug
-    verTag.style.color = '#fff';
+    verTag.style.backgroundColor = '#0dcaf0'; // 青色 Auto
+    verTag.style.color = '#000';
     verTag.style.padding = '5px 10px';
     verTag.style.borderRadius = '5px';
     verTag.style.fontSize = '12px';
     verTag.style.zIndex = '9999';
-    verTag.innerHTML = 'System Ver: 14.6 (Console Debug)';
+    verTag.innerHTML = 'System Ver: 14.7 (Auto Start)';
     document.body.appendChild(verTag);
 };
 
@@ -48,9 +48,12 @@ window.handleFileUpload = function(input) {
         state.isImageLoaded = true;
         Editor.loadImageToEditor(state.originalBase64);
         
+        // 隱藏上傳按鈕
         document.querySelector('.upload-btn-wrapper')?.classList.add('d-none');
         document.getElementById('uploaded-status')?.classList.remove('d-none');
-        document.getElementById('btn-process')?.classList.remove('d-none');
+        
+        // [修正] 不再顯示 "開始製作" 按鈕，因為我們要自動開始
+        // document.getElementById('btn-process')?.classList.remove('d-none');
         
         UI.showWorkspace();
         document.getElementById('cropMask')?.classList.add('d-none');
@@ -61,14 +64,17 @@ window.handleFileUpload = function(input) {
             console.log("[DEBUG] Detect Result:", data);
             if (data && data.found) {
                 state.faceData = data;
-                Editor.autoAlignImage();
-            } else {
-                Editor.autoAlignImage();
             }
+            // 無論是否偵測到臉，都自動對齊並開始製作
+            Editor.autoAlignImage();
+            
+            // [關鍵修正] 自動觸發製作流程！
+            console.log("[DEBUG] Auto-triggering processImage...");
+            processImage();
+            
         } catch (err) { 
             console.error("[DEBUG] Detect Failed:", err); 
-        } finally { 
-            UI.showLoading(false); 
+            UI.showLoading(false); // 只有出錯才在這裡關閉，正常情況 processImage 會接手
         }
     };
     reader.readAsDataURL(input.files[0]);
@@ -80,9 +86,11 @@ window.selectSpec = function(specId) {
     console.log("[DEBUG] Select Spec:", specId);
     state.currentSpecId = specId;
     document.querySelectorAll('.spec-card').forEach(el => {
-        el.classList.remove('active');
-        const icon = el.querySelector('.check-icon');
-        if (icon) icon.classList.add('d-none');
+        if(el) {
+            el.classList.remove('active');
+            const icon = el.querySelector('.check-icon');
+            if (icon) icon.classList.add('d-none');
+        }
     });
     const customInputs = document.getElementById('custom-inputs');
     if (customInputs) customInputs.classList.add('d-none');
@@ -99,7 +107,8 @@ window.toggleCustom = function() {
     document.querySelectorAll('.spec-card').forEach(el => el.classList.remove('active'));
     const specCustom = document.getElementById('spec-custom');
     if(specCustom) specCustom.classList.add('active');
-    document.getElementById('custom-inputs')?.classList.remove('d-none');
+    const customInputs = document.getElementById('custom-inputs');
+    if(customInputs) customInputs.classList.remove('d-none');
     state.currentSpecId = 'custom';
     window.updateCustom();
 }
@@ -117,22 +126,23 @@ window.updateCustom = function() {
 
 window.processImage = async function() {
     console.log("[DEBUG] Step 1: Start Process Image");
+    // 確保 Loading 顯示
     UI.showLoading(true, "AI 製作中...");
+    
     try {
         const cropParams = Editor.getCropParams();
         console.log("[DEBUG] calling API.processPreview...");
         const data = await API.processPreview(state.originalBase64, cropParams);
         
         console.log("[DEBUG] Step 2: Preview Data Received", data);
+        // 資料回來後，關閉全域 Loading，準備顯示局部進度條
         UI.showLoading(false);
         
         if (data.photos) {
             state.resultPhotos = data.photos;
             
-            // DOM check
             const dash = document.getElementById('dashboard-area');
             const resDash = document.getElementById('result-dashboard');
-            console.log("[DEBUG] DOM Check:", { dash, resDash });
             
             if(dash) dash.classList.add('d-none');
             if(resDash) resDash.classList.remove('d-none');
@@ -143,7 +153,6 @@ window.processImage = async function() {
                 img.classList.remove('d-none');
             }
             
-            // Background selection logic
             if (state.currentSpecId === 'passport') {
                 const resBlue = document.getElementById('res-blue');
                 if(resBlue) resBlue.classList.add('d-none');
@@ -182,15 +191,12 @@ async function startCheckProcess() {
     const loadingDiv = document.getElementById('report-loading');
     const contentDiv = document.getElementById('report-content');
     
-    if(!loadingDiv) {
-        console.error("[DEBUG] Critical: #report-loading not found!");
-        return;
-    }
+    if(!loadingDiv) return;
 
     if(loadingDiv) loadingDiv.classList.remove('d-none');
     if(contentDiv) contentDiv.classList.add('d-none');
     
-    console.log("[DEBUG] Injecting Progress Bar HTML...");
+    // 確保進度條 HTML 存在
     loadingDiv.innerHTML = `
         <div class="text-center py-5">
             <h5 class="mb-3 text-primary"><i class="bi bi-cpu-fill"></i> AI 智能審查中...</h5>
@@ -254,7 +260,7 @@ async function startCheckProcess() {
         if(loadingDiv) loadingDiv.innerHTML = `
             <div class="alert alert-danger text-center">
                 <i class="bi bi-exclamation-triangle-fill fs-1"></i><br>
-                <strong>審查失敗</strong><br>
+                <strong>審查連線逾時</strong><br>
                 <small>${e.message}</small><br>
                 <button class="btn btn-sm btn-outline-danger mt-2" onclick="startCheckProcess()">重試</button>
             </div>
