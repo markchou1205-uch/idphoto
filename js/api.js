@@ -205,7 +205,8 @@ export async function runCheckApi(imgBase64) {
         }
 
         // 3. Glasses (Warn)
-        if (attrs.glasses !== 'noGlasses') {
+        // Fix: Azure returns 'NoGlasses' (CamelCase). Check case-insensitively or specifically for NoGlasses.
+        if (attrs.glasses !== 'NoGlasses' && attrs.glasses !== 'noGlasses') {
             results.push({ category: 'compliance', status: 'warn', item: '眼鏡檢查', value: `偵測到眼鏡 (${attrs.glasses})`, standard: '建議不戴眼鏡' });
         } else {
             results.push({ category: 'compliance', status: 'pass', item: '眼鏡檢查', value: '無配戴眼鏡', standard: '建議不戴眼鏡' });
