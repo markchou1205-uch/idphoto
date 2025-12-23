@@ -25,7 +25,8 @@ export async function detectFace(base64) {
 
     try {
         const blob = base64ToBlob(base64);
-        const url = `${AZURE.ENDPOINT}/face/v1.0/detect?returnFaceId=false&returnFaceLandmarks=false&recognitionModel=recognition_01&detectionModel=detection_03`;
+        const endpoint = AZURE.ENDPOINT.endsWith('/') ? AZURE.ENDPOINT.slice(0, -1) : AZURE.ENDPOINT;
+        const url = `${endpoint}/face/v1.0/detect?returnFaceId=false&returnFaceLandmarks=false&recognitionModel=recognition_01&detectionModel=detection_01`;
 
         const res = await fetch(url, {
             method: 'POST',
@@ -41,8 +42,20 @@ export async function detectFace(base64) {
 
         if (data && data.length > 0) {
             // Azure: { faceRectangle: { top, left, width, height } }
-            // Editor expects: { found: true, box: { x, y, width, height } }
             const rect = data[0].faceRectangle;
+
+            // --- Precision Zoom Calculation ---
+            // Goal: Face Height = 75% of Photo Height
+            // And Top Margin = 10% of Photo Height
+            const faceH = rect.height;
+            const targetPhotoH = faceH / 0.75; // e.g. if face is 300px, photo should be 400px
+            const targetPhotoW = targetPhotoH * (35 / 45); // Aspect Ratio 35:45
+
+            // Calculate Crop Coordinates
+            const topMargin = targetPhotoH * 0.10;
+            const cropY = rect.top - topMargin;
+            const cropX = (rect.left + rect.width / 2) - (targetPhotoW / 2); // Center horizontally
+
             return {
                 found: true,
                 box: {
@@ -50,6 +63,12 @@ export async function detectFace(base64) {
                     y: rect.top,
                     width: rect.width,
                     height: rect.height
+                },
+                suggestedCrop: {
+                    x: Math.round(cropX),
+                    y: Math.round(cropY),
+                    w: Math.round(targetPhotoW),
+                    h: Math.round(targetPhotoH)
                 }
             };
         }
@@ -60,66 +79,53 @@ export async function detectFace(base64) {
 }
 
 // 2. Process Preview (Cloudinary)
-// Replace old backend logic with Cloudinary upload & transformation
 export async function processPreview(base64, cropParams) {
-    // Return photos array. 
-    // Fallback: simply return the original cropped base64 if Cloudinary fails.
-
-    // Note: To truly crop via Cloudinary, we'd need to upload the ORIGINAL and pass crop params in URL.
-    // However, Editor.js usually crops locally via canvas for 'manual_crop'.
-    // If 'cropParams' is passed, main.js might rely on backend cropping.
-    // BUT since we are serverless, we should probably assume the Base64 passed here IS the cropped image 
-    // OR we just upload the full image and let Cloudinary remove background?
-
-    // In strict serverless without backend logic, we can't easily re-crop "on the fly" unless we do it in canvas first.
-    // Assumption: The base64 passed here is the "source" to be processed.
-
-    // Upload to Cloudinary
-    let processedUrl = null;
+    // cropParams can be passed from main.js (state.faceData.suggestedCrop)
     try {
         if (CLOUDINARY && CLOUDINARY.CLOUD_NAME) {
             const blob = base64ToBlob(base64);
             const formData = new FormData();
             formData.append('file', blob);
-            formData.append('upload_preset', CLOUDINARY.UPLOAD_PRESET || 'unsigned'); // user didn't specify, assuming unsigned
+            formData.append('upload_preset', CLOUDINARY.UPLOAD_PRESET || 'unsigned');
 
-            // Unsigned upload to Cloudinary
             const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY.CLOUD_NAME}/image/upload`, {
-                method: 'POST',
-                body: formData
+                method: 'POST', body: formData
             });
 
             if (uploadRes.ok) {
                 const upData = await uploadRes.json();
-                // Construct URL with transformations
-                // mild improvement + background removal
-                // e_improve,e_background_removal
                 const publicId = upData.public_id;
                 const version = upData.version;
-                // E.g. https://res.cloudinary.com/demo/image/upload/e_background_removal/v1/sample.jpg
-                processedUrl = `https://res.cloudinary.com/${CLOUDINARY.CLOUD_NAME}/image/upload/e_improve,e_background_removal/v${version}/${publicId}.png`;
 
-                // Fetch the processed image to return as Base64 (to keep main.js happy)
-                // Or return URL if main.js can handle it?
-                // User said: "Let the preview... display Cloudinary URL". 
-                // But main.js prepends "data:image...". 
-                // We will return Base64 to ensure compatibility as requested ("Adapter").
+                // Construct Transformations
+                // Order: Crop first (to ID size) -> Improve -> Remove BG
+                // Syntax: /c_crop,.../e_improve/e_background_removal
+                let transforms = [];
+
+                if (cropParams) {
+                    // Ensure we don't crop out of bounds? Cloudinary handles it (black padding?) or we should clamp?
+                    // Let's assume simple crop first.
+                    transforms.push(`c_crop,x_${cropParams.x},y_${cropParams.y},w_${cropParams.w},h_${cropParams.h}`);
+                }
+
+                transforms.push('e_improve');
+                transforms.push('e_background_removal');
+
+                const transformStr = transforms.join('/');
+                const processedUrl = `https://res.cloudinary.com/${CLOUDINARY.CLOUD_NAME}/image/upload/${transformStr}/v${version}/${publicId}.png`;
 
                 const processedBlob = await fetch(processedUrl).then(r => r.blob());
                 const processedBase64 = await new Promise((resolve) => {
                     const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result.split(',')[1]); // remove data: prefix as main.js adds it
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
                     reader.readAsDataURL(processedBlob);
                 });
 
                 return { photos: [processedBase64, processedBase64] };
             }
         }
-    } catch (e) {
-        console.error("Cloudinary Process Failed:", e);
-    }
+    } catch (e) { console.error("Cloudinary Process Failed:", e); }
 
-    // Fallback: Return original base64 (stripped of prefix)
     const cleanBase64 = base64.includes(',') ? base64.split(',')[1] : base64;
     return { photos: [cleanBase64, cleanBase64] };
 }
@@ -264,6 +270,66 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
             results.push({ category: 'compliance', status: 'warn', item: '眼鏡檢查', value: `偵測到眼鏡 (${attrs.glasses})`, standard: '建議不戴眼鏡' });
         } else {
             results.push({ category: 'compliance', status: 'pass', item: '眼鏡檢查', value: '無配戴眼鏡', standard: '建議不戴眼鏡' });
+        }
+
+        // 5. Ratio Check (New)
+        // Face Height should be 70%~80% of Image Height (Standard 75% -> 3.4cm/4.5cm)
+        // face.faceRectangle.height is the detected face height (including calc error, but close enough)
+        // Note: Azure runs detection on the *Processed Crop*. So image height is the full height of the crop.
+        // We can get image height from metadata or assume it's the blob size?
+        // Actually face.faceRectangle is relative to the *image sent*. 
+        // We sent the *processed/cropped* image (blob).
+        // Azure doesn't explicitly return "Image Dimensions" in the JSON, but FaceRectangle coordinates are absolute.
+        // We can infer image height from the crop params we *intended*? No, we don't have them here easily.
+        // HOWEVER, we can just say: Ratio = face.faceRectangle.height / (face.faceRectangle.top + face.faceRectangle.height + smile...?)
+        // Better: We *know* the ratio should be 75%. 
+        // Let's rely on the ratio of `face.faceRectangle.height` to the *assumed* image height if we can't get it.
+        // Wait, "faceData" in main.js has original image. 
+        // Here we are checking the *Result Photo*.
+        // Let's assume the result photo matches the aspect ratio of 3.5/4.5.
+        // If we really want accurate ratio, we need the Image Height.
+        // We can load the blob into an Image object to get height? Too slow?
+        // Let's calculate based on `faceRectangle` vs known standard.
+        // Actually, if we use `detection_01` on the cropped image, `faceRectangle` will tell us the face size in pixels.
+        // We can estimate the Image Height if we assume the face is centered? No.
+        // Wait, standard 2-inch photo is 4.5cm.
+        // Ratio = FaceHeight / PhotoHeight.
+        // If we don't know PhotoHeight, we can't calculate Ratio.
+        // BUT `runCheckApi` receives `imgBase64`. We can get dimensions from it!
+        // Let's use a helper to get dimensions? Or just accept that we might need to skip this if costly?
+        // User requested it: "Check ratio...".
+        // Let's assume we can get it via `state` or pass it?
+        // `imgBase64` is passed. We can create an Image object? In Worker?
+        // We are in async function.
+        // Let's try to get image dimensions.
+
+        const img = new Image();
+        img.src = "data:image/jpeg;base64," + imgBase64;
+        await new Promise(r => img.onload = r);
+        const imgH = img.naturalHeight;
+
+        if (imgH > 0) {
+            const faceH = face.faceRectangle.height;
+            const ratio = faceH / imgH;
+
+            // Standard: 3.2~3.6cm / 4.5cm = 0.71 ~ 0.80
+            const headLenCm = ratio * 4.5;
+
+            if (ratio < 0.70 || ratio > 0.80) {
+                results.push({
+                    category: 'compliance', status: 'fail',
+                    item: '比例檢查',
+                    value: `頭部比例異常 (${headLenCm.toFixed(1)}cm)`,
+                    standard: '頭部長度需介於 3.2~3.6 公分'
+                });
+            } else {
+                results.push({
+                    category: 'compliance', status: 'pass',
+                    item: '比例檢查',
+                    value: `符合標準 (${headLenCm.toFixed(1)}cm)`,
+                    standard: '3.2~3.6 公分'
+                });
+            }
         }
 
         results.push({ category: 'basic', status: 'pass', item: '影像解析度', value: '符合標準', standard: '> 600dpi' });

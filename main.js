@@ -116,7 +116,7 @@ window.updateCustom = function () {
 window.processImage = async function () {
     UI.showLoading(true, "AI 製作中...");
     try {
-        const cropParams = Editor.getCropParams();
+        const cropParams = (state.faceData && state.faceData.suggestedCrop) ? state.faceData.suggestedCrop : Editor.getCropParams();
         const data = await API.processPreview(state.originalBase64, cropParams);
 
         UI.showLoading(false);
