@@ -43,19 +43,6 @@ export async function detectFace(base64) {
         if (data && data.length > 0) {
             // Azure: { faceRectangle: { top, left, width, height } }
             const rect = data[0].faceRectangle;
-
-            // --- Precision Zoom Calculation ---
-            // Goal: Face Height = 75% of Photo Height
-            // And Top Margin = 10% of Photo Height
-            const faceH = rect.height;
-            const targetPhotoH = faceH / 0.75; // e.g. if face is 300px, photo should be 400px
-            const targetPhotoW = targetPhotoH * (35 / 45); // Aspect Ratio 35:45
-
-            // Calculate Crop Coordinates
-            const topMargin = targetPhotoH * 0.10;
-            const cropY = rect.top - topMargin;
-            const cropX = (rect.left + rect.width / 2) - (targetPhotoW / 2); // Center horizontally
-
             return {
                 found: true,
                 box: {
@@ -63,12 +50,6 @@ export async function detectFace(base64) {
                     y: rect.top,
                     width: rect.width,
                     height: rect.height
-                },
-                suggestedCrop: {
-                    x: Math.round(cropX),
-                    y: Math.round(cropY),
-                    w: Math.round(targetPhotoW),
-                    h: Math.round(targetPhotoH)
                 }
             };
         }
@@ -80,7 +61,7 @@ export async function detectFace(base64) {
 
 // 2. Process Preview (Cloudinary)
 export async function processPreview(base64, cropParams) {
-    // cropParams can be passed from main.js (state.faceData.suggestedCrop)
+    // cropParams is ignored now as we use Cloudinary smart crop (c_thumb, g_face)
     try {
         if (CLOUDINARY && CLOUDINARY.CLOUD_NAME) {
             const blob = base64ToBlob(base64);
@@ -98,16 +79,31 @@ export async function processPreview(base64, cropParams) {
                 const version = upData.version;
 
                 // Construct Transformations
-                // Order: Crop first (to ID size) -> Improve -> Remove BG
-                // Syntax: /c_crop,.../e_improve/e_background_removal
+                // Old: Manual c_crop with coordinates
+                // New: Smart c_thumb with g_face (Gravity Face)
+                // Goal: 3.5x4.5 ratio (350x450px), Face = 75% height.
+
                 let transforms = [];
 
-                if (cropParams) {
-                    // Ensure we don't crop out of bounds? Cloudinary handles it (black padding?) or we should clamp?
-                    // Let's assume simple crop first.
-                    transforms.push(`c_crop,x_${cropParams.x},y_${cropParams.y},w_${cropParams.w},h_${cropParams.h}`);
-                }
+                // Smart Crop & Zoom
+                // w_350,h_450: Force output dimensions (Ratio 7:9)
+                // c_thumb: Thumbnail cropping (scales to fill then crops) -> actually with g_face it zooms to face.
+                // g_face: Center on face.
+                // z_0.75: Zoom level (0.75 means face occupies 75% of dimension). 
+                // y_10: Slight offset to ensure head has room (Move face up slightly by moving crop center down? Or verify typical behavior).
+                // Actually y_0 is usually centered. Let's use y_0 for now or slight adjustment if users want more chest.
+                // User requested: "Chin above bottom... Head top leave space".
+                // Default centering usually puts eyes at center.
+                // Let's try y_10 (positive y usually moves region of interest UP? or crop DOWN?).
+                // In Cloudinary g_face: "y" offsets the *center of the crop* from the detected face.
+                // We want face to be *higher* in the frame (standard ID photo).
+                // So we want the crop center to be *lower* than the face center.
+                // Crop Center Y = Face Center Y + Offset. 
+                // So positive Y offset moves crop center DOWN -> Face appears HIGHER.
 
+                transforms.push('c_thumb,g_face,w_350,h_450,z_0.75,y_15');
+
+                // Enhance & Remove BG
                 transforms.push('e_improve');
                 transforms.push('e_background_removal');
 
