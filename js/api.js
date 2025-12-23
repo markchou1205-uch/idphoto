@@ -135,8 +135,8 @@ export async function runCheckApi(imgBase64) {
         // Fix: Remove trailing slash from endpoint if present
         const endpoint = AZURE.ENDPOINT.endsWith('/') ? AZURE.ENDPOINT.slice(0, -1) : AZURE.ENDPOINT;
 
-        // Fix: Use detection_01. REMOVE 'smile' as it is deprecated and returns 403.
-        const url = `${endpoint}/face/v1.0/detect?returnFaceAttributes=glasses,occlusion&detectionModel=detection_01&returnFaceId=false`;
+        // Fix: Use detection_01 which supports BOTH Landmarks & Attributes.
+        const url = `${endpoint}/face/v1.0/detect?returnFaceAttributes=glasses,occlusion&returnFaceLandmarks=true&detectionModel=detection_01&returnFaceId=false`;
 
         const response = await fetch(url, {
             method: 'POST',
@@ -164,12 +164,36 @@ export async function runCheckApi(imgBase64) {
 
         const face = azureData[0];
         const attrs = face.faceAttributes;
+        const landmarks = face.faceLandmarks;
 
-        // Smile Check Removed (Deprecated by Azure)
-        // We can add a placeholder or simply omit it.
-        // results.push({ category: 'compliance', status: 'pass', item: '表情', value: '未檢測 (Azure已停用)', standard: '自然平視' });
+        // 1. Mouth/Expression Check (Landmark-based)
+        if (landmarks && landmarks.upperLipBottom && landmarks.underLipTop) {
+            const upperLipY = landmarks.upperLipBottom.y;
+            const lowerLipY = landmarks.underLipTop.y;
+            const mouthGap = lowerLipY - upperLipY;
 
-        // Occlusion (Strict)
+            // Threshold: 2% of face height
+            const faceHeight = face.faceRectangle.height;
+            const limit = faceHeight * 0.02;
+
+            if (mouthGap > limit) {
+                results.push({
+                    category: 'compliance', status: 'fail',
+                    item: '表情/嘴巴', value: '嘴巴未閉合/露齒', standard: '請閉合嘴巴，不可露出牙齒'
+                });
+            } else {
+                results.push({
+                    category: 'compliance', status: 'pass',
+                    item: '表情/嘴巴', value: '合格', standard: '自然平視，不露齒'
+                });
+            }
+        } else {
+            // Fallback if landmarks missing
+            results.push({ category: 'compliance', status: 'warn', item: '表情/嘴巴', value: '無法檢測', standard: '請閉合嘴巴' });
+        }
+
+
+        // 2. Occlusion (Strict)
         if (attrs.occlusion.foreheadOccluded || attrs.occlusion.eyeOccluded || attrs.occlusion.mouthOccluded) {
             let details = [];
             if (attrs.occlusion.foreheadOccluded) details.push("額頭");
@@ -180,7 +204,7 @@ export async function runCheckApi(imgBase64) {
             results.push({ category: 'compliance', status: 'pass', item: '遮擋檢查', value: '無遮擋', standard: '五官需清晰無遮擋' });
         }
 
-        // Glasses (Warn)
+        // 3. Glasses (Warn)
         if (attrs.glasses !== 'noGlasses') {
             results.push({ category: 'compliance', status: 'warn', item: '眼鏡檢查', value: `偵測到眼鏡 (${attrs.glasses})`, standard: '建議不戴眼鏡' });
         } else {
