@@ -10,9 +10,9 @@ const DEFAULT_SPECS = {
     "visa_us": { "name": "美國簽證", "desc": "5x5cm (51x51mm)", "width_mm": 51, "height_mm": 51 }
 };
 
-let userPlan = localStorage.getItem('userPlan') || 'free'; 
+let userPlan = localStorage.getItem('userPlan') || 'free';
 
-window.onload = function() {
+window.onload = function () {
     console.log("[DEBUG] System Init: Window Loaded");
     state.specConfig = DEFAULT_SPECS;
     Editor.initEditor();
@@ -33,25 +33,25 @@ window.onload = function() {
     document.body.appendChild(verTag);
 };
 
-window.goHome = function() { location.reload(); }
-window.switchFeature = function(featureId) { /* 略 */ }
+window.goHome = function () { location.reload(); }
+window.switchFeature = function (featureId) { /* 略 */ }
 
-window.handleFileUpload = function(input) {
+window.handleFileUpload = function (input) {
     if (!input.files.length) return;
     const reader = new FileReader();
     UI.showLoading(true, "AI 識別中...");
-    
-    reader.onload = async function() {
+
+    reader.onload = async function () {
         state.originalBase64 = reader.result;
         state.isImageLoaded = true;
         Editor.loadImageToEditor(state.originalBase64);
-        
+
         document.querySelector('.upload-btn-wrapper')?.classList.add('d-none');
         document.getElementById('uploaded-status')?.classList.remove('d-none');
-        
+
         UI.showWorkspace();
         document.getElementById('cropMask')?.classList.add('d-none');
-        
+
         try {
             const data = await API.detectFace(state.originalBase64);
             if (data && data.found) {
@@ -62,20 +62,20 @@ window.handleFileUpload = function(input) {
             }
             // 自動開始
             processImage();
-        } catch (err) { 
-            console.error("[DEBUG] Detect Failed:", err); 
-            UI.showLoading(false); 
+        } catch (err) {
+            console.error("[DEBUG] Detect Failed:", err);
+            UI.showLoading(false);
         }
     };
     reader.readAsDataURL(input.files[0]);
 }
 
-window.resetUpload = function() { location.reload(); }
+window.resetUpload = function () { location.reload(); }
 
-window.selectSpec = function(specId) {
+window.selectSpec = function (specId) {
     state.currentSpecId = specId;
     document.querySelectorAll('.spec-card').forEach(el => {
-        if(el) {
+        if (el) {
             el.classList.remove('active');
             const icon = el.querySelector('.check-icon');
             if (icon) icon.classList.add('d-none');
@@ -84,7 +84,7 @@ window.selectSpec = function(specId) {
     const customInputs = document.getElementById('custom-inputs');
     if (customInputs) customInputs.classList.add('d-none');
     const el = document.getElementById(`spec-${specId}`);
-    if(el) {
+    if (el) {
         el.classList.add('active');
         const icon = el.querySelector('.check-icon');
         if (icon) icon.classList.remove('d-none');
@@ -92,20 +92,20 @@ window.selectSpec = function(specId) {
     Editor.updateMaskRatio();
 }
 
-window.toggleCustom = function() {
+window.toggleCustom = function () {
     document.querySelectorAll('.spec-card').forEach(el => el.classList.remove('active'));
     const specCustom = document.getElementById('spec-custom');
-    if(specCustom) specCustom.classList.add('active');
+    if (specCustom) specCustom.classList.add('active');
     const customInputs = document.getElementById('custom-inputs');
-    if(customInputs) customInputs.classList.remove('d-none');
+    if (customInputs) customInputs.classList.remove('d-none');
     state.currentSpecId = 'custom';
     window.updateCustom();
 }
 
-window.updateCustom = function() {
+window.updateCustom = function () {
     const wInput = document.getElementById('custom-w');
     const hInput = document.getElementById('custom-h');
-    if(wInput && hInput) {
+    if (wInput && hInput) {
         const w = parseFloat(wInput.value) || 35;
         const h = parseFloat(hInput.value) || 45;
         state.currentCustomRatio = w / h;
@@ -113,67 +113,67 @@ window.updateCustom = function() {
     }
 }
 
-window.processImage = async function() {
+window.processImage = async function () {
     UI.showLoading(true, "AI 製作中...");
     try {
         const cropParams = Editor.getCropParams();
         const data = await API.processPreview(state.originalBase64, cropParams);
-        
+
         UI.showLoading(false);
-        
+
         if (data.photos) {
             state.resultPhotos = data.photos;
-            
+
             const dash = document.getElementById('dashboard-area');
             const resDash = document.getElementById('result-dashboard');
-            
-            if(dash) dash.classList.add('d-none');
-            if(resDash) resDash.classList.remove('d-none');
-            
+
+            if (dash) dash.classList.add('d-none');
+            if (resDash) resDash.classList.remove('d-none');
+
             const img = document.getElementById('main-preview-img');
-            if(img) {
-                img.src = `data:image/jpeg;base64,${data.photos[0]}`; 
+            if (img) {
+                img.src = `data:image/jpeg;base64,${data.photos[0]}`;
                 img.classList.remove('d-none');
             }
-            
+
             if (state.currentSpecId === 'passport') {
                 const resBlue = document.getElementById('res-blue');
-                if(resBlue) resBlue.classList.add('d-none');
+                if (resBlue) resBlue.classList.add('d-none');
                 const imgBlue = document.getElementById('img-blue');
-                if(imgBlue) imgBlue.src = `data:image/jpeg;base64,${data.photos[0]}`; 
+                if (imgBlue) imgBlue.src = `data:image/jpeg;base64,${data.photos[0]}`;
             } else {
                 const resBlue = document.getElementById('res-blue');
-                if(resBlue) resBlue.classList.remove('d-none');
+                if (resBlue) resBlue.classList.remove('d-none');
                 const imgBlue = document.getElementById('img-blue');
-                if(imgBlue) imgBlue.src = `data:image/jpeg;base64,${data.photos[1]}`;
+                if (imgBlue) imgBlue.src = `data:image/jpeg;base64,${data.photos[1]}`;
             }
-            
+
             const imgWhite = document.getElementById('img-white');
-            if(imgWhite) imgWhite.src = `data:image/jpeg;base64,${data.photos[0]}`;
-            
+            if (imgWhite) imgWhite.src = `data:image/jpeg;base64,${data.photos[0]}`;
+
             window.selectResult('white');
-            
+
             const btnCheck = document.querySelector('button[onclick="runCheck()"]');
-            if(btnCheck) btnCheck.innerHTML = '<i class="bi bi-shield-check"></i> 進階審查與智能修復';
-            
+            if (btnCheck) btnCheck.innerHTML = '<i class="bi bi-shield-check"></i> 進階審查與智能修復';
+
             startCheckProcess();
-            
+
         } else { alert("錯誤: " + (data.error || "未知錯誤")); }
-    } catch (e) { 
+    } catch (e) {
         UI.showLoading(false);
-        alert("連線錯誤: " + e.message); 
+        alert("連線錯誤: " + e.message);
     }
 }
 
 async function startCheckProcess() {
     const loadingDiv = document.getElementById('report-loading');
     const contentDiv = document.getElementById('report-content');
-    
-    if(!loadingDiv) return;
 
-    if(loadingDiv) loadingDiv.classList.remove('d-none');
-    if(contentDiv) contentDiv.classList.add('d-none');
-    
+    if (!loadingDiv) return;
+
+    if (loadingDiv) loadingDiv.classList.remove('d-none');
+    if (contentDiv) contentDiv.classList.add('d-none');
+
     loadingDiv.innerHTML = `
         <div class="text-center py-5">
             <h5 class="mb-3 text-primary"><i class="bi bi-cpu-fill"></i> AI 智能審查中...</h5>
@@ -183,18 +183,18 @@ async function startCheckProcess() {
             <p class="mt-3 small text-muted" id="local-progress-text">正在初始化模型...</p>
         </div>
     `;
-    
+
     const bar = document.getElementById('local-progress-bar');
     const text = document.getElementById('local-progress-text');
-    if(bar) bar.style.width = '0%';
-    
+    if (bar) bar.style.width = '0%';
+
     const steps = [
         { pct: 20, msg: "正在掃描五官定位..." },
         { pct: 50, msg: "正在分析光線與陰影..." },
         { pct: 80, msg: "正在比對外交部 BOCA 規範..." },
         { pct: 100, msg: "生成報告中..." }
     ];
-    
+
     let stepIdx = 0;
     const interval = setInterval(() => {
         if (stepIdx >= steps.length) {
@@ -202,56 +202,56 @@ async function startCheckProcess() {
             return;
         }
         const s = steps[stepIdx];
-        if(bar) bar.style.width = `${s.pct}%`;
-        if(text) text.innerText = s.msg;
+        if (bar) bar.style.width = `${s.pct}%`;
+        if (text) text.innerText = s.msg;
         stepIdx++;
     }, 400);
 
     try {
         console.log("[DEBUG] Calling API.runCheckApi via wrapper...");
-        
+
         // [修正] 使用 API wrapper 函式，它內部有正確的 URL
-        const data = await API.runCheckApi(state.resultPhotos[0]);
-        
+        const data = await API.runCheckApi(state.resultPhotos[0], state.currentSpecId);
+
         console.log("[DEBUG] Check Result Received:", data);
 
         setTimeout(() => {
             renderReport(data);
-            if(loadingDiv) loadingDiv.classList.add('d-none');
-            if(contentDiv) contentDiv.classList.remove('d-none');
-        }, 1600); 
-    } catch(e) { 
+            if (loadingDiv) loadingDiv.classList.add('d-none');
+            if (contentDiv) contentDiv.classList.remove('d-none');
+        }, 1600);
+    } catch (e) {
         console.error("[DEBUG] Check Process Failed:", e);
-        if(loadingDiv) loadingDiv.innerHTML = `
+        if (loadingDiv) loadingDiv.innerHTML = `
             <div class="alert alert-danger text-center">
                 <i class="bi bi-exclamation-triangle-fill fs-1"></i><br>
                 <strong>審查失敗</strong><br>
                 <small>${e.message}</small><br>
                 <button class="btn btn-sm btn-outline-danger mt-2" onclick="startCheckProcess()">重試</button>
             </div>
-        `; 
+        `;
     }
 }
 
 function renderReport(data) {
     try {
         const container = document.getElementById('report-content');
-        if(!container) return;
-    
+        if (!container) return;
+
         let html = `<h5 class="fw-bold mb-3"><i class="bi bi-clipboard-check"></i> AI 審查報告</h5>`;
         html += `<table class="table table-hover small"><tbody>`;
-        
+
         const categories = { 'basic': '🔹 基礎處理', 'compliance': '🔸 合規檢查', 'quality': '✨ 進階畫質' };
         let currentCat = '';
         let hasFatal = false;
         let hasFixable = false;
-    
+
         if (data.results && Array.isArray(data.results)) {
-            const sorted = data.results.sort((a,b) => {
-                const order = {'basic':1, 'compliance':2, 'quality':3};
+            const sorted = data.results.sort((a, b) => {
+                const order = { 'basic': 1, 'compliance': 2, 'quality': 3 };
                 return (order[a.category] || 99) - (order[b.category] || 99);
             });
-    
+
             sorted.forEach(res => {
                 if (res.category !== currentCat) {
                     currentCat = res.category;
@@ -259,18 +259,18 @@ function renderReport(data) {
                 }
                 let icon = res.status === 'pass' ? '✅' : (res.status === 'warn' ? '⚠️' : '❌');
                 let color = res.status === 'pass' ? 'text-success' : (res.status === 'warn' ? 'text-warning' : 'text-danger');
-                
+
                 if (res.status === 'fail') hasFatal = true;
                 if (res.category === 'quality' && res.status !== 'pass') hasFixable = true;
                 if (res.status !== 'pass') hasFixable = true;
-    
-                html += `<tr><td>${res.item}</td><td class="text-muted">${res.standard||''}</td><td class="${color}">${icon} ${res.value}</td></tr>`;
+
+                html += `<tr><td>${res.item}</td><td class="text-muted">${res.standard || ''}</td><td class="${color}">${icon} ${res.value}</td></tr>`;
             });
         } else {
             html += `<tr><td colspan="3" class="text-danger">無效的檢查結果格式</td></tr>`;
         }
         html += `</tbody></table>`;
-        
+
         if (hasFatal) {
             html += `<div class="alert alert-danger"><i class="bi bi-x-circle-fill"></i> <strong>未通過：</strong> 建議重新拍攝或嘗試修復。</div>`;
         } else if (hasFixable) {
@@ -278,26 +278,26 @@ function renderReport(data) {
         } else {
             html += `<div class="alert alert-success"><i class="bi bi-check-circle-fill"></i> <strong>恭喜通過！</strong> 照片符合規範。</div>`;
         }
-        
+
         container.innerHTML = html;
         renderActionButtons(hasFatal, hasFixable);
-    } catch(e) {
+    } catch (e) {
         console.error("[DEBUG] Render Report Exception:", e);
         const container = document.getElementById('report-content');
-        if(container) container.innerHTML = `<div class="alert alert-danger">報告渲染失敗: ${e.message}</div>`;
+        if (container) container.innerHTML = `<div class="alert alert-danger">報告渲染失敗: ${e.message}</div>`;
     }
 }
 
 function renderActionButtons(hasFatal, hasFixable) {
     const bar = document.getElementById('action-bar');
-    if(!bar) return;
+    if (!bar) return;
 
     let btns = '';
     btns += `<div class="d-flex gap-2">
                 <button class="btn btn-outline-dark" onclick="downloadImage('single')"><i class="bi bi-download"></i> 單張下載 (Free)</button>
                 <button class="btn btn-outline-primary" onclick="toggleEmailInput()"><i class="bi bi-envelope"></i> 寄到信箱</button>
              </div>`;
-             
+
     btns += `<div class="d-flex gap-2">`;
     if (userPlan === 'paid') {
         btns += `<button class="btn btn-dark" onclick="downloadImage('layout')"><i class="bi bi-grid-3x3"></i> 下載 4x6 排版</button>`;
@@ -314,27 +314,27 @@ function renderActionButtons(hasFatal, hasFixable) {
     bar.innerHTML = btns;
 }
 
-window.startSmartFix = async function() {
+window.startSmartFix = async function () {
     const btn = document.querySelector('button[onclick="startSmartFix()"]');
-    if(btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 修復中...'; }
-    
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 修復中...'; }
+
     try {
         const res = await fetch(`${API.API_BASE_URL}/generate/fix`, {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ image_base64: state.resultPhotos[0], action: 'all', watermark: true })
         });
         const fixData = await res.json();
-        
+
         if (fixData.image_base64) {
             const mainImg = document.getElementById('main-preview-img');
             const compareView = document.getElementById('compare-view');
-            if(mainImg) mainImg.classList.add('d-none');
-            if(compareView) compareView.classList.remove('d-none');
-            
+            if (mainImg) mainImg.classList.add('d-none');
+            if (compareView) compareView.classList.remove('d-none');
+
             document.getElementById('compare-orig').src = state.originalBase64;
             document.getElementById('compare-basic').src = `data:image/jpeg;base64,${state.resultPhotos[0]}`;
             document.getElementById('compare-fix').src = `data:image/jpeg;base64,${fixData.image_base64}`;
-            
+
             const bar = document.getElementById('action-bar');
             bar.innerHTML = `
                 <button class="btn btn-outline-secondary" onclick="cancelFix()">取消預覽</button>
@@ -346,40 +346,40 @@ window.startSmartFix = async function() {
                 </div>
             `;
         }
-    } catch(e) { alert("修復失敗"); if(btn) btn.disabled=false; }
+    } catch (e) { alert("修復失敗"); if (btn) btn.disabled = false; }
 }
 
-window.cancelFix = function() {
+window.cancelFix = function () {
     document.getElementById('compare-view').classList.add('d-none');
     document.getElementById('main-preview-img').classList.remove('d-none');
     startCheckProcess();
 }
 
-window.selectResult = function(color) {
+window.selectResult = function (color) {
     const idx = color === 'white' ? 0 : 1;
     state.selectedResultBg = idx;
-    
+
     const resWhite = document.getElementById('res-white');
     const resBlue = document.getElementById('res-blue');
-    if(resWhite) resWhite.classList.remove('active');
-    if(resBlue) resBlue.classList.remove('active');
-    
+    if (resWhite) resWhite.classList.remove('active');
+    if (resBlue) resBlue.classList.remove('active');
+
     const targetBtn = document.getElementById(`res-${color}`);
-    if(targetBtn) targetBtn.classList.add('active');
-    
+    if (targetBtn) targetBtn.classList.add('active');
+
     const img = document.getElementById('previewImg');
-    if(img) {
+    if (img) {
         img.src = `data:image/jpeg;base64,${state.resultPhotos[idx]}`;
         img.classList.remove('d-none');
     }
-    
+
     const mainImg = document.getElementById('main-preview-img');
-    if(mainImg) {
+    if (mainImg) {
         mainImg.src = `data:image/jpeg;base64,${state.resultPhotos[idx]}`;
     }
 }
 
-window.showPaymentModal = function() {
+window.showPaymentModal = function () {
     const modalEl = document.getElementById('paymentModal');
     const modal = new bootstrap.Modal(modalEl);
     const cards = document.getElementById('pricing-cards');
@@ -395,42 +395,42 @@ window.showPaymentModal = function() {
 function renderPricingCard(title, price, desc, isBest) {
     return `
         <div class="col-md-3">
-            <div class="card h-100 text-center p-3 pricing-card ${isBest?'best-value':''}" onclick="processPayment('${title}')">
+            <div class="card h-100 text-center p-3 pricing-card ${isBest ? 'best-value' : ''}" onclick="processPayment('${title}')">
                 <div class="card-body">
                     <h5 class="card-title">${title}</h5>
                     <h2 class="display-5 fw-bold my-3">$${price}</h2>
                     <p class="text-muted">${desc}</p>
-                    <button class="btn ${isBest?'btn-warning':'btn-outline-primary'} w-100">選擇方案</button>
+                    <button class="btn ${isBest ? 'btn-warning' : 'btn-outline-primary'} w-100">選擇方案</button>
                 </div>
             </div>
         </div>
     `;
 }
 
-window.processPayment = function(plan) {
-    if(confirm(`確認購買 [${plan}] 方案？\n(此為模擬付款)`)) {
+window.processPayment = function (plan) {
+    if (confirm(`確認購買 [${plan}] 方案？\n(此為模擬付款)`)) {
         localStorage.setItem('userPlan', 'paid');
         userPlan = 'paid';
         const modalEl = document.getElementById('paymentModal');
         const modal = bootstrap.Modal.getInstance(modalEl);
         modal.hide();
-        
+
         alert("付款成功！");
-        
+
         if (!document.getElementById('compare-view').classList.contains('d-none')) {
-             cancelFix(); 
+            cancelFix();
         } else {
-             renderActionButtons(false, false); 
+            renderActionButtons(false, false);
         }
     }
 }
 
-window.downloadImage = function(type) {
-    if(!state.resultPhotos || state.resultPhotos.length === 0) {
+window.downloadImage = function (type) {
+    if (!state.resultPhotos || state.resultPhotos.length === 0) {
         alert("無可下載的圖片"); return;
     }
     if (type === 'single') {
-        if(confirm("【免責聲明】本免費圖片僅供參考。\n下載？")) {
+        if (confirm("【免責聲明】本免費圖片僅供參考。\n下載？")) {
             const link = document.createElement('a');
             link.href = `data:image/jpeg;base64,${state.resultPhotos[state.selectedResultBg]}`;
             link.download = `id_photo_single.jpg`;
@@ -446,19 +446,19 @@ window.downloadImage = function(type) {
     }
 }
 
-window.toggleUserProfile = function() {
+window.toggleUserProfile = function () {
     const panel = document.getElementById('user-profile-panel');
-    if(panel) panel.classList.toggle('d-none');
+    if (panel) panel.classList.toggle('d-none');
 }
 
-window.toggleEmailInput = function() { 
+window.toggleEmailInput = function () {
     const email = prompt("請輸入您的 Email：");
-    if(email) window.sendEmail(email);
+    if (email) window.sendEmail(email);
 };
 
-window.sendEmail = async function(email) {
+window.sendEmail = async function (email) {
     try {
         const res = await API.sendEmailApi(email, state.resultPhotos[state.selectedResultBg]);
         alert("已發送！");
-    } catch(e) { alert("發送失敗"); }
+    } catch (e) { alert("發送失敗"); }
 }

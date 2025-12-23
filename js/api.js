@@ -126,7 +126,8 @@ export async function processPreview(base64, cropParams) {
 
 
 // 3. Validation Check (Azure) - Runs immediately
-export async function runCheckApi(imgBase64) {
+// 3. Validation Check (Azure) - Runs immediately
+export async function runCheckApi(imgBase64, specId = 'passport') {
     try {
         if (!AZURE || !AZURE.ENDPOINT || !AZURE.KEY) throw new Error("Azure config missing");
 
@@ -193,18 +194,71 @@ export async function runCheckApi(imgBase64) {
         }
 
 
-        // 2. Occlusion (Strict)
+        // 2. Occlusion (Strict + Symmetry Check)
+        let occlusionFail = false;
         if (attrs.occlusion.foreheadOccluded || attrs.occlusion.eyeOccluded || attrs.occlusion.mouthOccluded) {
+            occlusionFail = true;
             let details = [];
             if (attrs.occlusion.foreheadOccluded) details.push("額頭");
             if (attrs.occlusion.eyeOccluded) details.push("眼睛");
             if (attrs.occlusion.mouthOccluded) details.push("嘴巴");
             results.push({ category: 'compliance', status: 'fail', item: '遮擋檢查', value: `偵測到遮擋 (${details.join(',')})`, standard: '五官需清晰無遮擋' });
-        } else {
-            results.push({ category: 'compliance', status: 'pass', item: '遮擋檢查', value: '無遮擋', standard: '五官需清晰無遮擋' });
         }
 
-        // 3. Glasses (Warn)
+        // New: Symmetry Check (if basic occlusion passed)
+        if (!occlusionFail && landmarks && landmarks.noseTip && landmarks.eyebrowLeftOuter && landmarks.eyebrowRightOuter) {
+            const midX = landmarks.noseTip.x;
+            const leftDist = Math.abs(midX - landmarks.eyebrowLeftOuter.x);
+            const rightDist = Math.abs(landmarks.eyebrowRightOuter.x - midX);
+            const maxDist = Math.max(leftDist, rightDist);
+            const ratio = Math.abs(leftDist - rightDist) / (maxDist > 0 ? maxDist : 1);
+
+            // Dynamic Thresholds
+            const isPassport = (specId === 'passport');
+            const warnLimit = isPassport ? 0.08 : 0.15; // 8% for Passport, 15% for others
+            const failLimit = 0.15; // >15% is fail for everyone (or specifically strict for passport?)
+
+            // Logic:
+            // Warn: warnLimit <= ratio < 0.15
+            // Fail: ratio >= 0.15 (for Passport? Or always?) 
+            // User said: "> 15% fail (Red)". "10~15% warn".
+            // Let's implement:
+            // If Ratio > 15% -> Fail (Red)
+            // Else If Ratio > WarnLimit -> Warn (Yellow)
+
+            if (ratio > 0.15) {
+                results.push({
+                    category: 'compliance', status: 'fail',
+                    item: '遮擋檢查 (對稱性)',
+                    value: `眉毛嚴重偏移 (${(ratio * 100).toFixed(1)}%)`,
+                    standard: '請確認是否被瀏海遮擋'
+                });
+            } else if (ratio > warnLimit) {
+                results.push({
+                    category: 'compliance', status: 'warn',
+                    item: '遮擋檢查 (對稱性)',
+                    value: `眉毛輕微偏移 (${(ratio * 100).toFixed(1)}%)`,
+                    standard: '請確認是否被瀏海遮擋'
+                });
+            } else {
+                results.push({
+                    category: 'compliance', status: 'pass',
+                    item: '遮擋檢查', value: '無遮擋 (請人工確認眉耳露出)', // Adding prompt as requested
+                    standard: '五官需清晰無遮擋'
+                });
+            }
+        } else if (!occlusionFail) {
+            // Fallback if symmetry calc failed but occlusion passed
+            results.push({ category: 'compliance', status: 'pass', item: '遮擋檢查', value: '無遮擋 (請人工確認眉耳露出)', standard: '五官需清晰無遮擋' });
+        }
+
+        // 3. Ear Check (Fixed Reminder)
+        if (specId === 'passport') {
+            results.push({ category: 'quality', status: 'warn', item: '耳朵檢查', value: '請人工確認耳朵是否露出', standard: '護照要求露出雙耳' });
+        }
+
+
+        // 4. Glasses (Warn)
         // Fix: Azure returns 'NoGlasses' (CamelCase). Check case-insensitively or specifically for NoGlasses.
         if (attrs.glasses !== 'NoGlasses' && attrs.glasses !== 'noGlasses') {
             results.push({ category: 'compliance', status: 'warn', item: '眼鏡檢查', value: `偵測到眼鏡 (${attrs.glasses})`, standard: '建議不戴眼鏡' });
