@@ -41,8 +41,21 @@ export async function detectFace(base64) {
         const data = await res.json();
 
         if (data && data.length > 0) {
-            // Azure: { faceRectangle: { top, left, width, height } }
             const rect = data[0].faceRectangle;
+
+            // --- Precision Zoom Calculation (Restored) ---
+            // Goal: Face Height = 75% of Photo Height
+            // Aspect Ratio: 350 / 450 = 0.777...
+            const faceH = rect.height;
+            const targetPhotoH = faceH / 0.75;
+            const targetPhotoW = targetPhotoH * (350 / 450);
+
+            // Calculate Crop Coordinates (Original Image)
+            // Headroom: 10% of Target Height
+            const topMargin = targetPhotoH * 0.10;
+            const cropY = rect.top - topMargin;
+            const cropX = (rect.left + rect.width / 2) - (targetPhotoW / 2); // Center horizontally
+
             return {
                 found: true,
                 box: {
@@ -50,6 +63,12 @@ export async function detectFace(base64) {
                     y: rect.top,
                     width: rect.width,
                     height: rect.height
+                },
+                suggestedCrop: {
+                    x: Math.round(cropX),
+                    y: Math.round(cropY),
+                    w: Math.round(targetPhotoW),
+                    h: Math.round(targetPhotoH)
                 }
             };
         }
@@ -61,7 +80,7 @@ export async function detectFace(base64) {
 
 // 2. Process Preview (Cloudinary)
 export async function processPreview(base64, cropParams) {
-    // cropParams is ignored now as we use Cloudinary smart crop (c_thumb, g_face)
+    // cropParams passed from state.faceData.suggestedCrop
     try {
         if (CLOUDINARY && CLOUDINARY.CLOUD_NAME) {
             const blob = base64ToBlob(base64);
@@ -79,36 +98,38 @@ export async function processPreview(base64, cropParams) {
                 const version = upData.version;
 
                 // Construct Transformations
-                // Old: Manual c_crop with coordinates
-                // New: Smart c_thumb with g_face (Gravity Face)
-                // Goal: 3.5x4.5 ratio (350x450px), Face = 75% height.
+                // Strategy: Manual Crop (Precision) -> Scale (to 350x450) -> Improve -> Remove BG -> White BG
 
                 let transforms = [];
 
-                // Smart Crop & Zoom
-                // w_350,h_450: Force output dimensions (Ratio 7:9)
-                // c_thumb: Thumbnail cropping (scales to fill then crops) -> actually with g_face it zooms to face.
-                // g_face: Center on face.
-                // z_0.75: Zoom level (0.75 means face occupies 75% of dimension). 
-                // y_10: Slight offset to ensure head has room (Move face up slightly by moving crop center down? Or verify typical behavior).
-                // Actually y_0 is usually centered. Let's use y_0 for now or slight adjustment if users want more chest.
-                // User requested: "Chin above bottom... Head top leave space".
-                // Default centering usually puts eyes at center.
-                // Let's try y_10 (positive y usually moves region of interest UP? or crop DOWN?).
-                // In Cloudinary g_face: "y" offsets the *center of the crop* from the detected face.
-                // We want face to be *higher* in the frame (standard ID photo).
-                // So we want the crop center to be *lower* than the face center.
-                // Crop Center Y = Face Center Y + Offset. 
-                // So positive Y offset moves crop center DOWN -> Face appears HIGHER.
+                if (cropParams) {
+                    // 1. Precise Crop (on original)
+                    transforms.push(`c_crop,x_${cropParams.x},y_${cropParams.y},w_${cropParams.w},h_${cropParams.h}`);
+                    // 2. Scale to Output Size (350x450)
+                    transforms.push('c_scale,w_350,h_450');
+                } else {
+                    // Fallback if no crop params: Smart Thumb
+                    transforms.push('c_thumb,g_face,w_350,h_450,z_0.75');
+                }
 
-                transforms.push('c_thumb,g_face,w_350,h_450,z_0.75,y_15');
-
-                // Enhance & Remove BG
+                // 3. Improve Lighting
                 transforms.push('e_improve');
+
+                // 4. Remove BG and set White
+                // Note: b_white must be applied effectively. 
+                // Using "b_white" usually affects padding. 
+                // For replacing transparent BG: "e_background_removal" makes it transparent.
+                // Then we layer on white?
+                // Simplest: "e_background_removal" -> "b_white" (might not fill).
+                // Trick: "e_background_removal" -> "c_pad,w_350,h_450,b_white"? (No change in size, just fills bg).
+                // Or "e_background_removal/b_white/fl_flatten".
                 transforms.push('e_background_removal');
+                transforms.push('b_white'); // Background color white
+                transforms.push('fl_flatten'); // Flatten transparency onto background
 
                 const transformStr = transforms.join('/');
-                const processedUrl = `https://res.cloudinary.com/${CLOUDINARY.CLOUD_NAME}/image/upload/${transformStr}/v${version}/${publicId}.png`;
+                const processedUrl = `https://res.cloudinary.com/${CLOUDINARY.CLOUD_NAME}/image/upload/${transformStr}/v${version}/${publicId}.jpg`;
+                // Changed to .jpg to ensure no transparency alpha channel issues, enforcing white bg.
 
                 const processedBlob = await fetch(processedUrl).then(r => r.blob());
                 const processedBase64 = await new Promise((resolve) => {

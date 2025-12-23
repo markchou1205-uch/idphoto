@@ -141,6 +141,10 @@ window.processImage = async function () {
                 if (resBlue) resBlue.classList.add('d-none');
                 const imgBlue = document.getElementById('img-blue');
                 if (imgBlue) imgBlue.src = `data:image/jpeg;base64,${data.photos[0]}`;
+
+                // [Added] Visual Border for Preview
+                const mainPreview = document.getElementById('main-preview-img');
+                if (mainPreview) mainPreview.style.border = "1px solid black";
             } else {
                 const resBlue = document.getElementById('res-blue');
                 if (resBlue) resBlue.classList.remove('d-none');
