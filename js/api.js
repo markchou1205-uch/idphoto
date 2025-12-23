@@ -131,7 +131,12 @@ export async function runCheckApi(imgBase64) {
         if (!AZURE || !AZURE.ENDPOINT || !AZURE.KEY) throw new Error("Azure config missing");
 
         const blob = base64ToBlob(imgBase64);
-        const url = `${AZURE.ENDPOINT}/face/v1.0/detect?returnFaceAttributes=smile,glasses,occlusion&detectionModel=detection_03&returnFaceId=false`;
+
+        // Fix: Remove trailing slash from endpoint if present
+        const endpoint = AZURE.ENDPOINT.endsWith('/') ? AZURE.ENDPOINT.slice(0, -1) : AZURE.ENDPOINT;
+
+        // Fix: Use detection_01 which supports 'smile', 'glasses', 'occlusion'. (detection_03 does not)
+        const url = `${endpoint}/face/v1.0/detect?returnFaceAttributes=smile,glasses,occlusion&detectionModel=detection_01&returnFaceId=false`;
 
         const response = await fetch(url, {
             method: 'POST',
