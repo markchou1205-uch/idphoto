@@ -43,16 +43,29 @@ export async function detectFace(base64) {
         if (data && data.length > 0) {
             const rect = data[0].faceRectangle;
 
-            // --- Precision Zoom Calculation (Restored) ---
-            // Goal: Face Height = 75% of Photo Height
-            // Aspect Ratio: 350 / 450 = 0.777...
-            const faceH = rect.height;
-            const targetPhotoH = faceH / 0.75;
-            const targetPhotoW = targetPhotoH * (350 / 450);
+            // --- Precision Zoom Calculation (Restored & Enhanced) ---
+            // Goal: Face Height = 71%~80% (Taget 75%)
+            // Constraint: Face Width must not exceed ~80% of width (to prevent chopping ears/glasses)
 
-            // Calculate Crop Coordinates (Original Image)
-            // Headroom: 10% of Target Height
-            const topMargin = targetPhotoH * 0.10;
+            // 1. Calculate dimensions based on Height Rule (Standard)
+            const faceH = rect.height;
+            let targetPhotoH = faceH / 0.75;
+            let targetPhotoW = targetPhotoH * (35 / 45);
+
+            // 2. Check Width Constraint
+            // If calculated width is too tight for the face width, scale UP (Zoom Out)
+            const faceW = rect.width;
+            if (faceW > targetPhotoW * 0.8) {
+                // Face is too wide for this crop. Adjust based on Width.
+                // New Width = FaceW / 0.8
+                targetPhotoW = faceW / 0.8;
+                targetPhotoH = targetPhotoW * (45 / 35);
+            }
+
+            // 3. Calculate Crop Coordinates
+            // Headroom: Standard is ~5mm in 45mm (approx 11%)
+            // Let's use 12% to be safe (ensure top of hair isn't cut if rect.top is forehead)
+            const topMargin = targetPhotoH * 0.12;
             const cropY = rect.top - topMargin;
             const cropX = (rect.left + rect.width / 2) - (targetPhotoW / 2); // Center horizontally
 

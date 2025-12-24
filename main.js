@@ -29,8 +29,33 @@ window.onload = function () {
     verTag.style.borderRadius = '5px';
     verTag.style.fontSize = '12px';
     verTag.style.zIndex = '9999';
-    verTag.innerHTML = 'System Ver: 14.8 (URL Fixed)';
+    verTag.innerHTML = 'System Ver: 15.0 (Smart Crop Fixed)';
     document.body.appendChild(verTag);
+
+    // [UI Fix] Ensure Main Preview has correct Aspect Ratio container
+    const mainImg = document.getElementById('main-preview-img');
+    if (mainImg) {
+        // Find parent col or creating a wrapper?
+        // Let's modify the image style directly to ensure it doesn't stretch weirdly
+        mainImg.style.objectFit = 'contain';
+        mainImg.style.backgroundColor = '#6c757d'; // Gray background
+        mainImg.style.border = '1px solid #000';
+        mainImg.style.width = '100%';
+        mainImg.style.height = 'auto'; // Or fixed height?
+        mainImg.style.maxWidth = '350px'; // Limit width for realism?
+        // Actually, if we want to show 35x45 ratio, we should perhaps wrap it.
+        // But the image ITSELF is 350x450 now. So 'height: auto' respects ratio.
+        // The background color is for "outside". 
+        // If image takes full width, no background visible.
+        // The user wants "Gray background OUTSIDE the image area".
+        // That means the CONTAINER (parent) should be gray, and image centered.
+        if (mainImg.parentElement) {
+            mainImg.parentElement.style.backgroundColor = '#e9ecef'; // Light gray wrapper
+            mainImg.parentElement.style.display = 'flex';
+            mainImg.parentElement.style.justifyContent = 'center';
+            mainImg.parentElement.style.padding = '20px';
+        }
+    }
 };
 
 window.goHome = function () { location.reload(); }
