@@ -2,10 +2,22 @@ import { AZURE, CLOUDINARY } from './config.js';
 import { state } from './state.js';
 
 /* --- Azure Helper --- */
+export function ensureSinglePrefix(str) {
+    if (!str) return '';
+    // Structural Split: Safest way to remove single/double/triple prefixes
+    // Split by comma, take the last part (data), then add ONE prefix.
+    const parts = str.split('base64,');
+    const cleanData = parts[parts.length - 1];
+    return `data:image/jpeg;base64,${cleanData}`;
+}
+
 function base64ToBlob(base64) {
-    const parts = base64.split(';base64,');
+    // Ensure we are working with standard form
+    const clean = ensureSinglePrefix(base64);
+    const parts = clean.split(';base64,');
     const contentType = parts.length > 1 ? parts[0].split(':')[1] : 'image/jpeg';
-    const raw = window.atob(parts.length > 1 ? parts[1] : base64);
+    const raw = window.atob(parts.length > 1 ? parts[1] : clean); // logic fix: if split worked, parts[1] is data
+
     const rawLength = raw.length;
     const uInt8Array = new Uint8Array(rawLength);
     for (let i = 0; i < rawLength; ++i) {
