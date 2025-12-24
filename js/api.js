@@ -149,6 +149,7 @@ export async function detectFace(base64) {
 }
 
 // 2. Process Preview (Cloudinary)
+// 2. Process Preview (Cloudinary with Local Fallback)
 export async function processPreview(base64, cropParams) {
     try {
         if (CLOUDINARY && CLOUDINARY.CLOUD_NAME) {
@@ -178,13 +179,10 @@ export async function processPreview(base64, cropParams) {
                     transforms.push('c_thumb,g_face,w_350,h_450,z_0.60');
                 }
 
-                // Lighting & Color (Enhanced per User Spec)
+                // Lighting & Color
                 transforms.push('e_improve:outdoor');
                 transforms.push('e_viesus_correct');
-                transforms.push('e_gamma:70'); // Gamma correction
-                // e_contrast excluded if not requested, assuming gamma handles it or defaults valid.
-
-                // BG Removal & White BG
+                transforms.push('e_gamma:70');
                 transforms.push('e_background_removal');
                 transforms.push('b_white');
                 transforms.push('fl_flatten');
@@ -202,19 +200,11 @@ export async function processPreview(base64, cropParams) {
                         reader.onloadend = () => resolve(reader.result.split(',')[1]);
                         reader.readAsDataURL(processedBlob);
                     });
-                    // Return stripped base64, ensureSinglePrefix will fix it later if needed, 
-                    // or we assume consumers handle it? 
-                    // Users request: "Don't manual concat".
-                    // So we should verify caller behavior.
-                    // Caller (main.js) uses ensureSinglePrefix. So we can return raw or clean.
-                    // Let's return clean for consistency.
                     return { photos: [processedBase64, processedBase64] };
                 } catch (err) {
-                    console.warn("Advanced filters failed, falling back to Safe Mode (Crop Only):", err);
-
-                    // FALLBACK: Safe Mode (No background removal, no Viesus)
-                    // This ensures the user gets a result even if add-ons are 401 restricted.
-                    const basicUrl = `https://res.cloudinary.com/${CLOUDINARY.CLOUD_NAME}/image/upload/c_crop,x_${cropParams.x},y_${cropParams.y},w_${cropParams.w},h_${cropParams.h}/c_scale,w_350,h_450/e_improve/e_gamma:50/fl_flatten/v${version}/${publicId}.jpg`;
+                    console.warn("Advanced filters failed:", err);
+                    // Try Safe Mode (Crop Only)
+                     const basicUrl = `https://res.cloudinary.com/${CLOUDINARY.CLOUD_NAME}/image/upload/c_crop,x_${cropParams.x},y_${cropParams.y},w_${cropParams.w},h_${cropParams.h}/c_scale,w_350,h_450/e_improve/e_gamma:50/fl_flatten/v${version}/${publicId}.jpg`;
 
                     try {
                         const basicRes = await fetch(basicUrl);
@@ -224,18 +214,59 @@ export async function processPreview(base64, cropParams) {
                             return { photos: [bB64, bB64] };
                         }
                     } catch (fallbackErr) {
-                        console.error("Fallback also failed:", fallbackErr);
+                         console.error("Cloudinary Safe Mode also failed:", fallbackErr);
                     }
-                    throw err;
+                    // If safe mode fails, fall through to local crop
                 }
+            } else {
+                 console.warn(`Cloudinary Upload Failed: ${uploadRes.status}`);
             }
         }
     } catch (e) {
-        console.error("Cloudinary Process Failed:", e);
+        console.error("Cloudinary Process Failed/Skipped:", e);
     }
 
-    const cleanBase64 = base64.includes(',') ? base64.split(',')[1] : base64;
-    return { photos: [cleanBase64, cleanBase64] };
+    // --- FINAL FALLBACK: LOCAL CROP ---
+    console.log("Falling back to Local Canvas Crop...");
+    try {
+        const localResult = await cropImageLocally(base64, cropParams);
+        return { photos: [localResult, localResult] }; // Return simple cropped version
+    } catch (localErr) {
+        console.error("Local Crop Failed:", localErr);
+        // Last resort: return original
+        const cleanBase64 = base64.includes(',') ? base64.split(',')[1] : base64;
+        return { photos: [cleanBase64, cleanBase64] };
+    }
+}
+
+// Helper: Local Canvas Crop
+function cropImageLocally(base64, crop) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            // Target size: 350x450 (Standard ID photo resolution we use)
+            canvas.width = 350;
+            canvas.height = 450;
+            const ctx = canvas.getContext('2d');
+
+            // Draw cropped portion
+            // source: img, sX, sY, sW, sH, dX, dY, dW, dH
+            ctx.drawImage(
+                img,
+                crop.x, crop.y, crop.w, crop.h, // Source (Crop Box)
+                0, 0, 350, 450                  // Destination (Canvas Size)
+            );
+
+            // Export to Base64
+            // remove prefix manually to match expected API output format
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            const b64 = dataUrl.split(',')[1];
+            resolve(b64);
+        };
+        img.onerror = (e) => reject(e);
+        img.src = ensureSinglePrefix(base64);
+    });
 }
 
 
