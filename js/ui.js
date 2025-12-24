@@ -254,54 +254,58 @@ export const UI = {
         };
     },
 
-    // 4. Final Comparison View
-    showComparison(originalSrc, finalCanvas) {
-        // Find existing container or create new
-        let container = document.getElementById('comparison-view');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'comparison-view';
-            container.className = 'compare-container';
-            // Insert after main preview area? Or replace it?
-            const mainArea = document.querySelector('.preview-area') || document.getElementById('preview-container');
-            if (mainArea) {
-                mainArea.innerHTML = '';
-                mainArea.appendChild(container);
-            }
+
+
+    showComparison(origImg, resultImg, bgRemoved = true) {
+        const container = document.getElementById('preview-container');
+        const compareView = document.getElementById('compare-view');
+
+        // Clear previous
+        container.innerHTML = '';
+
+        // Hide standard compare view, we will build a custom result view
+        if (compareView) compareView.classList.add('d-none');
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'position-relative text-center animate-fade-in';
+        wrapper.style.maxWidth = '350px';
+        wrapper.style.margin = '0 auto'; // Centering Fix
+
+        const title = document.createElement('h5');
+        title.className = 'fw-bold mb-3';
+        title.innerHTML = '製作成品 (35x45mm)';
+        wrapper.appendChild(title);
+
+        // BG Removal Warning
+        if (!bgRemoved) {
+            const warning = document.createElement('div');
+            warning.className = 'alert alert-warning py-1 small mb-2';
+            warning.style.fontSize = '0.8rem';
+            warning.innerHTML = '<i class="bi bi-exclamation-triangle"></i> 無法移除背景 (服務授權限制)';
+            wrapper.appendChild(warning);
         }
 
-        container.innerHTML = `
-            <div class="compare-box">
-                <h4>原始照片</h4>
-                <img src="${originalSrc}" class="compare-img" style="height:300px;">
-            </div>
-            <div class="compare-arrow">➔</div>
-            <div class="compare-box" id="final-result-box">
-                <h4>製作成品 (35x45mm)</h4>
-                <!-- Final Canvas or Img goes here -->
-            </div>
-            <div style="width: 100%; text-align: center; margin-top:20px;">
-                <button class="id-btn id-btn-secondary" id="manual-adjust-btn">🛠 手動調整 / 重新裁切</button>
-            </div>
+        // Final Image
+        resultImg.className = 'img-fluid shadow-lg rounded';
+        resultImg.style.border = '1px solid #ddd';
+        resultImg.style.maxHeight = '450px';
+        wrapper.appendChild(resultImg);
+
+        // Manual Adjust Button
+        const btnContainer = document.createElement('div');
+        btnContainer.className = 'mt-3';
+        btnContainer.innerHTML = `
+            <button id="manual-adjust-btn" class="btn btn-secondary btn-sm shadow-sm">
+                <i class="bi bi-tools"></i> 手動調整 / 重新裁切
+            </button>
         `;
+        wrapper.appendChild(btnContainer);
 
-        const finalBox = container.querySelector('#final-result-box');
-
-        // Ensure finalCanvas is styled properly
-        finalCanvas.style.height = '300px';
-        finalCanvas.style.width = 'auto'; // Keep ratio
-        finalCanvas.className = 'compare-img';
-
-        // Wrap finalCanvas in a relative div for Overlay
-        const wrapper = document.createElement('div');
-        wrapper.style.position = 'relative';
-        wrapper.style.display = 'inline-block';
-        wrapper.appendChild(finalCanvas);
-        finalBox.appendChild(wrapper);
+        container.appendChild(wrapper);
 
         return {
             wrapper: wrapper,
-            imgElement: finalCanvas,
+            imgElement: resultImg,
             manualBtn: container.querySelector('#manual-adjust-btn')
         };
     },

@@ -106,8 +106,8 @@ export async function detectFace(base64) {
             const fullHeadH = chinY - hairTopY;     // Total Head Height
 
             // 2. Target Ratio
-            // Formula: Target Photo Height = Full Head Height / 0.70 (Zoomed out from 0.75)
-            let targetPhotoH = fullHeadH / 0.70;
+            // Formula: Target Photo Height = Full Head Height / 0.76 (Zoomed out from 0.75)
+            let targetPhotoH = fullHeadH / 0.76;
 
             // Calculate Required Photo Width (35:45 aspect ratio)
             let targetPhotoW = targetPhotoH * (35 / 45);
@@ -201,7 +201,7 @@ export async function processPreview(base64, cropParams) {
                         reader.onloadend = () => resolve(reader.result.split(',')[1]);
                         reader.readAsDataURL(processedBlob);
                     });
-                    return { photos: [processedBase64, processedBase64] };
+                    return { photos: [processedBase64, processedBase64], bgRemoved: true };
                 } catch (err) {
                     console.warn("Advanced filters failed:", err);
                     console.log("Cloudinary advanced filters failed. Skipping Safe Mode and falling back to Local Crop immediately to ensure result.");
@@ -219,12 +219,12 @@ export async function processPreview(base64, cropParams) {
     console.log("Falling back to Local Canvas Crop...");
     try {
         const localResult = await cropImageLocally(base64, cropParams);
-        return { photos: [localResult, localResult] }; // Return simple cropped version
+        return { photos: [localResult, localResult], bgRemoved: false }; // Return simple cropped version
     } catch (localErr) {
         console.error("Local Crop Failed:", localErr);
         // Last resort: return original
         const cleanBase64 = base64.includes(',') ? base64.split(',')[1] : base64;
-        return { photos: [cleanBase64, cleanBase64] };
+        return { photos: [cleanBase64, cleanBase64], bgRemoved: false };
     }
 }
 

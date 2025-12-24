@@ -158,7 +158,7 @@ function triggerManualEdit() {
     );
 }
 
-function renderResult(imgSrc) {
+function renderResult(imgSrc, bgRemoved = false) {
     // Ensure View Switch
     const dashboard = document.getElementById('dashboard-area');
     const resultDash = document.getElementById('result-dashboard');
@@ -168,7 +168,7 @@ function renderResult(imgSrc) {
     const finalImg = new Image();
     finalImg.onload = () => {
         // Use updated UI.showComparison which returns handles
-        const uiRefs = UI.showComparison(state.originalImage, finalImg);
+        const uiRefs = UI.showComparison(state.originalImage, finalImg, bgRemoved);
 
         // Apply Guides
         UI.applyResultGuides(uiRefs.wrapper);
@@ -189,7 +189,9 @@ async function runProductionPhase() {
 
         if (processRes && processRes.photos && processRes.photos.length > 0) {
             state.processedImage = 'data:image/jpeg;base64,' + processRes.photos[0];
-            renderResult(state.processedImage);
+            // Pass bgRemoved flag (default true if undefined, but API now returns simple boolean)
+            // If fallback occurred, bgRemoved is false.
+            renderResult(state.processedImage, processRes.bgRemoved);
         }
 
     } catch (err) {
