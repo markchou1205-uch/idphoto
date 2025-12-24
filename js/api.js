@@ -64,27 +64,21 @@ export async function detectFace(base64) {
 
             // 3. Calculate Crop Coordinates
             // Headroom Strategy:
-            // The user observed "Head Top Chopped". Azure 'faceRectangle' top is often mid-forehead.
-            // Safe bet: Align relative to the CHIN (rect.top + rect.height) which is reliable.
-            // BOCA Standard: Chin to Bottom ~ distance. Head Top to Top ~ distance.
-            // If we assume HeadHeight ~ rect.height (approx), and we want to center it vertically:
-            // But since 'rect.top' is below real Head Top (hair), we need MORE space above.
-            // Strategy: Calculate 'Ideal Box' where Face is centered, then Shift Box UP by ~10% of FaceHeight.
+            // User Request: Head Top Margin ~4.5mm (10% of 45mm).
+            // Azure rect.top is typically the forehead/hairline.
+            // Ensure we leave 10% space ABOVE rect.top (or slightly adjusted for hair volume).
 
-            const faceCenterY = rect.top + rect.height / 2;
-            const cropH = targetPhotoH;
+            const marginRatio = 0.10; // 10% -> 4.5mm
+            const topMargin = targetPhotoH * marginRatio;
 
-            // Initial Center
-            let cropY = faceCenterY - (cropH / 2);
+            // Current 'rect.top' is the top of the detector box.
+            // Often we need a bit more for hair.
+            // Let's rely on the 10% margin purely from the detected top?
+            // User said "Start calculating from above hair". We don't know where hair is.
+            // But strict 10% margin above rect.top is a good standard baseline.
 
-            // Shift UP to accommodate hair (Shift Frame Up = Decrease Y)
-            // Shift by 12% of FaceHeight?
-            const verticalShift = faceH * 0.12;
-            cropY -= verticalShift;
-
-            // Calculate X center
-            const faceCenterX = rect.left + rect.width / 2;
-            const cropX = faceCenterX - (targetPhotoW / 2);
+            const cropY = rect.top - topMargin;
+            const cropX = (rect.left + rect.width / 2) - (targetPhotoW / 2); // Center horizontally
 
             // Validate Chin Margin
             // Chin Y = rect.top + rect.height;
@@ -134,8 +128,6 @@ export async function processPreview(base64, cropParams) {
                 const version = upData.version;
 
                 // Construct Transformations
-                // Strategy: Manual Crop (Precision) -> Scale (to 350x450) -> Improve -> Remove BG -> White BG
-
                 let transforms = [];
 
                 if (cropParams) {
@@ -148,8 +140,9 @@ export async function processPreview(base64, cropParams) {
                     transforms.push('c_thumb,g_face,w_350,h_450,z_0.75');
                 }
 
-                // 3. Improve Lighting
-                transforms.push('e_improve');
+                // 3. Improve Lighting & Color (New params)
+                transforms.push('e_improve:outdoor'); // Outdoor profile handles skin tones well
+                transforms.push('e_viesus_correct'); // Color correction
 
                 // 4. Remove BG and set White
                 // Note: b_white must be applied effectively. 
@@ -195,8 +188,8 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
         // Fix: Remove trailing slash from endpoint if present
         const endpoint = AZURE.ENDPOINT.endsWith('/') ? AZURE.ENDPOINT.slice(0, -1) : AZURE.ENDPOINT;
 
-        // Fix: Use detection_01 which supports BOTH Landmarks & Attributes.
-        const url = `${endpoint}/face/v1.0/detect?returnFaceAttributes=glasses,occlusion&returnFaceLandmarks=true&detectionModel=detection_01&returnFaceId=false`;
+        // Fix: Use detection_01 which supports BOTH Landmarks & Attributes + Exposure.
+        const url = `${endpoint}/face/v1.0/detect?returnFaceAttributes=glasses,occlusion,exposure&returnFaceLandmarks=true&detectionModel=detection_01&returnFaceId=false`;
 
         const response = await fetch(url, {
             method: 'POST',
@@ -225,6 +218,23 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
         const face = azureData[0];
         const attrs = face.faceAttributes;
         const landmarks = face.faceLandmarks;
+
+        // 0. Exposure Check (New)
+        if (attrs.exposure) {
+            if (attrs.exposure.exposureLevel === 'GoodExposure') {
+                // Pass
+            } else {
+                const val = attrs.exposure.value; // 0..1
+                // If poor, report warning or fail?
+                // User said "Report Lighting Uneven (Suggest Retake)"
+                results.push({
+                    category: 'quality', status: 'warn',
+                    item: '光線檢查',
+                    value: `光線不均勻 (${attrs.exposure.exposureLevel})`,
+                    standard: '光線需明亮均勻'
+                });
+            }
+        }
 
         // 1. Mouth/Expression Check (Landmark-based)
         if (landmarks && landmarks.upperLipBottom && landmarks.underLipTop) {
