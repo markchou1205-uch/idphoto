@@ -43,25 +43,27 @@ export async function detectFace(base64) {
         if (data && data.length > 0) {
             const rect = data[0].faceRectangle;
 
-            // --- Precision Zoom Calculation (Ver 19.0 - Strict Ministry Compliance) ---
+            // --- Precision Zoom Calculation (Ver 20.0 - Aggressive "Anti-Chop") ---
+
+            // User Feedback: "Head too big, Top Chopped".
+            // Previous 20% hair assumption was too low.
+            // New Assumption: Hair/Volume is 35% of Face Height.
 
             // 1. Define Head Boundaries
             // Azure provides 'rect' (Forehead to Chin).
             // Real Head Top (Hair) is estimated at 20% above forehead.
             const faceH = rect.height;
-            const hairOffset = faceH * 0.20; // 20% for hair
+            const hairOffset = faceH * 0.35; // increased from 0.20
             const headTopY = rect.top - hairOffset; // True Top
             const chinY = rect.top + rect.height;   // True Bottom
             const fullHeadH = chinY - headTopY;     // Total Head Height (Hair to Chin)
 
             // 2. Target Ratio
-            // Ministry Standard: Head Height (3.2 - 3.6cm) in 4.5cm Photo.
-            // Target Average: 3.4cm.
-            // Ratio: 3.4 / 4.5 = 0.755 (approx 76%).
-
-            // Calculate Required Photo Height (Crop Height)
+            // Aim for 3.33cm (74% of 4.5cm).
+            // This is slightly smaller than 3.4cm to ensure plenty of space.
+            // Formula: CanvasH = HeadH / 0.74
             // If fullHeadH takes up 76% of the photo...
-            let targetPhotoH = fullHeadH / 0.76;
+            let targetPhotoH = fullHeadH / 0.74;
 
             // Calculate Required Photo Width (35:45 aspect ratio)
             let targetPhotoW = targetPhotoH * (35 / 45);
@@ -75,7 +77,7 @@ export async function detectFace(base64) {
             }
 
             // 4. Vertical Alignment (Crucial Step)
-            // The "Head Top" (headTopY) must be at exactly 4.5mm (10%) from the Top Edge.
+            // Lock "Estimated Hair Top" to 10% (0.45cm) margin.
             // Top Margin = 10% of Target Photo Height.
             const topMarginPx = targetPhotoH * 0.10;
 
@@ -132,7 +134,7 @@ export async function processPreview(base64, cropParams) {
                     transforms.push('c_thumb,g_face,w_350,h_450,z_0.60');
                 }
 
-                // Lighting & Color (Ver 19.0 - Ministry Polished)
+                // Lighting & Color (Ver 20.0)
                 transforms.push('e_improve:outdoor');
                 transforms.push('e_viesus_correct');
                 transforms.push('e_contrast:10'); // Smooth contrast
