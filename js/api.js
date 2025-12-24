@@ -43,36 +43,36 @@ export async function detectFace(base64) {
         if (data && data.length > 0) {
             const rect = data[0].faceRectangle;
 
-            // --- Precision Zoom Calculation (Ver 17.0) ---
+            // --- Precision Zoom Calculation (Ver 18.0 - Hair Aware) ---
 
-            // 1. Calculate dimensions based on Height Rule (Standard)
-            // User Feedback: Head Top Chopped. "Head" in Azure is just Face Box.
-            // "Crown to Chin" is larger.
-            // Old: faceH / 0.75 (Targeting 75% coverage for FaceBox). Result: Zoom too tight.
-            // New: faceH / 0.60 (Targeting 60% coverage for FaceBox). 
-            // This leaves 40% for Hair (Top) and Neck/Shoulders (Bottom).
-            // This effectively "Zooms Out" to include full head.
-
+            // Problem: Azure "FaceRectangle" is Forehead-to-Chin. Real head includes Hair.
+            // Solution: Estimate Hair Height as 20% of Face Height.
             const faceH = rect.height;
-            let targetPhotoH = faceH / 0.60;
+            const estimatedHairH = faceH * 0.20;
+            const visualHeadH = faceH + estimatedHairH; // Estimated "Crown to Chin"
+
+            // Goal: Visual Head Height should be ~77% of Photo Height (Midpoint of 3.2-3.6cm range)
+            // 3.4cm / 4.5cm = 0.755. Let's aim for 0.76 (76%).
+            let targetPhotoH = visualHeadH / 0.76;
             let targetPhotoW = targetPhotoH * (35 / 45); // Ratio 35:45
 
-            // 2. Width Constraint (Relaxed 90%)
-            // Safety check for very wide faces/glasses
-            if (rect.width > targetPhotoW * 0.90) {
-                targetPhotoW = rect.width / 0.90;
+            // Width Constraint:
+            // Ensure wide faces/glasses fit with margin.
+            // If FaceWidth > 85% of PhotoWidth, Zoom Out.
+            if (rect.width > targetPhotoW * 0.85) {
+                targetPhotoW = rect.width / 0.85;
                 targetPhotoH = targetPhotoW * (45 / 35);
             }
 
-            // 3. Vertical Alignment (Headroom)
-            // Goal: Head Top to Photo Top = 10% (4.5mm).
-            // We assume "Crown" is above "Forehead" (rect.top).
-            // If we place rect.top at ~25% from top?
-            // Space for Hair = 25% - 10% = 15% of Photo Height.
-            // This sounds reasonable for bangs/volume.
+            // Vertical Alignment (Hair-Safe Top Margin)
+            // Goal: Leave ~4.5mm (10%) space ABOVE the "Estimated Hair Top".
+            // Hair Top Y = rect.top - estimatedHairH.
+            // Crop Top Y = Hair Top Y - (10% of Photo Height).
 
-            const topPadding = targetPhotoH * 0.25;
-            const cropY = rect.top - topPadding;
+            const hairTopY = rect.top - estimatedHairH;
+            const topMargin = targetPhotoH * 0.10; // 4.5mm
+
+            const cropY = hairTopY - topMargin;
             const cropX = (rect.left + rect.width / 2) - (targetPhotoW / 2); // Center horizontally
 
             return {
@@ -117,18 +117,17 @@ export async function processPreview(base64, cropParams) {
                     transforms.push(`c_crop,x_${cropParams.x},y_${cropParams.y},w_${cropParams.w},h_${cropParams.h}`);
                     transforms.push('c_scale,w_350,h_450');
                 } else {
+                    // Fallback to looser zoom if no params
                     transforms.push('c_thumb,g_face,w_350,h_450,z_0.60');
                 }
 
-                // Lighting & Color (Refined Ver 17.0)
+                // Lighting & Color (Ver 18.0)
                 transforms.push('e_improve:outdoor');
                 transforms.push('e_viesus_correct');
                 transforms.push('e_contrast:20');
-                transforms.push('e_gamma:60'); // Boost shadows
 
                 // BG Removal & White BG
                 transforms.push('e_background_removal');
-                // Ensure b_white is effective after removal
                 transforms.push('b_white');
                 transforms.push('fl_flatten');
 

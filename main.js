@@ -197,32 +197,7 @@ window.processImage = async function () {
                     const oldGuides = mainPreview.parentElement.querySelectorAll('.guide-overlay');
                     oldGuides.forEach(g => g.remove());
 
-                    function createLine(topPct, text) {
-                        const el = document.createElement('div');
-                        el.style.position = 'absolute';
-                        el.style.top = topPct + '%';
-                        el.style.left = '0';
-                        el.style.width = '100%';
-                        el.style.borderTop = '1px dashed red';
-                        el.style.zIndex = '10';
-                        el.style.pointerEvents = 'none';
-
-                        const label = document.createElement('span');
-                        label.innerText = text;
-                        label.style.position = 'absolute';
-                        label.style.right = '-90px';
-                        label.style.top = '-10px';
-                        label.style.background = '#ffffff';
-                        label.style.padding = '2px 6px';
-                        label.style.fontSize = '12px';
-                        label.style.color = 'red';
-                        label.style.border = '1px solid red';
-                        label.style.fontWeight = 'bold';
-                        el.appendChild(label);
-                        return el;
-                    }
-
-                    // Clear Guides
+                    // Create Overlay for Standard Template
                     const overlay = document.createElement('div');
                     overlay.className = 'guide-overlay';
                     overlay.style.position = 'absolute';
@@ -232,41 +207,77 @@ window.processImage = async function () {
                     overlay.style.height = '100%';
                     overlay.style.pointerEvents = 'none';
 
-                    // Top Line (10% = 0.45cm)
-                    overlay.appendChild(createLine(10, "上緣 0.45cm (10%)"));
+                    // Helper for Lines
+                    function createStyleLine(top, left, width, height, border, text, textPos) {
+                        const el = document.createElement('div');
+                        el.style.position = 'absolute';
+                        el.style.top = top;
+                        el.style.left = left;
+                        el.style.width = width;
+                        el.style.height = height;
+                        if (border) el.style.border = border;
+                        el.style.boxSizing = 'border-box';
+                        el.style.zIndex = '10';
 
-                    // Bottom Line (90%) -> actually Chin can vary, but standard says chin should be > 10% from bottom?
-                    // Display standard: Head 3.2-3.6cm.
-                    // Let's Guide standard head bottom limit: Top(10%) + MaxHead(80%) = 90%.
-                    overlay.appendChild(createLine(90, "下緣 0.45cm (10%)"));
+                        if (text) {
+                            const label = document.createElement('span');
+                            label.innerText = text;
+                            label.style.position = 'absolute';
+                            label.style.color = '#d00'; // Dark Red
+                            label.style.fontSize = '12px';
+                            label.style.fontWeight = 'bold';
+                            label.style.whiteSpace = 'nowrap';
+                            switch (textPos) {
+                                case 'left': label.style.right = '105%'; label.style.top = '50%'; label.style.transform = 'translateY(-50%)'; break;
+                                case 'bottom': label.style.top = '105%'; label.style.left = '50%'; label.style.transform = 'translateX(-50%)'; break;
+                                case 'right-center': label.style.left = '105%'; label.style.top = '50%'; label.style.transform = 'translateY(-50%)'; break;
+                            }
+                            el.appendChild(label);
+                        }
+                        return el;
+                    }
 
-                    // Size Label
-                    const sizeLabel = document.createElement('div');
-                    sizeLabel.innerText = "規格：35x45 mm (2吋)";
-                    sizeLabel.style.position = 'absolute';
-                    sizeLabel.style.bottom = '-30px';
-                    sizeLabel.style.width = '100%';
-                    sizeLabel.style.textAlign = 'center';
-                    sizeLabel.style.color = '#333';
-                    sizeLabel.style.fontSize = '12px';
-                    overlay.appendChild(sizeLabel);
+                    // 1. Photo Dimensions
+                    // Left Ruler (4.5cm)
+                    const leftRuler = createStyleLine('0', '-15px', '10px', '100%', '', '4.5公分', 'left');
+                    leftRuler.style.borderLeft = '1px solid #999';
+                    leftRuler.style.borderTop = '1px solid #999';
+                    leftRuler.style.borderBottom = '1px solid #999';
+                    overlay.appendChild(leftRuler);
 
-                    // Ensure parent styles are unified (Remove gray spacing if any)
-                    mainPreview.parentElement.style.backgroundColor = '#F0F0F0'; // Unified Gray
-                    mainPreview.parentElement.style.padding = '40px';
-                    mainPreview.parentElement.style.display = 'flex';
-                    mainPreview.parentElement.style.justifyContent = 'center';
-                    mainPreview.parentElement.style.alignItems = 'center';
+                    // Bottom Ruler (3.5cm)
+                    const bottomRuler = createStyleLine('100%', '0', '100%', '10px', '', '3.5公分', 'bottom');
+                    bottomRuler.style.top = 'calc(100% + 5px)';
+                    bottomRuler.style.borderLeft = '1px solid #999';
+                    bottomRuler.style.borderRight = '1px solid #999';
+                    bottomRuler.style.borderBottom = '1px solid #999';
+                    overlay.appendChild(bottomRuler);
+
+                    // 2. Head Height Standard (3.2cm - 3.6cm)
+                    // Head Top should be ~ 4.5mm (10%) from Top.
+                    // Chin should be ~ 3.4cm (approx 76%) below Head Top.
+                    // Let's create an ideal "Validation Box" on the Right side.
+
+                    // Marker Line: Top Margin (10% / 0.45cm)
+                    const headTopY = 10; // 10%
+                    overlay.appendChild(createStyleLine(headTopY + '%', '0', '100%', '1px', '1px dashed rgba(255,0,0,0.5)', ''));
+
+                    // Marker Line: Chin Limit (Min 3.2cmHead ~ 71% + 10% = 81%)
+                    // Marker Line: Chin Limit (Max 3.6cmHead ~ 80% + 10% = 90%)
+                    // We just mark the ideal "Chin Zone"
+                    const chinY = 10 + 75.5; // ~85.5%
+                    overlay.appendChild(createStyleLine(chinY + '%', '0', '100%', '1px', '1px dashed rgba(255,0,0,0.5)', ''));
+
+                    // Right Bracket for Head Height
+                    // Visualize "3.2~3.6cm"
+                    const rightBracket = createStyleLine(headTopY + '%', '95%', '15px', '75.5%', '', '應介於 3.2 - 3.6 cm', 'right-center');
+                    rightBracket.style.left = 'calc(100% + 10px)';
+                    rightBracket.style.borderTop = '2px solid red';
+                    rightBracket.style.borderBottom = '2px solid red';
+                    rightBracket.style.borderRight = '2px solid red';
+                    overlay.appendChild(rightBracket);
 
                     // Wrapper to hold image + guides together tightly
-                    // Current structure: Parent -> Img.
-                    // We need Parent -> Wrapper -> [Img, Overlay]
-                    // To avoid complex DOM manipulation on existing Img reference re-parenting,
-                    // We just treat Parent as the anchor if we match dimensions.
-                    // But mainPreview width might be responsive.
-                    // Simplest: Overlay follows mainPreview via wrapper? 
-                    // For now, appending overlay to parent works if parent is relative and tight?
-
                     // Let's create a Wrapper if not exists.
                     if (!document.getElementById('img-wrapper')) {
                         const wrapper = document.createElement('div');
@@ -274,6 +285,7 @@ window.processImage = async function () {
                         wrapper.style.position = 'relative';
                         wrapper.style.display = 'inline-block';
                         wrapper.style.lineHeight = '0'; // Remove font gap
+                        wrapper.style.boxShadow = '0 0 10px rgba(0,0,0,0.1)';
                         mainPreview.parentNode.insertBefore(wrapper, mainPreview);
                         wrapper.appendChild(mainPreview);
                         wrapper.appendChild(overlay);
