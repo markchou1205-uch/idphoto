@@ -72,16 +72,19 @@ export const UI = {
     },
 
     // 3. Modal 2: Audit Report
-    showAuditReport(imgSrc, validationResults, onProceed, onRetry) {
+    showAuditReport(imgSrc, validationResults, faceData, onProceed, onRetry) {
+        // Validation check for args in case calling from old code
+        if (typeof faceData === 'function') {
+            onRetry = onProceed;
+            onProceed = faceData;
+            faceData = null;
+        }
+
         const overlay = document.createElement('div');
         overlay.className = 'id-modal-overlay';
 
         let hasFail = false;
         let hasWarn = false;
-
-        // Filter: Separate User Errors from System Services
-        // "Head Ratio" / "Crop" issues are SERVICES, not Errors effectively in this new flow.
-        // We will hardcode the Service List for now.
 
         const userItemsHtml = validationResults.map(res => {
             if (res.status === 'fail') hasFail = true;
@@ -141,7 +144,6 @@ export const UI = {
 
                 ${warningBlock}
 
-
                 <div style="text-align: right; margin-top: 25px;">
                      <button class="id-btn id-btn-secondary" id="modal-retry-btn">重傳照片</button>
                      <button class="id-btn ${proceedBtnClass}" id="modal-proceed-btn">${proceedBtnText}</button>
@@ -151,16 +153,96 @@ export const UI = {
 
         document.body.appendChild(overlay);
 
-        // Safely append Image
+        // SAFE IMAGE & LINE DRAWING LOGIC
+        const container = overlay.querySelector('#report-img-container');
+        container.style.position = 'relative'; // For absolute positioning of lines
+
         const img = document.createElement('img');
         img.src = imgSrc;
         img.style.maxWidth = '100%';
         img.style.maxHeight = '300px';
         img.style.border = '1px solid #ccc';
         img.style.borderRadius = '4px';
+        img.style.display = 'block';
+        img.style.margin = '0 auto';
 
-        const imgContainer = overlay.querySelector('#report-img-container');
-        if (imgContainer) imgContainer.appendChild(img);
+        img.onload = () => {
+            // Draw Lines if markers exist
+            if (faceData && faceData.markers) {
+                const { hairTopY, chinY } = faceData.markers;
+                if (hairTopY && chinY) {
+                    // Calculation scaling
+                    // Logic: The image is displayed at some size. We need to map natural coords to display coords.
+                    // But img.width/height depends on CSS constraint (maxHeight 300).
+                    const scale = img.height / img.naturalHeight;
+
+                    // Since img is centered or block, we need to position the overlay relative to the IMAGE, not the container?
+                    // Container is text-align center.
+                    // For precise overlay, best to wrap image.
+                    const wrapper = document.createElement('div');
+                    wrapper.style.position = 'relative';
+                    wrapper.style.display = 'inline-block';
+                    img.parentNode.insertBefore(wrapper, img);
+                    wrapper.appendChild(img);
+
+                    const drawLine = (yNat, color, labelText) => {
+                        const yPx = yNat * scale;
+                        const line = document.createElement('div');
+                        line.style.position = 'absolute';
+                        line.style.top = `${yPx}px`;
+                        line.style.left = '0';
+                        line.style.width = '100%';
+                        line.style.borderTop = `2px dashed ${color}`;
+                        line.style.zIndex = '10';
+                        if (labelText) {
+                            const lbl = document.createElement('span');
+                            lbl.innerText = labelText;
+                            lbl.style.position = 'absolute';
+                            lbl.style.right = '-110px'; // Push out to right side info
+                            lbl.style.top = '-10px';
+                            lbl.style.color = color;
+                            lbl.style.fontSize = '12px';
+                            lbl.style.backgroundColor = 'rgba(255,255,255,0.8)';
+                            lbl.style.padding = '2px 4px';
+                            line.appendChild(lbl);
+                        }
+                        wrapper.appendChild(line);
+                    };
+
+                    drawLine(hairTopY, 'red', '頭頂 (預估)');
+                    drawLine(chinY, 'red', '下巴');
+
+                    // Add guideline text
+                    const guide = document.createElement('div');
+                    guide.style.position = 'absolute';
+                    // Position roughly between the two lines
+                    guide.style.top = `${(hairTopY * scale + chinY * scale) / 2}px`;
+                    guide.style.right = '-20px';
+                    guide.style.transform = 'translate(100%, -50%)';
+                    guide.style.color = 'red';
+                    guide.style.fontSize = '12px';
+                    guide.style.fontWeight = 'bold';
+                    guide.style.width = '100px';
+                    guide.style.textAlign = 'left';
+                    guide.innerText = '應介於 3.2 - 3.6 cm';
+                    wrapper.appendChild(guide);
+
+                    // Also draw bracket? 
+                    const bracket = document.createElement('div');
+                    bracket.style.position = 'absolute';
+                    bracket.style.top = `${hairTopY * scale}px`;
+                    bracket.style.right = '-5px';
+                    bracket.style.width = '10px';
+                    bracket.style.height = `${(chinY - hairTopY) * scale}px`;
+                    bracket.style.borderRight = '2px solid red';
+                    bracket.style.borderTop = '2px solid red';
+                    bracket.style.borderBottom = '2px solid red';
+                    wrapper.appendChild(bracket);
+                }
+            }
+        };
+        container.appendChild(img);
+
 
         document.getElementById('modal-proceed-btn').onclick = () => {
             overlay.remove();

@@ -132,6 +132,7 @@ async function runAuditPhase() {
         UI.showAuditReport(
             state.originalImage,
             checkRes.results,
+            state.faceData, // Pass Face Data for UI lines
             () => runProductionPhase(),
             () => { uploadInput.value = ''; }
         );
