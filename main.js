@@ -29,9 +29,12 @@ window.handleFileUpload = handleFileUpload;
 
 // --- Handlers ---
 async function handleFileUpload(e) {
+    console.log("Upload Handler Triggered");
     // Robust fallback: If 'e' is undefined (called from HTML without args), use global input
     const input = (e && e.target) ? e.target : document.getElementById('uploadInput');
+    console.log("Input element:", input);
     const file = input && input.files ? input.files[0] : null;
+    console.log("File detected:", file);
 
     if (!file) return;
 
@@ -40,13 +43,21 @@ async function handleFileUpload(e) {
 
     const reader = new FileReader();
     reader.onload = async (event) => {
-        state.originalImage = event.target.result;
+        console.log("File Reader Loaded");
+        try {
+            state.originalImage = event.target.result;
+            console.log("State Updated, Calling UI.showUseConfirm");
 
-        // Step 1: Confirm Usage (Modal 1)
-        UI.showUseConfirm(state.spec === 'passport' ? '護照/身分證 (35x45mm)' : '其他證件', async () => {
-            await runAuditPhase();
-        });
+            // Step 1: Confirm Usage (Modal 1)
+            UI.showUseConfirm(state.spec === 'passport' ? '護照/身分證 (35x45mm)' : '其他證件', async () => {
+                console.log("Modal Confirmed, Starting Audit");
+                await runAuditPhase();
+            });
+        } catch (err) {
+            console.error("Error inside reader.onload:", err);
+        }
     };
+    reader.onerror = (err) => console.error("File Reader Error:", err);
     reader.readAsDataURL(file);
 }
 
