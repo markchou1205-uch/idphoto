@@ -1,637 +1,212 @@
-import { state } from './js/state.js';
-import * as UI from './js/ui.js';
-import { API } from './js/api.js';
+import * as API from './js/api.js';
+import { UI } from './js/ui.js';
 import { CONFIG } from './js/config.js';
 
-const DEFAULT_SPECS = {
-    "passport": { "name": "護照 / 身分證", "desc": "2吋 (35x45mm) - 頭部 3.2~3.6cm", "width_mm": 35, "height_mm": 45 },
-    "resume": { "name": "健保卡 / 履歷 / 半身照", "desc": "2吋 (42x47mm)", "width_mm": 42, "height_mm": 47 },
-    "inch1": { "name": "駕照 / 執照 / 證書", "desc": "1吋 (28x35mm)", "width_mm": 28, "height_mm": 35 },
-    "visa_us": { "name": "美國簽證", "desc": "5x5cm (51x51mm)", "width_mm": 51, "height_mm": 51 }
+// --- State ---
+let state = {
+    originalImage: null,  // Base64
+    processedImage: null, // Base64
+    faceData: null,       // Azure Face Data
+    spec: 'passport'
 };
 
-let userPlan = localStorage.getItem('userPlan') || 'free';
+// --- DOM Elements ---
+const uploadInput = document.getElementById('uploadInput');
 
-window.onload = function () {
-    console.log("[DEBUG] System Init: Window Loaded");
-    state.specConfig = DEFAULT_SPECS;
-    Editor.initEditor();
-    UI.renderSpecList(selectSpec);
-    setTimeout(() => selectSpec('passport'), 100);
+// --- Initialization ---
+document.addEventListener('DOMContentLoaded', () => {
+    UI.initStyles();
 
-    const verTag = document.createElement('div');
-    verTag.style.position = 'fixed';
-    verTag.style.bottom = '10px';
-    verTag.style.left = '10px';
-    verTag.style.backgroundColor = '#0dcaf0'; // 青色 Fixed
-    verTag.style.color = '#000';
-    verTag.style.padding = '5px 10px';
-    verTag.style.borderRadius = '5px';
-    verTag.style.fontSize = '12px';
-    verTag.style.zIndex = '9999';
-    verTag.innerHTML = 'System Ver: 15.0 (Smart Crop Fixed)';
-    document.body.appendChild(verTag);
-
-    // [UI Fix] Ensure Main Preview has correct Aspect Ratio container
-    const mainImg = document.getElementById('main-preview-img');
-    if (mainImg) {
-        // Find parent col or creating a wrapper?
-        // Let's modify the image style directly to ensure it doesn't stretch weirdly
-        mainImg.style.objectFit = 'contain';
-        mainImg.style.backgroundColor = '#6c757d'; // Gray background
-        mainImg.style.border = '1px solid #000';
-        mainImg.style.width = '100%';
-        mainImg.style.height = 'auto'; // Or fixed height?
-        mainImg.style.maxWidth = '350px'; // Limit width for realism?
-        // Actually, if we want to show 35x45 ratio, we should perhaps wrap it.
-        // But the image ITSELF is 350x450 now. So 'height: auto' respects ratio.
-        // The background color is for "outside". 
-        // If image takes full width, no background visible.
-        // The user wants "Gray background OUTSIDE the image area".
-        // That means the CONTAINER (parent) should be gray, and image centered.
-        if (mainImg.parentElement) {
-            mainImg.parentElement.style.backgroundColor = '#e9ecef'; // Light gray wrapper
-            mainImg.parentElement.style.display = 'flex';
-            mainImg.parentElement.style.justifyContent = 'center';
-            mainImg.parentElement.style.padding = '20px';
-        }
+    if (uploadInput) {
+        // Remove existing listener if any to avoid duplicates (though reload clears it)
+        // Add listener
+        uploadInput.addEventListener('change', handleFileUpload);
     }
-};
+});
 
-window.goHome = function () { location.reload(); }
-window.switchFeature = function (featureId) { /* 略 */ }
+// Expose for HTML inline calls (Legacy support)
+window.handleFileUpload = handleFileUpload;
 
-window.handleFileUpload = function (input) {
-    if (!input.files.length) return;
+// --- Handlers ---
+async function handleFileUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Reset input so same file can be selected again if needed (verification)
+    // uploadInput.value = ''; // Wait, if we clear it here, might break change event? Better clear after process.
+
     const reader = new FileReader();
-    UI.showLoading(true, "AI 識別中...");
+    reader.onload = async (event) => {
+        state.originalImage = event.target.result;
 
-    reader.onload = async function () {
-        state.originalBase64 = reader.result;
-        state.isImageLoaded = true;
-        Editor.loadImageToEditor(state.originalBase64);
-
-        document.querySelector('.upload-btn-wrapper')?.classList.add('d-none');
-        document.getElementById('uploaded-status')?.classList.remove('d-none');
-
-        UI.showWorkspace();
-        document.getElementById('cropMask')?.classList.add('d-none');
-
-        try {
-            const data = await API.detectFace(state.originalBase64);
-            if (data && data.found) {
-                state.faceData = data;
-                Editor.autoAlignImage();
-            } else {
-                Editor.autoAlignImage();
-            }
-            // 自動開始
-            processImage();
-        } catch (err) {
-            console.error("[DEBUG] Detect Failed:", err);
-            UI.showLoading(false);
-        }
+        // Step 1: Confirm Usage (Modal 1)
+        UI.showUseConfirm(state.spec === 'passport' ? '護照/身分證 (35x45mm)' : '其他證件', async () => {
+            await runAuditPhase();
+        });
     };
-    reader.readAsDataURL(input.files[0]);
+    reader.readAsDataURL(file);
 }
 
-window.resetUpload = function () { location.reload(); }
-
-window.selectSpec = function (specId) {
-    state.currentSpecId = specId;
-    document.querySelectorAll('.spec-card').forEach(el => {
-        if (el) {
-            el.classList.remove('active');
-            const icon = el.querySelector('.check-icon');
-            if (icon) icon.classList.add('d-none');
-        }
-    });
-    const customInputs = document.getElementById('custom-inputs');
-    if (customInputs) customInputs.classList.add('d-none');
-    const el = document.getElementById(`spec-${specId}`);
-    if (el) {
-        el.classList.add('active');
-        const icon = el.querySelector('.check-icon');
-        if (icon) icon.classList.remove('d-none');
-    }
-    Editor.updateMaskRatio();
-}
-
-window.toggleCustom = function () {
-    document.querySelectorAll('.spec-card').forEach(el => el.classList.remove('active'));
-    const specCustom = document.getElementById('spec-custom');
-    if (specCustom) specCustom.classList.add('active');
-    const customInputs = document.getElementById('custom-inputs');
-    if (customInputs) customInputs.classList.remove('d-none');
-    state.currentSpecId = 'custom';
-    window.updateCustom();
-}
-
-window.updateCustom = function () {
-    const wInput = document.getElementById('custom-w');
-    const hInput = document.getElementById('custom-h');
-    if (wInput && hInput) {
-        const w = parseFloat(wInput.value) || 35;
-        const h = parseFloat(hInput.value) || 45;
-        state.currentCustomRatio = w / h;
-        Editor.updateMaskRatio(w, h);
-    }
-}
-
-window.processImage = async function () {
-    UI.showLoading(true, "AI 製作中...");
+// Phase 1: Audit (Check Only)
+async function runAuditPhase() {
     try {
-        const cropParams = (state.faceData && state.faceData.suggestedCrop) ? state.faceData.suggestedCrop : Editor.getCropParams();
-        const data = await API.processPreview(state.originalBase64, cropParams);
-
-        UI.showLoading(false);
-
-        if (data.photos) {
-            state.resultPhotos = data.photos;
-
-            const dash = document.getElementById('dashboard-area');
-            const resDash = document.getElementById('result-dashboard');
-
-            if (dash) dash.classList.add('d-none');
-            if (resDash) resDash.classList.remove('d-none');
-
-            const img = document.getElementById('main-preview-img');
-            if (img) {
-                img.src = `data:image/jpeg;base64,${data.photos[0]}`;
-                img.classList.remove('d-none');
-            }
-
-            if (state.currentSpecId === 'passport') {
-                const resBlue = document.getElementById('res-blue');
-                if (resBlue) resBlue.classList.add('d-none');
-                const imgBlue = document.getElementById('img-blue');
-                if (imgBlue) imgBlue.src = `data:image/jpeg;base64,${data.photos[0]}`;
-
-                // [Added] Visual Border for Preview
-                const mainPreview = document.getElementById('main-preview-img');
-                if (mainPreview) mainPreview.style.border = "1px solid black";
-            } else {
-                const resBlue = document.getElementById('res-blue');
-                if (resBlue) resBlue.classList.remove('d-none');
-                const imgBlue = document.getElementById('img-blue');
-                if (imgBlue) imgBlue.src = `data:image/jpeg;base64,${data.photos[1]}`;
-            }
-
-            const imgWhite = document.getElementById('img-white');
-            if (imgWhite) imgWhite.src = `data:image/jpeg;base64,${data.photos[0]}`;
-
-            window.selectResult('white');
-
-            const btnCheck = document.querySelector('button[onclick="runCheck()"]');
-            if (btnCheck) btnCheck.innerHTML = '<i class="bi bi-shield-check"></i> 進階審查與智能修復';
-
-            // [Added] Visual Border & Guides
-            const mainPreview = document.getElementById('main-preview-img');
-            if (mainPreview) {
-                mainPreview.style.border = "1px solid black";
-                // Add Guides if container allows
-                if (mainPreview.parentElement) {
-                    mainPreview.parentElement.style.position = 'relative'; // Ensure positioning context
-
-                    // Clear old guides
-                    const oldGuides = mainPreview.parentElement.querySelectorAll('.guide-overlay');
-                    oldGuides.forEach(g => g.remove());
-
-                    // Create Overlay for Ministry Standard Template
-                    const overlay = document.createElement('div');
-                    overlay.className = 'guide-overlay';
-                    overlay.style.position = 'absolute';
-                    overlay.style.top = '0';
-                    overlay.style.left = '0';
-                    overlay.style.width = '100%';
-                    overlay.style.height = '100%';
-                    overlay.style.pointerEvents = 'none';
-
-                    // Helper for Lines
-                    function createStyleLine(top, left, width, height, border, text, textPos, color = '#d00') {
-                        const el = document.createElement('div');
-                        el.style.position = 'absolute';
-                        el.style.top = top;
-                        el.style.left = left;
-                        el.style.width = width;
-                        el.style.height = height;
-                        if (border) el.style.border = border;
-                        el.style.boxSizing = 'border-box';
-                        el.style.zIndex = '10';
-
-                        if (text) {
-                            const label = document.createElement('span');
-                            label.innerText = text;
-                            label.style.position = 'absolute';
-                            label.style.color = color;
-                            label.style.fontSize = '13px';
-                            label.style.fontWeight = 'bold';
-                            label.style.whiteSpace = 'nowrap';
-                            label.style.fontFamily = 'Arial, sans-serif';
-
-                            switch (textPos) {
-                                case 'left':
-                                    label.style.right = '12px';
-                                    label.style.top = '50%';
-                                    label.style.transform = 'translateY(-50%)';
-                                    break;
-                                case 'bottom':
-                                    label.style.top = '10px';
-                                    label.style.left = '50%';
-                                    label.style.transform = 'translateX(-50%)';
-                                    break;
-                                case 'right-center':
-                                    label.style.left = '15px';
-                                    label.style.top = '50%';
-                                    label.style.transform = 'translateY(-50%)';
-                                    break;
-                            }
-                            el.appendChild(label);
-                        }
-                        return el;
-                    }
-
-                    // 1. Outer Dimensions (Gray Scale Style)
-                    // Left Ruler (4.5cm)
-                    // A long vertical line on the left, slightly outside the image
-                    const leftRuler = createStyleLine('0%', '-20px', '10px', '100%', '', '4.5公分', 'left', '#333');
-                    leftRuler.style.borderLeft = '1px solid #666';
-                    leftRuler.style.borderTop = '1px solid #666';
-                    leftRuler.style.borderBottom = '1px solid #666';
-                    overlay.appendChild(leftRuler);
-
-                    // Bottom Ruler (3.5cm)
-                    // A long horizontal line on the bottom
-                    const bottomRuler = createStyleLine('100%', '0%', '100%', '10px', '', '3.5公分', 'bottom', '#333');
-                    bottomRuler.style.top = 'calc(100% + 10px)';
-                    bottomRuler.style.borderLeft = '1px solid #666';
-                    bottomRuler.style.borderRight = '1px solid #666';
-                    bottomRuler.style.borderBottom = '1px solid #666';
-                    overlay.appendChild(bottomRuler);
-
-                    // 2. Right Side: Compliance Check (Red)
-                    // The spec says Head must be 3.2cm - 3.6cm.
-                    // In 4.5cm photo:
-                    // 3.2cm = 71.1%
-                    // 3.6cm = 80.0%
-                    // Top Start (Hair) = 10% (0.45cm)
-
-                    // Top Limit Line (Hair Top) -> at 10%
-                    const topLimitY = 10.0;
-                    // Bottom Limit Line (Chin) -> should fall between (10+71.1)% and (10+80.0)%
-                    // i.e., 81.1% to 90.0%.
-                    // We draw the "Range Bracket".
-
-                    // Dashed Line at Top (10%)
-                    overlay.appendChild(createStyleLine(topLimitY + '%', '0', '100%', '1px', '1px dashed red', ''));
-
-                    // Dashed Line at 86% (Avg of 3.2-3.6 base) or just mark the Max/Min?
-                    // Let's mark the "Chin Line" at safe max (90%)?
-                    // Or better: Draw the Bracket encompassing the valid Head Height.
-                    // Bracket Start: 10%
-                    // Bracket End: 10 + 75.5 (Average 3.4cm) ? No user wants range.
-                    // Actually, usually the bracket spans the *actual* head height.
-                    // But here we want to show the Standard.
-                    // Standard Bracket: From 10% to ~86%.
-
-                    const bracketTop = 10.0;
-                    const bracketHeight = 76.0; // 3.42cm (Avg)
-
-                    const rightBracket = createStyleLine(bracketTop + '%', '100%', '10px', bracketHeight + '%', '', '應介於 3.2 - 3.6 cm', 'right-center');
-                    rightBracket.style.borderTop = '2px solid red';
-                    rightBracket.style.borderBottom = '2px solid red';
-                    rightBracket.style.borderRight = '2px solid red';
-                    overlay.appendChild(rightBracket);
-
-                    // Also draw dashed line for Chin at bottom of bracket?
-                    overlay.appendChild(createStyleLine((bracketTop + bracketHeight) + '%', '0', '100%', '1px', '1px dashed red', ''));
-
-
-                    // Wrapper to hold image + guides together tightly
-                    if (!document.getElementById('img-wrapper')) {
-                        const wrapper = document.createElement('div');
-                        wrapper.id = 'img-wrapper';
-                        wrapper.style.position = 'relative';
-                        wrapper.style.display = 'inline-block';
-                        wrapper.style.lineHeight = '0'; // Remove font gap
-                        wrapper.style.boxShadow = '0 0 15px rgba(0,0,0,0.1)';
-                        wrapper.style.margin = '20px'; // Space for rulers
-                        mainPreview.parentNode.insertBefore(wrapper, mainPreview);
-                        wrapper.appendChild(mainPreview);
-                        wrapper.appendChild(overlay);
-                    } else {
-                        // Update overlay
-                        const wrap = document.getElementById('img-wrapper');
-                        const old = wrap.querySelector('.guide-overlay');
-                        if (old) old.remove();
-                        wrap.appendChild(overlay);
-                    }
-                }
-            }
-
-            startCheckProcess();
-
-        } else { alert("錯誤: " + (data.error || "未知錯誤")); }
-    } catch (e) {
-        UI.showLoading(false);
-        alert("連線錯誤: " + e.message);
-    }
-}
-
-async function startCheckProcess() {
-    const loadingDiv = document.getElementById('report-loading');
-    const contentDiv = document.getElementById('report-content');
-
-    if (!loadingDiv) return;
-
-    if (loadingDiv) loadingDiv.classList.remove('d-none');
-    if (contentDiv) contentDiv.classList.add('d-none');
-
-    loadingDiv.innerHTML = `
-        <div class="text-center py-5">
-            <h5 class="mb-3 text-primary"><i class="bi bi-cpu-fill"></i> AI 智能審查中...</h5>
-            <div class="progress w-75 mx-auto shadow-sm" style="height: 10px;">
-                <div id="local-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 0%"></div>
-            </div>
-            <p class="mt-3 small text-muted" id="local-progress-text">正在初始化模型...</p>
-        </div>
-    `;
-
-    const bar = document.getElementById('local-progress-bar');
-    const text = document.getElementById('local-progress-text');
-    if (bar) bar.style.width = '0%';
-
-    const steps = [
-        { pct: 20, msg: "正在掃描五官定位..." },
-        { pct: 50, msg: "正在分析光線與陰影..." },
-        { pct: 80, msg: "正在比對外交部 BOCA 規範..." },
-        { pct: 100, msg: "生成報告中..." }
-    ];
-
-    let stepIdx = 0;
-    const interval = setInterval(() => {
-        if (stepIdx >= steps.length) {
-            clearInterval(interval);
+        // 1. Detect Face (Get Rect for future crop)
+        const detectRes = await API.detectFace(state.originalImage);
+        if (!detectRes.found) {
+            alert('未偵測到人臉，請更換照片');
             return;
         }
-        const s = steps[stepIdx];
-        if (bar) bar.style.width = `${s.pct}%`;
-        if (text) text.innerText = s.msg;
-        stepIdx++;
-    }, 400);
+        state.faceData = detectRes; // Store for phase 2
 
+        // 2. Run Validation (Azure Analysis) - No Cloudinary cost yet
+        const checkRes = await API.runCheckApi(state.originalImage, state.spec);
+
+        // Step 2: Show Audit Report (Modal 2)
+        UI.showAuditReport(
+            state.originalImage,
+            checkRes.results,
+            () => runProductionPhase(), // On Proceed
+            () => { uploadInput.value = ''; } // On Retry
+        );
+
+    } catch (err) {
+        console.error("Audit Failed:", err);
+        alert("審查過程發生錯誤，請稍後再試。");
+    }
+}
+
+// Phase 2: Production (Processing)
+async function runProductionPhase() {
     try {
-        console.log("[DEBUG] Calling API.runCheckApi via wrapper...");
+        // 1. Process Image (Crop -> Lighting -> BG)
+        // detailed cropParams come from detectFace in Phase 1
+        const processRes = await API.processPreview(state.originalImage, state.faceData.suggestedCrop);
 
-        // [修正] 使用 API wrapper 函式，它內部有正確的 URL
-        const data = await API.runCheckApi(state.resultPhotos[0], state.currentSpecId);
+        if (processRes && processRes.photos && processRes.photos.length > 0) {
+            state.processedImage = 'data:image/jpeg;base64,' + processRes.photos[0];
 
-        console.log("[DEBUG] Check Result Received:", data);
+            // 2. Create Final Canvas Element from Result
+            const finalImg = new Image();
+            finalImg.onload = () => {
+                // Prepare Side-by-Side View
+                const finalBox = UI.showComparison(state.originalImage, finalImg); // finalImg unused logic in UI helper
 
-        setTimeout(() => {
-            renderReport(data);
-            if (loadingDiv) loadingDiv.classList.add('d-none');
-            if (contentDiv) contentDiv.classList.remove('d-none');
-        }, 1600);
-    } catch (e) {
-        console.error("[DEBUG] Check Process Failed:", e);
-        if (loadingDiv) loadingDiv.innerHTML = `
-            <div class="alert alert-danger text-center">
-                <i class="bi bi-exclamation-triangle-fill fs-1"></i><br>
-                <strong>審查失敗</strong><br>
-                <small>${e.message}</small><br>
-                <button class="btn btn-sm btn-outline-danger mt-2" onclick="startCheckProcess()">重試</button>
-            </div>
-        `;
-    }
-}
+                // Clear Box content to customized it
+                finalBox.innerHTML = '';
+                finalBox.style.position = 'relative';
+                finalBox.style.display = 'inline-block';
 
-function renderReport(data) {
-    try {
-        const container = document.getElementById('report-content');
-        if (!container) return;
+                // Append Image
+                finalBox.appendChild(finalImg);
 
-        let html = `<h5 class="fw-bold mb-3"><i class="bi bi-clipboard-check"></i> AI 審查報告</h5>`;
-        html += `<table class="table table-hover small"><tbody>`;
-
-        const categories = { 'basic': '🔹 基礎處理', 'compliance': '🔸 合規檢查', 'quality': '✨ 進階畫質' };
-        let currentCat = '';
-        let hasFatal = false;
-        let hasFixable = false;
-
-        if (data.results && Array.isArray(data.results)) {
-            const sorted = data.results.sort((a, b) => {
-                const order = { 'basic': 1, 'compliance': 2, 'quality': 3 };
-                return (order[a.category] || 99) - (order[b.category] || 99);
-            });
-
-            sorted.forEach(res => {
-                if (res.category !== currentCat) {
-                    currentCat = res.category;
-                    html += `<tr class="table-light"><td colspan="3" class="fw-bold">${categories[currentCat] || '其他'}</td></tr>`;
-                }
-                let icon = res.status === 'pass' ? '✅' : (res.status === 'warn' ? '⚠️' : '❌');
-                let color = res.status === 'pass' ? 'text-success' : (res.status === 'warn' ? 'text-warning' : 'text-danger');
-
-                if (res.status === 'fail') hasFatal = true;
-                if (res.category === 'quality' && res.status !== 'pass') hasFixable = true;
-                if (res.status !== 'pass') hasFixable = true;
-
-                html += `<tr><td>${res.item}</td><td class="text-muted">${res.standard || ''}</td><td class="${color}">${icon} ${res.value}</td></tr>`;
-            });
-        } else {
-            html += `<tr><td colspan="3" class="text-danger">無效的檢查結果格式</td></tr>`;
-        }
-        html += `</tbody></table>`;
-
-        if (hasFatal) {
-            html += `<div class="alert alert-danger"><i class="bi bi-x-circle-fill"></i> <strong>未通過：</strong> 建議重新拍攝或嘗試修復。</div>`;
-        } else if (hasFixable) {
-            html += `<div class="alert alert-warning"><i class="bi bi-exclamation-triangle-fill"></i> <strong>有疑慮：</strong> 建議使用智能修復。</div>`;
-        } else {
-            html += `<div class="alert alert-success"><i class="bi bi-check-circle-fill"></i> <strong>恭喜通過！</strong> 照片符合規範。</div>`;
+                // Apply Guides (Ministry Standard)
+                applyGuideOverlay(finalImg);
+            };
+            finalImg.src = state.processedImage;
         }
 
-        container.innerHTML = html;
-        renderActionButtons(hasFatal, hasFixable);
-    } catch (e) {
-        console.error("[DEBUG] Render Report Exception:", e);
-        const container = document.getElementById('report-content');
-        if (container) container.innerHTML = `<div class="alert alert-danger">報告渲染失敗: ${e.message}</div>`;
+    } catch (err) {
+        console.error("Production Failed:", err);
+        alert("製作過程發生錯誤，請稍後再試。");
     }
 }
 
-function renderActionButtons(hasFatal, hasFixable) {
-    const bar = document.getElementById('action-bar');
-    if (!bar) return;
+// Helper: Apply Guides (Ministry of Interior Standard)
+function applyGuideOverlay(targetImgElement) {
+    // Create Overlay for Ministry Standard Template
+    const overlay = document.createElement('div');
+    overlay.className = 'guide-overlay';
+    overlay.style.position = 'absolute';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.pointerEvents = 'none';
 
-    let btns = '';
-    btns += `<div class="d-flex gap-2">
-                <button class="btn btn-outline-dark" onclick="downloadImage('single')"><i class="bi bi-download"></i> 單張下載 (Free)</button>
-                <button class="btn btn-outline-primary" onclick="toggleEmailInput()"><i class="bi bi-envelope"></i> 寄到信箱</button>
-             </div>`;
+    // Helper for Lines
+    function createStyleLine(top, left, width, height, border, text, textPos, color = '#d00') {
+        const el = document.createElement('div');
+        el.style.position = 'absolute';
+        el.style.top = top;
+        el.style.left = left;
+        el.style.width = width;
+        el.style.height = height;
+        if (border) el.style.border = border;
+        el.style.boxSizing = 'border-box';
+        el.style.zIndex = '10';
 
-    btns += `<div class="d-flex gap-2">`;
-    if (userPlan === 'paid') {
-        btns += `<button class="btn btn-dark" onclick="downloadImage('layout')"><i class="bi bi-grid-3x3"></i> 下載 4x6 排版</button>`;
-    } else {
-        btns += `<button class="btn btn-dark" onclick="showPaymentModal()"><i class="bi bi-lock-fill"></i> 下載 4x6 排版</button>`;
-    }
+        if (text) {
+            const label = document.createElement('span');
+            label.innerText = text;
+            label.style.position = 'absolute';
+            label.style.color = color;
+            label.style.fontSize = '12px';
+            label.style.fontWeight = 'bold';
+            label.style.whiteSpace = 'nowrap';
+            label.style.fontFamily = 'Arial, sans-serif'; // Clean font
 
-    if (hasFixable || hasFatal) {
-        btns += `<button class="btn btn-warning fw-bold animate-pulse" onclick="startSmartFix()">
-                    <i class="bi bi-magic"></i> ✨ 智能修復加值服務
-                 </button>`;
-    }
-    btns += `</div>`;
-    bar.innerHTML = btns;
-}
-
-window.startSmartFix = async function () {
-    const btn = document.querySelector('button[onclick="startSmartFix()"]');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 修復中...'; }
-
-    try {
-        const res = await fetch(`${API.API_BASE_URL}/generate/fix`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image_base64: state.resultPhotos[0], action: 'all', watermark: true })
-        });
-        const fixData = await res.json();
-
-        if (fixData.image_base64) {
-            const mainImg = document.getElementById('main-preview-img');
-            const compareView = document.getElementById('compare-view');
-            if (mainImg) mainImg.classList.add('d-none');
-            if (compareView) compareView.classList.remove('d-none');
-
-            document.getElementById('compare-orig').src = state.originalBase64;
-            document.getElementById('compare-basic').src = `data:image/jpeg;base64,${state.resultPhotos[0]}`;
-            document.getElementById('compare-fix').src = `data:image/jpeg;base64,${fixData.image_base64}`;
-
-            const bar = document.getElementById('action-bar');
-            bar.innerHTML = `
-                <button class="btn btn-outline-secondary" onclick="cancelFix()">取消預覽</button>
-                <div class="d-flex gap-2">
-                    <span class="text-muted align-self-center small">滿意修復結果嗎？</span>
-                    <button class="btn btn-primary btn-lg fw-bold" onclick="showPaymentModal()">
-                        <i class="bi bi-unlock-fill"></i> 解鎖並取得圖片
-                    </button>
-                </div>
-            `;
+            switch (textPos) {
+                case 'left':
+                    label.style.right = '8px';
+                    label.style.top = '50%';
+                    label.style.transform = 'translateY(-50%)';
+                    break;
+                case 'bottom':
+                    label.style.top = '6px';
+                    label.style.left = '50%';
+                    label.style.transform = 'translateX(-50%)';
+                    break;
+                case 'right-center':
+                    label.style.left = '10px';
+                    label.style.top = '50%';
+                    label.style.transform = 'translateY(-50%)';
+                    break;
+            }
+            el.appendChild(label);
         }
-    } catch (e) { alert("修復失敗"); if (btn) btn.disabled = false; }
-}
-
-window.cancelFix = function () {
-    document.getElementById('compare-view').classList.add('d-none');
-    document.getElementById('main-preview-img').classList.remove('d-none');
-    startCheckProcess();
-}
-
-window.selectResult = function (color) {
-    const idx = color === 'white' ? 0 : 1;
-    state.selectedResultBg = idx;
-
-    const resWhite = document.getElementById('res-white');
-    const resBlue = document.getElementById('res-blue');
-    if (resWhite) resWhite.classList.remove('active');
-    if (resBlue) resBlue.classList.remove('active');
-
-    const targetBtn = document.getElementById(`res-${color}`);
-    if (targetBtn) targetBtn.classList.add('active');
-
-    const img = document.getElementById('previewImg');
-    if (img) {
-        img.src = `data:image/jpeg;base64,${state.resultPhotos[idx]}`;
-        img.classList.remove('d-none');
+        return el;
     }
 
-    const mainImg = document.getElementById('main-preview-img');
-    if (mainImg) {
-        mainImg.src = `data:image/jpeg;base64,${state.resultPhotos[idx]}`;
-    }
-}
+    // 1. Rulers (Gray)
+    const leftRuler = createStyleLine('0%', '-15px', '10px', '100%', '', '4.5公分', 'left', '#333');
+    leftRuler.style.borderLeft = '1px solid #999'; leftRuler.style.borderTop = '1px solid #999'; leftRuler.style.borderBottom = '1px solid #999';
+    overlay.appendChild(leftRuler);
 
-window.showPaymentModal = function () {
-    const modalEl = document.getElementById('paymentModal');
-    const modal = new bootstrap.Modal(modalEl);
-    const cards = document.getElementById('pricing-cards');
-    cards.innerHTML = `
-        ${renderPricingCard('單次通行', '39', '本次修復下載', false)}
-        ${renderPricingCard('7日衝刺', '139', '一週無限次數', true)}
-        ${renderPricingCard('月費訂閱', '339', '30天無限暢用', false)}
-        ${renderPricingCard('年費專家', '899', '平均 $75/月', false)}
-    `;
-    modal.show();
-}
+    const bottomRuler = createStyleLine('100%', '0%', '100%', '10px', '', '3.5公分', 'bottom', '#333');
+    bottomRuler.style.top = 'calc(100% + 5px)';
+    bottomRuler.style.borderLeft = '1px solid #999'; bottomRuler.style.borderRight = '1px solid #999'; bottomRuler.style.borderBottom = '1px solid #999';
+    overlay.appendChild(bottomRuler);
 
-function renderPricingCard(title, price, desc, isBest) {
-    return `
-        <div class="col-md-3">
-            <div class="card h-100 text-center p-3 pricing-card ${isBest ? 'best-value' : ''}" onclick="processPayment('${title}')">
-                <div class="card-body">
-                    <h5 class="card-title">${title}</h5>
-                    <h2 class="display-5 fw-bold my-3">$${price}</h2>
-                    <p class="text-muted">${desc}</p>
-                    <button class="btn ${isBest ? 'btn-warning' : 'btn-outline-primary'} w-100">選擇方案</button>
-                </div>
-            </div>
-        </div>
-    `;
-}
+    // 2. Compliance Bracket (Red)
+    // Head (Hair Top to Chin) = 3.2-3.6cm.
+    // In 4.5cm photo: Start at 10% (0.45cm).
+    // Height of bracket: ~3.4cm = 75.5%.
 
-window.processPayment = function (plan) {
-    if (confirm(`確認購買 [${plan}] 方案？\n(此為模擬付款)`)) {
-        localStorage.setItem('userPlan', 'paid');
-        userPlan = 'paid';
-        const modalEl = document.getElementById('paymentModal');
-        const modal = bootstrap.Modal.getInstance(modalEl);
-        modal.hide();
+    const bracketTop = 10.0;
+    const bracketHeight = 75.5;
 
-        alert("付款成功！");
+    // Top Line (Hair Limit)
+    overlay.appendChild(createStyleLine(bracketTop + '%', '0', '100%', '1px', '1px dashed red', ''));
 
-        if (!document.getElementById('compare-view').classList.contains('d-none')) {
-            cancelFix();
-        } else {
-            renderActionButtons(false, false);
-        }
-    }
-}
+    // The Bracket
+    const rightBracket = createStyleLine(bracketTop + '%', '100%', '10px', bracketHeight + '%', '', '應介於 3.2 - 3.6 cm', 'right-center');
+    rightBracket.style.borderTop = '2px solid red';
+    rightBracket.style.borderBottom = '2px solid red';
+    rightBracket.style.borderRight = '2px solid red';
+    overlay.appendChild(rightBracket);
 
-window.downloadImage = function (type) {
-    if (!state.resultPhotos || state.resultPhotos.length === 0) {
-        alert("無可下載的圖片"); return;
-    }
-    if (type === 'single') {
-        if (confirm("【免責聲明】本免費圖片僅供參考。\n下載？")) {
-            const link = document.createElement('a');
-            link.href = `data:image/jpeg;base64,${state.resultPhotos[state.selectedResultBg]}`;
-            link.download = `id_photo_single.jpg`;
-            link.click();
-        }
-    } else if (type === 'layout') {
-        API.generateLayoutApi(state.resultPhotos[state.selectedResultBg]).then(data => {
-            const link = document.createElement('a');
-            link.href = `data:image/jpeg;base64,${data.layout_image}`;
-            link.download = `id_photo_layout.jpg`;
-            link.click();
-        });
-    }
-}
+    // Bottom Line (Chin Limit)
+    overlay.appendChild(createStyleLine((bracketTop + bracketHeight) + '%', '0', '100%', '1px', '1px dashed red', ''));
 
-window.toggleUserProfile = function () {
-    const panel = document.getElementById('user-profile-panel');
-    if (panel) panel.classList.toggle('d-none');
-}
+    // 3. Wrapper
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'relative';
+    wrapper.style.display = 'inline-block';
+    wrapper.style.marginTop = '20px'; // Space for rulers
+    wrapper.style.marginLeft = '20px';
+    wrapper.style.marginBottom = '20px';
 
-window.toggleEmailInput = function () {
-    const email = prompt("請輸入您的 Email：");
-    if (email) window.sendEmail(email);
-};
-
-window.sendEmail = async function (email) {
-    try {
-        const res = await API.sendEmailApi(email, state.resultPhotos[state.selectedResultBg]);
-        alert("已發送！");
-    } catch (e) { alert("發送失敗"); }
+    targetImgElement.parentNode.insertBefore(wrapper, targetImgElement);
+    wrapper.appendChild(targetImgElement);
+    wrapper.appendChild(overlay);
 }
