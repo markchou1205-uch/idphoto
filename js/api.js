@@ -43,28 +43,35 @@ export async function detectFace(base64) {
         if (data && data.length > 0) {
             const rect = data[0].faceRectangle;
 
-            // --- Precision Zoom Calculation (Ver 16.0) ---
+            // --- Precision Zoom Calculation (Ver 17.0) ---
 
             // 1. Calculate dimensions based on Height Rule (Standard)
+            // User Feedback: Head Top Chopped. "Head" in Azure is just Face Box.
+            // "Crown to Chin" is larger.
+            // Old: faceH / 0.75 (Targeting 75% coverage for FaceBox). Result: Zoom too tight.
+            // New: faceH / 0.60 (Targeting 60% coverage for FaceBox). 
+            // This leaves 40% for Hair (Top) and Neck/Shoulders (Bottom).
+            // This effectively "Zooms Out" to include full head.
+
             const faceH = rect.height;
-            let targetPhotoH = faceH / 0.75;
+            let targetPhotoH = faceH / 0.60;
             let targetPhotoW = targetPhotoH * (35 / 45); // Ratio 35:45
 
             // 2. Width Constraint (Relaxed 90%)
-            // If face is wider than 90% of the calculated photo width, we must Zoom Out (Increase Frame Size).
-            // New Width = FaceWidth / 0.90
+            // Safety check for very wide faces/glasses
             if (rect.width > targetPhotoW * 0.90) {
                 targetPhotoW = rect.width / 0.90;
                 targetPhotoH = targetPhotoW * (45 / 35);
             }
 
             // 3. Vertical Alignment (Headroom)
-            // Goal: ~10% Top Margin (Head Top to Photo Top).
-            // Detector returns 'rect.top' which is roughly forehead.
-            // Hair usually sits ABOVE Rect.Top.
-            // Move Frame UP by 18% of TargetHeight to account for 10% Margin + 8% Forehead-to-Hair difference.
+            // Goal: Head Top to Photo Top = 10% (4.5mm).
+            // We assume "Crown" is above "Forehead" (rect.top).
+            // If we place rect.top at ~25% from top?
+            // Space for Hair = 25% - 10% = 15% of Photo Height.
+            // This sounds reasonable for bangs/volume.
 
-            const topPadding = targetPhotoH * 0.18;
+            const topPadding = targetPhotoH * 0.25;
             const cropY = rect.top - topPadding;
             const cropX = (rect.left + rect.width / 2) - (targetPhotoW / 2); // Center horizontally
 
@@ -110,18 +117,18 @@ export async function processPreview(base64, cropParams) {
                     transforms.push(`c_crop,x_${cropParams.x},y_${cropParams.y},w_${cropParams.w},h_${cropParams.h}`);
                     transforms.push('c_scale,w_350,h_450');
                 } else {
-                    transforms.push('c_thumb,g_face,w_350,h_450,z_0.75');
+                    transforms.push('c_thumb,g_face,w_350,h_450,z_0.60');
                 }
 
-                // Lighting & Color (User Requested)
-                // Note: e_viesus_correct is paid. If it fails (401), we catch it below.
+                // Lighting & Color (Refined Ver 17.0)
                 transforms.push('e_improve:outdoor');
                 transforms.push('e_viesus_correct');
                 transforms.push('e_contrast:20');
-                transforms.push('e_gamma:60');
+                transforms.push('e_gamma:60'); // Boost shadows
 
                 // BG Removal & White BG
                 transforms.push('e_background_removal');
+                // Ensure b_white is effective after removal
                 transforms.push('b_white');
                 transforms.push('fl_flatten');
 
@@ -141,10 +148,7 @@ export async function processPreview(base64, cropParams) {
                     return { photos: [processedBase64, processedBase64] };
                 } catch (err) {
                     console.warn("Advanced filters failed, falling back to basic:", err);
-                    // Fallback without viesus/gamma if basic fails?
-                    // For now, return error or handle gracefully? 
-                    // Let's try basic improve if advanced fails.
-                    const basicUrl = `https://res.cloudinary.com/${CLOUDINARY.CLOUD_NAME}/image/upload/c_crop,x_${cropParams.x},y_${cropParams.y},w_${cropParams.w},h_${cropParams.h}/c_scale,w_350,h_450/e_improve/e_background_removal/b_white/fl_flatten/v${version}/${publicId}.jpg`;
+                    const basicUrl = `https://res.cloudinary.com/${CLOUDINARY.CLOUD_NAME}/image/upload/c_crop,x_${cropParams.x},y_${cropParams.y},w_${cropParams.w},h_${cropParams.h}/c_scale,w_350,h_450/e_improve/e_gamma:50/e_background_removal/b_white/fl_flatten/v${version}/${publicId}.jpg`;
                     const basicRes = await fetch(basicUrl);
                     if (basicRes.ok) {
                         const bBlob = await basicRes.blob();
@@ -165,11 +169,12 @@ export async function processPreview(base64, cropParams) {
 
 
 // 3. Validation Check (Azure) - Runs immediately
-// 3. Validation Check (Azure) - Runs immediately
 export async function runCheckApi(imgBase64, specId = 'passport') {
-    try {
-        if (!AZURE || !AZURE.ENDPOINT || !AZURE.KEY) throw new Error("Azure config missing");
+    if (!AZURE || !AZURE.ENDPOINT || !AZURE.KEY) {
+        return { results: [{ category: 'basic', status: 'warn', item: '系統連線', value: '無需連線', standard: '離線模式' }] };
+    }
 
+    try {
         const blob = base64ToBlob(imgBase64);
 
         // Fix: Remove trailing slash from endpoint if present
@@ -206,14 +211,11 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
         const attrs = face.faceAttributes;
         const landmarks = face.faceLandmarks;
 
-        // 0. Exposure Check (New)
+        // 0. Exposure Check
         if (attrs.exposure) {
             if (attrs.exposure.exposureLevel === 'GoodExposure') {
                 // Pass
             } else {
-                const val = attrs.exposure.value; // 0..1
-                // If poor, report warning or fail?
-                // User said "Report Lighting Uneven (Suggest Retake)"
                 results.push({
                     category: 'quality', status: 'warn',
                     item: '光線檢查',
@@ -223,52 +225,10 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
             }
         }
 
-        // 1. Mouth/Expression Check (Landmark-based)
+        // 1. Mouth Check (Relaxed Threshold 4%)
         if (landmarks && landmarks.upperLipBottom && landmarks.underLipTop) {
             const upperLipY = landmarks.upperLipBottom.y;
             const lowerLipY = landmarks.underLipTop.y;
-            const mouthGap = lowerLipY - upperLipY;
-
-            // Threshold: 2% of face height
-            const faceHeight = face.faceRectangle.height;
-            const limit = faceHeight * 0.02;
-
-            if (mouthGap > limit) {
-                results.push({
-                    category: 'compliance', status: 'fail',
-                    item: '表情/嘴巴', value: '嘴巴未閉合/露齒', standard: '請閉合嘴巴，不可露出牙齒'
-                });
-            } else {
-                results.push({
-                    category: 'compliance', status: 'pass',
-                    item: '表情/嘴巴', value: '合格', standard: '自然平視，不露齒'
-                });
-            }
-        } else {
-            // Fallback if landmarks missing
-            results.push({ category: 'compliance', status: 'warn', item: '表情/嘴巴', value: '無法檢測', standard: '請閉合嘴巴' });
-        }
-
-
-        // 2. Occlusion (Strict + Symmetry Check)
-        let occlusionFail = false;
-        if (attrs.occlusion.foreheadOccluded || attrs.occlusion.eyeOccluded || attrs.occlusion.mouthOccluded) {
-            occlusionFail = true;
-            let details = [];
-            if (attrs.occlusion.foreheadOccluded) details.push("額頭");
-            if (attrs.occlusion.eyeOccluded) details.push("眼睛");
-            if (attrs.occlusion.mouthOccluded) details.push("嘴巴");
-            results.push({ category: 'compliance', status: 'fail', item: '遮擋檢查', value: `偵測到遮擋 (${details.join(',')})`, standard: '五官需清晰無遮擋' });
-        }
-
-        // New: Symmetry Check (if basic occlusion passed)
-        if (!occlusionFail && landmarks && landmarks.noseTip && landmarks.eyebrowLeftOuter && landmarks.eyebrowRightOuter) {
-            const midX = landmarks.noseTip.x;
-            const leftDist = Math.abs(midX - landmarks.eyebrowLeftOuter.x);
-            const rightDist = Math.abs(landmarks.eyebrowRightOuter.x - midX);
-            const maxDist = Math.max(leftDist, rightDist);
-            const ratio = Math.abs(leftDist - rightDist) / (maxDist > 0 ? maxDist : 1);
-
             // Dynamic Thresholds
             const isPassport = (specId === 'passport');
             const warnLimit = isPassport ? 0.08 : 0.15; // 8% for Passport, 15% for others

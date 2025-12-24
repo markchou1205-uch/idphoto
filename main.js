@@ -252,7 +252,7 @@ window.processImage = async function () {
                     overlay.appendChild(sizeLabel);
 
                     // Ensure parent styles are unified (Remove gray spacing if any)
-                    mainPreview.parentElement.style.backgroundColor = '#e0e0e0'; // Unified Gray
+                    mainPreview.parentElement.style.backgroundColor = '#F0F0F0'; // Unified Gray
                     mainPreview.parentElement.style.padding = '40px';
                     mainPreview.parentElement.style.display = 'flex';
                     mainPreview.parentElement.style.justifyContent = 'center';
