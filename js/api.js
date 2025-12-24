@@ -225,47 +225,58 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
             }
         }
 
-        // 1. Mouth Check (Relaxed Threshold 4%)
+        // 1. Mouth/Expression Check (Landmark-based)
         if (landmarks && landmarks.upperLipBottom && landmarks.underLipTop) {
             const upperLipY = landmarks.upperLipBottom.y;
             const lowerLipY = landmarks.underLipTop.y;
-            // Dynamic Thresholds
-            const isPassport = (specId === 'passport');
-            const warnLimit = isPassport ? 0.08 : 0.15; // 8% for Passport, 15% for others
-            const failLimit = 0.15; // >15% is fail for everyone (or specifically strict for passport?)
+            const mouthOpen = Math.abs(lowerLipY - upperLipY);
+            const faceH = face.faceRectangle.height;
+            const mouthRatio = (mouthOpen / faceH) * 100;
 
-            // Logic:
-            // Warn: warnLimit <= ratio < 0.15
-            // Fail: ratio >= 0.15 (for Passport? Or always?) 
-            // User said: "> 15% fail (Red)". "10~15% warn".
-            // Let's implement:
-            // If Ratio > 15% -> Fail (Red)
-            // Else If Ratio > WarnLimit -> Warn (Yellow)
-
-            if (ratio > 0.15) {
-                results.push({
-                    category: 'compliance', status: 'fail',
-                    item: '遮擋檢查 (對稱性)',
-                    value: `眉毛嚴重偏移 (${(ratio * 100).toFixed(1)}%)`,
-                    standard: '請確認是否被瀏海遮擋'
-                });
-            } else if (ratio > warnLimit) {
-                results.push({
-                    category: 'compliance', status: 'warn',
-                    item: '遮擋檢查 (對稱性)',
-                    value: `眉毛輕微偏移 (${(ratio * 100).toFixed(1)}%)`,
-                    standard: '請確認是否被瀏海遮擋'
-                });
+            // Relaxed Threshold: 4% (Ver 17.0)
+            if (mouthRatio > 4.0) {
+                results.push({ category: 'compliance', status: 'fail', item: '表情/嘴巴', value: '嘴巴未閉合/露齒', standard: '自然平視，不露齒' });
             } else {
-                results.push({
-                    category: 'compliance', status: 'pass',
-                    item: '遮擋檢查', value: '無遮擋 (請人工確認眉耳露出)', // Adding prompt as requested
-                    standard: '五官需清晰無遮擋'
-                });
+                results.push({ category: 'compliance', status: 'pass', item: '表情/嘴巴', value: '自然平視，不露齒', standard: '合格' });
             }
-        } else if (!occlusionFail) {
-            // Fallback if symmetry calc failed but occlusion passed
-            results.push({ category: 'compliance', status: 'pass', item: '遮擋檢查', value: '無遮擋 (請人工確認眉耳露出)', standard: '五官需清晰無遮擋' });
+        } else {
+            // Fallback if landmarks missing
+            results.push({ category: 'compliance', status: 'warn', item: '表情/嘴巴', value: '無法檢測', standard: '請閉合嘴巴' });
+        }
+
+        // 2. Occlusion (Symmetry Check)
+        const isPassport = (specId === 'passport');
+        const symmetryThresholdWarn = isPassport ? 18.0 : 20.0;
+        const symmetryThresholdFail = isPassport ? 22.0 : 25.0;
+
+        let symmetryFail = false;
+
+        if (landmarks && landmarks.eyebrowLeftOuter && landmarks.eyebrowRightOuter) {
+            const leftBrowY = (landmarks.eyebrowLeftOuter.y + landmarks.eyebrowLeftInner.y) / 2;
+            const rightBrowY = (landmarks.eyebrowRightOuter.y + landmarks.eyebrowRightInner.y) / 2;
+            const diffY = Math.abs(leftBrowY - rightBrowY);
+            const faceH = face.faceRectangle.height;
+            const symRatio = (diffY / faceH) * 100;
+
+            if (symRatio > symmetryThresholdFail) {
+                symmetryFail = true;
+                results.push({ category: 'compliance', status: 'fail', item: '遮擋檢查 (對稱性)', value: `眉毛嚴重偏移 (${symRatio.toFixed(1)}%)`, standard: '請確認是否被瀏海遮擋' });
+            } else if (symRatio > symmetryThresholdWarn) {
+                results.push({ category: 'compliance', status: 'warn', item: '遮擋檢查 (對稱性)', value: `眉毛輕微偏移 (${symRatio.toFixed(1)}%)`, standard: '請確認是否被瀏海遮擋' });
+            } else {
+                results.push({ category: 'compliance', status: 'pass', item: '遮擋檢查 (對稱性)', value: 'Pass', standard: '未偵測到遮擋' });
+            }
+        } else {
+            // Fallback if symmetry calc failed (e.g. no eyebrows detected)
+            let details = [];
+            if (attrs.occlusion && attrs.occlusion.foreheadOccluded) details.push("額頭遮擋");
+            if (attrs.occlusion && attrs.occlusion.eyeOccluded) details.push("眼睛遮擋");
+
+            if (details.length > 0) {
+                results.push({ category: 'compliance', status: 'fail', item: '遮擋檢查', value: `偵測到遮擋 (${details.join(',')})`, standard: '五官需清晰無遮擋' });
+            } else {
+                results.push({ category: 'compliance', status: 'pass', item: '遮擋檢查', value: '無遮擋 (請人工確認眉耳露出)', standard: '五官需清晰無遮擋' });
+            }
         }
 
         // 3. Ear Check (Fixed Reminder)
