@@ -276,15 +276,19 @@ export const UI = {
         leftCol.className = 'text-center';
         leftCol.innerHTML = '<h5 class="fw-bold mb-3">原始照片</h5>';
 
-        // Clone original image to avoid moving the reference if needed, 
-        // or just use valid src. origImg is an Image object.
-        // We really want to display it, so append it.
-        // BUT origImg might be huge.
-        origImg.className = 'shadow-sm rounded';
-        origImg.style.maxHeight = '300px';
-        origImg.style.maxWidth = '100%';
-        origImg.style.objectFit = 'contain';
-        leftCol.appendChild(origImg);
+        let imgEl;
+        if (typeof origImg === 'string') {
+            imgEl = new Image();
+            imgEl.src = origImg;
+        } else {
+            imgEl = origImg; // Assume it's an element
+        }
+
+        imgEl.className = 'shadow-sm rounded';
+        imgEl.style.maxHeight = '300px';
+        imgEl.style.maxWidth = '100%';
+        imgEl.style.objectFit = 'contain';
+        leftCol.appendChild(imgEl);
         mainWrapper.appendChild(leftCol);
 
         // 2. Arrow (Center)
