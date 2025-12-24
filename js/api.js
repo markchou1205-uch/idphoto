@@ -203,23 +203,11 @@ export async function processPreview(base64, cropParams) {
                     return { photos: [processedBase64, processedBase64] };
                 } catch (err) {
                     console.warn("Advanced filters failed:", err);
-                    // Try Safe Mode (Crop Only)
-                     const basicUrl = `https://res.cloudinary.com/${CLOUDINARY.CLOUD_NAME}/image/upload/c_crop,x_${cropParams.x},y_${cropParams.y},w_${cropParams.w},h_${cropParams.h}/c_scale,w_350,h_450/e_improve/e_gamma:50/fl_flatten/v${version}/${publicId}.jpg`;
-
-                    try {
-                        const basicRes = await fetch(basicUrl);
-                        if (basicRes.ok) {
-                            const bBlob = await basicRes.blob();
-                            const bB64 = await new Promise(r => { const rd = new FileReader(); rd.onloadend = () => r(rd.result.split(',')[1]); rd.readAsDataURL(bBlob); });
-                            return { photos: [bB64, bB64] };
-                        }
-                    } catch (fallbackErr) {
-                         console.error("Cloudinary Safe Mode also failed:", fallbackErr);
-                    }
-                    // If safe mode fails, fall through to local crop
+                    console.log("Cloudinary advanced filters failed. Skipping Safe Mode and falling back to Local Crop immediately to ensure result.");
+                    // Fall through to local crop
                 }
             } else {
-                 console.warn(`Cloudinary Upload Failed: ${uploadRes.status}`);
+                console.warn(`Cloudinary Upload Failed: ${uploadRes.status}`);
             }
         }
     } catch (e) {
