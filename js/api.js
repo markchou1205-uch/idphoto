@@ -266,7 +266,7 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
         }
 
         const face = azureData[0];
-        console.log("Processing Face Attributes...");
+        // console.log("Processing Face Attributes...");
         // Do NOT log 'face' or 'attrs' if they contain massive data, but they usually don't.
         // The massive log seen by user likely came from a 'console.log(imgBase64)' that I am removing/fixing above.
         // Wait, where was the massive log? User said 'data:image...' appeared after 'Processing Face Attributes...'.
