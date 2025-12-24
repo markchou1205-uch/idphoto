@@ -1,7 +1,7 @@
 import { state } from './js/state.js';
 import * as UI from './js/ui.js';
-import * as API from './js/api.js';
-import * as Editor from './js/editor.js';
+import { API } from './js/api.js';
+import { CONFIG } from './js/config.js';
 
 const DEFAULT_SPECS = {
     "passport": { "name": "護照 / 身分證", "desc": "2吋 (35x45mm) - 頭部 3.2~3.6cm", "width_mm": 35, "height_mm": 45 },

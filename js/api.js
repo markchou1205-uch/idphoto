@@ -305,27 +305,6 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
             results.push({ category: 'compliance', status: 'pass', item: '眼鏡檢查', value: '無配戴眼鏡', standard: '建議不戴眼鏡' });
         }
 
-        // 5. Ratio Check (New)
-        // Face Height should be 70%~80% of Image Height (Standard 75% -> 3.4cm/4.5cm)
-        // face.faceRectangle.height is the detected face height (including calc error, but close enough)
-        // Note: Azure runs detection on the *Processed Crop*. So image height is the full height of the crop.
-        // We can get image height from metadata or assume it's the blob size?
-        // Actually face.faceRectangle is relative to the *image sent*. 
-        // We sent the *processed/cropped* image (blob).
-        // Azure doesn't explicitly return "Image Dimensions" in the JSON, but FaceRectangle coordinates are absolute.
-        // We can infer image height from the crop params we *intended*? No, we don't have them here easily.
-        // HOWEVER, we can just say: Ratio = face.faceRectangle.height / (face.faceRectangle.top + face.faceRectangle.height + smile...?)
-        // Better: We *know* the ratio should be 75%. 
-        // Let's rely on the ratio of `face.faceRectangle.height` to the *assumed* image height if we can't get it.
-        // Wait, "faceData" in main.js has original image. 
-        // Here we are checking the *Result Photo*.
-        // Let's assume the result photo matches the aspect ratio of 3.5/4.5.
-        // If we really want accurate ratio, we need the Image Height.
-        // We can load the blob into an Image object to get height? Too slow?
-        // Let's calculate based on `faceRectangle` vs known standard.
-        // Actually, if we use `detection_01` on the cropped image, `faceRectangle` will tell us the face size in pixels.
-        // We can estimate the Image Height if we assume the face is centered? No.
-        // Wait, standard 2-inch photo is 4.5cm.
         // Ratio = FaceHeight / PhotoHeight.
         // If we don't know PhotoHeight, we can't calculate Ratio.
         // BUT `runCheckApi` receives `imgBase64`. We can get dimensions from it!
