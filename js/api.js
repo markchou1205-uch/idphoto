@@ -40,8 +40,16 @@ export async function detectFace(base64) {
             body: blob
         });
 
-        if (!res.ok) throw new Error(`Azure Error: ${res.status}`);
+        console.log("Azure Response Status:", res.status);
+
+        if (!res.ok) {
+            const txt = await res.text();
+            console.error("Azure Error Body:", txt);
+            throw new Error(`Azure Error: ${res.status}`);
+        }
+
         const data = await res.json();
+        console.log("Azure Detect Data:", data);
 
         if (data && data.length > 0) {
             const rect = data[0].faceRectangle;
