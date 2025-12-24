@@ -56,13 +56,16 @@ async function handleFileUpload(e) {
         console.log("File Reader Loaded");
         try {
             let rawResult = event.target.result;
-            // Fix: Detect and remove double prefix if present (rare bug safeguard)
-            if (rawResult.match(/data:image\/.*?;base64,data:image\/.*?;base64,/)) {
-                console.warn("Detected double base64 prefix, fixing...");
-                rawResult = rawResult.replace(/^data:image\/.*?;base64,/, '');
+
+            // Debug: Check for double header
+            if (rawResult.startsWith('data:image/jpeg;base64,data:')) {
+                console.warn("DOUBLE HEADER DETECTED! Fixing...");
+                // Replace any sequence of (data:image...base64,)+ with a single one
+                rawResult = rawResult.replace(/^(data:image\/[a-zA-Z]+;base64,)+/, 'data:image/jpeg;base64,');
             }
+
             state.originalImage = rawResult;
-            console.log("State Updated, Calling UI.showUseConfirm");
+            console.log("State Updated (Sanitized), Calling UI.showUseConfirm");
 
             // Step 1: Confirm Usage (Modal 1)
             UI.showUseConfirm(state.spec === 'passport' ? '護照/身分證 (35x45mm)' : '其他證件', async () => {
