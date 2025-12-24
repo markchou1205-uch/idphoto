@@ -215,11 +215,18 @@ export async function processPreview(base64, cropParams) {
 // 3. Validation Check (Azure) - Runs immediately
 export async function runCheckApi(imgBase64, specId = 'passport') {
     if (!AZURE || !AZURE.ENDPOINT || !AZURE.KEY) {
-        return { results: [{ category: 'basic', status: 'warn', item: '系統連線', value: '無需連線', standard: '離線模式' }] };
+        console.error("Azure config missing in runCheckApi");
+        return { results: [{ category: 'basic', status: 'fail', item: '系統錯誤', value: 'API Key Missing' }] };
     }
 
     try {
-        const blob = base64ToBlob(imgBase64);
+        // Fix: Do not add prefix if already present.
+        const base64Content = imgBase64.startsWith('data:') ? imgBase64 : `data:image/jpeg;base64,${imgBase64}`;
+
+        // Log length only
+        console.log("Calling runCheckApi. Len:", base64Content.length);
+
+        const blob = base64ToBlob(base64Content);
 
         // Fix: Remove trailing slash from endpoint if present
         const endpoint = AZURE.ENDPOINT.endsWith('/') ? AZURE.ENDPOINT.slice(0, -1) : AZURE.ENDPOINT;
