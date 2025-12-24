@@ -140,9 +140,10 @@ export async function processPreview(base64, cropParams) {
                     transforms.push('c_thumb,g_face,w_350,h_450,z_0.75');
                 }
 
-                // 3. Improve Lighting & Color (New params)
-                transforms.push('e_improve:outdoor'); // Outdoor profile handles skin tones well
-                transforms.push('e_viesus_correct'); // Color correction
+                // 3. Improve Lighting & Color
+                // Reverted 'e_viesus_correct' (Paid Add-on causing 401)
+                // Reverted to standard 'e_improve' for reliability
+                transforms.push('e_improve');
 
                 // 4. Remove BG and set White
                 // Note: b_white must be applied effectively. 
@@ -160,7 +161,11 @@ export async function processPreview(base64, cropParams) {
                 const processedUrl = `https://res.cloudinary.com/${CLOUDINARY.CLOUD_NAME}/image/upload/${transformStr}/v${version}/${publicId}.jpg`;
                 // Changed to .jpg to ensure no transparency alpha channel issues, enforcing white bg.
 
-                const processedBlob = await fetch(processedUrl).then(r => r.blob());
+                // Fetch Blob with Error Handling
+                const procRes = await fetch(processedUrl);
+                if (!procRes.ok) throw new Error(`Cloudinary Gen Failed: ${procRes.status}`);
+
+                const processedBlob = await procRes.blob();
                 const processedBase64 = await new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onloadend = () => resolve(reader.result.split(',')[1]);
