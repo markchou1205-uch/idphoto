@@ -80,22 +80,13 @@ async function handleFileUpload(e) {
         try {
             let rawResult = event.target.result;
 
-            // --- ULTIMATE SANITIZER ---
-            // Issue: Double headers like "data:image/jpeg;base64,data:image/jpeg;base64,..."
-            // Fix: Split by 'base64,' and take the LAST part (the actual data), then re-add prefix.
+            // --- HARDCORE SANITIZER ---
+            // 1. Remove ALL occurrences of data header (Global Regex)
+            const cleanBody = rawResult.replace(/(data:image\/[a-zA-Z]+;base64,)/g, '');
+            // 2. Add ONE correct header
+            state.originalImage = `data:image/jpeg;base64,${cleanBody}`;
 
-            if (rawResult.indexOf('base64,') !== -1) {
-                const parts = rawResult.split('base64,');
-                if (parts.length > 2) {
-                    console.warn("Multiple base64 headers detected! Cleaning...");
-                    // parts[parts.length-1] is the data.
-                    const cleanData = parts[parts.length - 1];
-                    rawResult = `data:image/jpeg;base64,${cleanData}`;
-                }
-            }
-
-            state.originalImage = rawResult;
-            console.log("State Updated (Cleaned), Length:", state.originalImage.length);
+            console.log("State Updated (Total Sanitization). Length:", state.originalImage.length);
 
             UI.showUseConfirm(DEFAULT_SPECS[state.spec].name, async () => {
                 console.log("Modal Confirmed, Starting Audit");
