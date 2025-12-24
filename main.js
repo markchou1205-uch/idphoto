@@ -11,7 +11,7 @@ let state = {
 };
 
 // --- DOM Elements ---
-const uploadInput = document.getElementById('uploadInput');
+const uploadInput = document.getElementById('fileInput'); // Fixed ID from 'uploadInput' to 'fileInput'
 
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -29,9 +29,21 @@ window.handleFileUpload = handleFileUpload;
 
 // --- Handlers ---
 async function handleFileUpload(e) {
-    console.log("Upload Handler Triggered");
-    // Robust fallback: If 'e' is undefined (called from HTML without args), use global input
-    const input = (e && e.target) ? e.target : document.getElementById('uploadInput');
+    console.log("Upload Handler Triggered", e);
+    // Robust fallback:
+    // Case 1: called via onchange="handleFileUpload(this)" -> e is InputElement
+    // Case 2: called via addEventListener -> e is Event, e.target is InputElement
+    // Case 3: Global fallback
+
+    let input = null;
+    if (e instanceof HTMLInputElement) {
+        input = e;
+    } else if (e && e.target) {
+        input = e.target;
+    } else {
+        input = document.getElementById('fileInput');
+    }
+
     console.log("Input element:", input);
     const file = input && input.files ? input.files[0] : null;
     console.log("File detected:", file);
