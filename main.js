@@ -29,7 +29,10 @@ window.handleFileUpload = handleFileUpload;
 
 // --- Handlers ---
 async function handleFileUpload(e) {
-    const file = e.target.files[0];
+    // Robust fallback: If 'e' is undefined (called from HTML without args), use global input
+    const input = (e && e.target) ? e.target : document.getElementById('uploadInput');
+    const file = input && input.files ? input.files[0] : null;
+
     if (!file) return;
 
     // Reset input so same file can be selected again if needed (verification)
