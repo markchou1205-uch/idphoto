@@ -1,6 +1,6 @@
 import * as API from './js/api.js';
 import { UI } from './js/ui.js';
-import { CONFIG } from './js/config.js';
+// import { CONFIG } from './js/config.js'; // REMOVED: No such export
 
 // --- State ---
 let state = {
