@@ -55,7 +55,13 @@ async function handleFileUpload(e) {
     reader.onload = async (event) => {
         console.log("File Reader Loaded");
         try {
-            state.originalImage = event.target.result;
+            let rawResult = event.target.result;
+            // Fix: Detect and remove double prefix if present (rare bug safeguard)
+            if (rawResult.match(/data:image\/.*?;base64,data:image\/.*?;base64,/)) {
+                console.warn("Detected double base64 prefix, fixing...");
+                rawResult = rawResult.replace(/^data:image\/.*?;base64,/, '');
+            }
+            state.originalImage = rawResult;
             console.log("State Updated, Calling UI.showUseConfirm");
 
             // Step 1: Confirm Usage (Modal 1)
