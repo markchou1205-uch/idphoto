@@ -83,9 +83,19 @@ async function runAuditPhase() {
         state.faceData = detectRes; // Store for phase 2
 
         // 2. Run Validation (Azure Analysis) - No Cloudinary cost yet
+        console.log("Calling runCheckApi...");
         const checkRes = await API.runCheckApi(state.originalImage, state.spec);
+        console.log("runCheckApi Result:", checkRes);
+
+        if (!checkRes || !checkRes.results) {
+            throw new Error("Invalid check result from API");
+        }
+
+        // Debug Image Data
+        console.log("Original Image Prefix:", state.originalImage.substring(0, 50));
 
         // Step 2: Show Audit Report (Modal 2)
+        console.log("Showing Audit Report Modal...");
         UI.showAuditReport(
             state.originalImage,
             checkRes.results,

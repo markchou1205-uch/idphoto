@@ -206,6 +206,8 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
         // Fix: Use detection_01 which supports BOTH Landmarks & Attributes + Exposure.
         const url = `${endpoint}/face/v1.0/detect?returnFaceAttributes=glasses,occlusion,exposure&returnFaceLandmarks=true&detectionModel=detection_01&returnFaceId=false`;
 
+        console.log("runCheckApi Fetching URL:", url);
+
         const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -215,8 +217,11 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
             body: blob
         });
 
+        console.log("runCheckApi Status:", response.status);
+
         if (!response.ok) {
             const errData = await response.json();
+            console.error("runCheckApi Azure Error:", errData);
             throw new Error(errData.error?.message || `Azure API Error: ${response.status}`);
         }
 
