@@ -159,6 +159,12 @@ function triggerManualEdit() {
 }
 
 function renderResult(imgSrc) {
+    // Ensure View Switch
+    const dashboard = document.getElementById('dashboard-area');
+    const resultDash = document.getElementById('result-dashboard');
+    if (dashboard) dashboard.classList.add('d-none');
+    if (resultDash) resultDash.classList.remove('d-none');
+
     const finalImg = new Image();
     finalImg.onload = () => {
         // Use updated UI.showComparison which returns handles
