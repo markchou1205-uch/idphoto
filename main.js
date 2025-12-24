@@ -17,11 +17,9 @@ const uploadInput = document.getElementById('fileInput'); // Fixed ID from 'uplo
 document.addEventListener('DOMContentLoaded', () => {
     UI.initStyles();
 
-    if (uploadInput) {
-        // Remove existing listener if any to avoid duplicates (though reload clears it)
-        // Add listener
-        uploadInput.addEventListener('change', handleFileUpload);
-    }
+    // Legacy support: HTML calls handleFileUpload(this) via onchange.
+    // We do NOT need to addEventListener here, or it will fire twice.
+    // Confirmed via Debug Logs: double execution causing duplicate Modals.
 });
 
 // Expose for HTML inline calls (Legacy support)
