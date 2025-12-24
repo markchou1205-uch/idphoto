@@ -133,11 +133,14 @@ export const UI = {
                     </div>
                     
                     <!-- Right: Original Preview -->
-                    <div style="text-align:center">
+                    <div style="text-align:center" id="report-img-container">
                         <div class="report-section-title">原始照片預覽</div>
-                        <img src="${imgSrc}" style="max-width:100%; max-height:300px; border:1px solid #ccc; border-radius:4px;">
+                         <!-- Img will be appended safely -->
                     </div>
                 </div>
+
+                ${warningBlock}
+
 
                 ${warningBlock}
 
@@ -149,6 +152,17 @@ export const UI = {
         `;
 
         document.body.appendChild(overlay);
+
+        // Safely append Image
+        const img = document.createElement('img');
+        img.src = imgSrc;
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '300px';
+        img.style.border = '1px solid #ccc';
+        img.style.borderRadius = '4px';
+
+        const imgContainer = overlay.querySelector('#report-img-container');
+        if (imgContainer) imgContainer.appendChild(img);
 
         document.getElementById('modal-proceed-btn').onclick = () => {
             overlay.remove();

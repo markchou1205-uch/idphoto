@@ -226,18 +226,22 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
         }
 
         const azureData = await response.json();
+        console.log("Azure JSON Parsed", azureData);
 
         // --- Validation Logic ---
         const results = [];
 
         if (azureData.length === 0) {
+            console.log("No face detected in Azure result");
             results.push({ category: 'basic', status: 'fail', item: '人臉偵測', value: '未偵測到人臉', standard: '需清晰人臉' });
             return { results };
         }
 
         const face = azureData[0];
+        console.log("Processing Face Attributes...");
         const attrs = face.faceAttributes;
         const landmarks = face.faceLandmarks;
+
 
         // 0. Exposure Check
         if (attrs.exposure) {
