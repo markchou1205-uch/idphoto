@@ -39,7 +39,10 @@ export class ManualEditor {
                 <div id="editor-guides" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></div>
             </div>
             
-            <div style="margin-top:20px; display:flex; gap:15px; z-index:10001">
+            <div style="margin-top:20px; display:flex; gap:15px; z-index:10001; align-items:center;">
+                 <button class="id-btn id-btn-secondary" id="zoom-out" title="縮小"><i class="bi bi-dash-lg"></i> －</button>
+                 <button class="id-btn id-btn-secondary" id="zoom-in" title="放大"><i class="bi bi-plus-lg"></i> ＋</button>
+                 <div style="width:20px;"></div>
                  <button class="id-btn id-btn-secondary" id="editor-cancel">取消</button>
                  <button class="id-btn id-btn-primary" id="editor-confirm">確認建立成品</button>
             </div>
@@ -63,6 +66,16 @@ export class ManualEditor {
         this.overlay.querySelector('#editor-cancel').onclick = () => this.close();
         this.overlay.querySelector('#guide-toggle').onchange = (e) => {
             this.guides.style.display = e.target.checked ? 'block' : 'none';
+        };
+
+        // Zoom Buttons
+        this.overlay.querySelector('#zoom-in').onclick = () => {
+            this.scale *= 1.05;
+            this.draw();
+        };
+        this.overlay.querySelector('#zoom-out').onclick = () => {
+            this.scale *= 0.95;
+            this.draw();
         };
     }
 

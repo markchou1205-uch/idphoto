@@ -93,29 +93,30 @@ export async function detectFace(base64) {
                 const faceCoreH = chinY - eyebrowY;
 
                 // Hair Top
-                const estimatedHairHeight = faceCoreH * 0.2;
+                // Tuned: Increased from 0.2 to 0.5 to prevent cutting off high hair
+                const estimatedHairHeight = faceCoreH * 0.5;
                 hairTopY = eyebrowY - estimatedHairHeight;
 
                 console.log(`[Crop Logic] EyebrowY: ${eyebrowY}, ChinY: ${chinY}, CoreH: ${faceCoreH}, HairOffset: ${estimatedHairHeight}`);
             } else {
-                console.warn("[Crop Logic] Landmarks missing, using fallback 20% offset from top");
-                hairTopY = rect.top - (rect.height * 0.2);
+                console.warn("[Crop Logic] Landmarks missing, using fallback 40% offset from top");
+                hairTopY = rect.top - (rect.height * 0.4);
             }
 
             const fullHeadH = chinY - hairTopY;     // Total Head Height
 
             // 2. Target Ratio
-            // Formula: Target Photo Height = Full Head Height / 0.75
-            let targetPhotoH = fullHeadH / 0.75;
+            // Formula: Target Photo Height = Full Head Height / 0.70 (Zoomed out from 0.75)
+            let targetPhotoH = fullHeadH / 0.70;
 
             // Calculate Required Photo Width (35:45 aspect ratio)
             let targetPhotoW = targetPhotoH * (35 / 45);
 
             // 3. Width Constraint Check (Prevent ear chopping?)
-            // If Face Width > 82% of Target Width, zoom out.
-            if (rect.width > targetPhotoW * 0.82) {
+            // If Face Width > 75% of Target Width, zoom out.
+            if (rect.width > targetPhotoW * 0.75) {
                 // Adjust W to fit width
-                targetPhotoW = rect.width / 0.82;
+                targetPhotoW = rect.width / 0.75;
                 targetPhotoH = targetPhotoW * (45 / 35);
             }
 
