@@ -43,37 +43,48 @@ export async function detectFace(base64) {
         if (data && data.length > 0) {
             const rect = data[0].faceRectangle;
 
-            // --- Precision Zoom Calculation (Ver 18.0 - Hair Aware) ---
+            // --- Precision Zoom Calculation (Ver 19.0 - Strict Ministry Compliance) ---
 
-            // Problem: Azure "FaceRectangle" is Forehead-to-Chin. Real head includes Hair.
-            // Solution: Estimate Hair Height as 20% of Face Height.
+            // 1. Define Head Boundaries
+            // Azure provides 'rect' (Forehead to Chin).
+            // Real Head Top (Hair) is estimated at 20% above forehead.
             const faceH = rect.height;
-            const estimatedHairH = faceH * 0.20;
-            const visualHeadH = faceH + estimatedHairH; // Estimated "Crown to Chin"
+            const hairOffset = faceH * 0.20; // 20% for hair
+            const headTopY = rect.top - hairOffset; // True Top
+            const chinY = rect.top + rect.height;   // True Bottom
+            const fullHeadH = chinY - headTopY;     // Total Head Height (Hair to Chin)
 
-            // Goal: Visual Head Height should be ~77% of Photo Height (Midpoint of 3.2-3.6cm range)
-            // 3.4cm / 4.5cm = 0.755. Let's aim for 0.76 (76%).
-            let targetPhotoH = visualHeadH / 0.76;
-            let targetPhotoW = targetPhotoH * (35 / 45); // Ratio 35:45
+            // 2. Target Ratio
+            // Ministry Standard: Head Height (3.2 - 3.6cm) in 4.5cm Photo.
+            // Target Average: 3.4cm.
+            // Ratio: 3.4 / 4.5 = 0.755 (approx 76%).
 
-            // Width Constraint:
-            // Ensure wide faces/glasses fit with margin.
-            // If FaceWidth > 85% of PhotoWidth, Zoom Out.
-            if (rect.width > targetPhotoW * 0.85) {
-                targetPhotoW = rect.width / 0.85;
+            // Calculate Required Photo Height (Crop Height)
+            // If fullHeadH takes up 76% of the photo...
+            let targetPhotoH = fullHeadH / 0.76;
+
+            // Calculate Required Photo Width (35:45 aspect ratio)
+            let targetPhotoW = targetPhotoH * (35 / 45);
+
+            // 3. Width Constraint (Prevent chopping ears)
+            // If Face Width > 82% of Target Width, we must zoom out.
+            // (82% allows side margins for ears)
+            if (rect.width > targetPhotoW * 0.82) {
+                targetPhotoW = rect.width / 0.82;
                 targetPhotoH = targetPhotoW * (45 / 35);
             }
 
-            // Vertical Alignment (Hair-Safe Top Margin)
-            // Goal: Leave ~4.5mm (10%) space ABOVE the "Estimated Hair Top".
-            // Hair Top Y = rect.top - estimatedHairH.
-            // Crop Top Y = Hair Top Y - (10% of Photo Height).
+            // 4. Vertical Alignment (Crucial Step)
+            // The "Head Top" (headTopY) must be at exactly 4.5mm (10%) from the Top Edge.
+            // Top Margin = 10% of Target Photo Height.
+            const topMarginPx = targetPhotoH * 0.10;
 
-            const hairTopY = rect.top - estimatedHairH;
-            const topMargin = targetPhotoH * 0.10; // 4.5mm
+            // The Crop Box Y start position:
+            // CropY = HeadTopY - TopMarginPx
+            const cropY = headTopY - topMarginPx;
 
-            const cropY = hairTopY - topMargin;
-            const cropX = (rect.left + rect.width / 2) - (targetPhotoW / 2); // Center horizontally
+            // Center Horizontally
+            const cropX = (rect.left + rect.width / 2) - (targetPhotoW / 2);
 
             return {
                 found: true,
@@ -121,10 +132,10 @@ export async function processPreview(base64, cropParams) {
                     transforms.push('c_thumb,g_face,w_350,h_450,z_0.60');
                 }
 
-                // Lighting & Color (Ver 18.0)
+                // Lighting & Color (Ver 19.0 - Ministry Polished)
                 transforms.push('e_improve:outdoor');
                 transforms.push('e_viesus_correct');
-                transforms.push('e_contrast:20');
+                transforms.push('e_contrast:10'); // Smooth contrast
 
                 // BG Removal & White BG
                 transforms.push('e_background_removal');

@@ -197,7 +197,7 @@ window.processImage = async function () {
                     const oldGuides = mainPreview.parentElement.querySelectorAll('.guide-overlay');
                     oldGuides.forEach(g => g.remove());
 
-                    // Create Overlay for Standard Template
+                    // Create Overlay for Ministry Standard Template
                     const overlay = document.createElement('div');
                     overlay.className = 'guide-overlay';
                     overlay.style.position = 'absolute';
@@ -208,7 +208,7 @@ window.processImage = async function () {
                     overlay.style.pointerEvents = 'none';
 
                     // Helper for Lines
-                    function createStyleLine(top, left, width, height, border, text, textPos) {
+                    function createStyleLine(top, left, width, height, border, text, textPos, color = '#d00') {
                         const el = document.createElement('div');
                         el.style.position = 'absolute';
                         el.style.top = top;
@@ -223,69 +223,99 @@ window.processImage = async function () {
                             const label = document.createElement('span');
                             label.innerText = text;
                             label.style.position = 'absolute';
-                            label.style.color = '#d00'; // Dark Red
-                            label.style.fontSize = '12px';
+                            label.style.color = color;
+                            label.style.fontSize = '13px';
                             label.style.fontWeight = 'bold';
                             label.style.whiteSpace = 'nowrap';
+                            label.style.fontFamily = 'Arial, sans-serif';
+
                             switch (textPos) {
-                                case 'left': label.style.right = '105%'; label.style.top = '50%'; label.style.transform = 'translateY(-50%)'; break;
-                                case 'bottom': label.style.top = '105%'; label.style.left = '50%'; label.style.transform = 'translateX(-50%)'; break;
-                                case 'right-center': label.style.left = '105%'; label.style.top = '50%'; label.style.transform = 'translateY(-50%)'; break;
+                                case 'left':
+                                    label.style.right = '12px';
+                                    label.style.top = '50%';
+                                    label.style.transform = 'translateY(-50%)';
+                                    break;
+                                case 'bottom':
+                                    label.style.top = '10px';
+                                    label.style.left = '50%';
+                                    label.style.transform = 'translateX(-50%)';
+                                    break;
+                                case 'right-center':
+                                    label.style.left = '15px';
+                                    label.style.top = '50%';
+                                    label.style.transform = 'translateY(-50%)';
+                                    break;
                             }
                             el.appendChild(label);
                         }
                         return el;
                     }
 
-                    // 1. Photo Dimensions
+                    // 1. Outer Dimensions (Gray Scale Style)
                     // Left Ruler (4.5cm)
-                    const leftRuler = createStyleLine('0', '-15px', '10px', '100%', '', '4.5公分', 'left');
-                    leftRuler.style.borderLeft = '1px solid #999';
-                    leftRuler.style.borderTop = '1px solid #999';
-                    leftRuler.style.borderBottom = '1px solid #999';
+                    // A long vertical line on the left, slightly outside the image
+                    const leftRuler = createStyleLine('0%', '-20px', '10px', '100%', '', '4.5公分', 'left', '#333');
+                    leftRuler.style.borderLeft = '1px solid #666';
+                    leftRuler.style.borderTop = '1px solid #666';
+                    leftRuler.style.borderBottom = '1px solid #666';
                     overlay.appendChild(leftRuler);
 
                     // Bottom Ruler (3.5cm)
-                    const bottomRuler = createStyleLine('100%', '0', '100%', '10px', '', '3.5公分', 'bottom');
-                    bottomRuler.style.top = 'calc(100% + 5px)';
-                    bottomRuler.style.borderLeft = '1px solid #999';
-                    bottomRuler.style.borderRight = '1px solid #999';
-                    bottomRuler.style.borderBottom = '1px solid #999';
+                    // A long horizontal line on the bottom
+                    const bottomRuler = createStyleLine('100%', '0%', '100%', '10px', '', '3.5公分', 'bottom', '#333');
+                    bottomRuler.style.top = 'calc(100% + 10px)';
+                    bottomRuler.style.borderLeft = '1px solid #666';
+                    bottomRuler.style.borderRight = '1px solid #666';
+                    bottomRuler.style.borderBottom = '1px solid #666';
                     overlay.appendChild(bottomRuler);
 
-                    // 2. Head Height Standard (3.2cm - 3.6cm)
-                    // Head Top should be ~ 4.5mm (10%) from Top.
-                    // Chin should be ~ 3.4cm (approx 76%) below Head Top.
-                    // Let's create an ideal "Validation Box" on the Right side.
+                    // 2. Right Side: Compliance Check (Red)
+                    // The spec says Head must be 3.2cm - 3.6cm.
+                    // In 4.5cm photo:
+                    // 3.2cm = 71.1%
+                    // 3.6cm = 80.0%
+                    // Top Start (Hair) = 10% (0.45cm)
 
-                    // Marker Line: Top Margin (10% / 0.45cm)
-                    const headTopY = 10; // 10%
-                    overlay.appendChild(createStyleLine(headTopY + '%', '0', '100%', '1px', '1px dashed rgba(255,0,0,0.5)', ''));
+                    // Top Limit Line (Hair Top) -> at 10%
+                    const topLimitY = 10.0;
+                    // Bottom Limit Line (Chin) -> should fall between (10+71.1)% and (10+80.0)%
+                    // i.e., 81.1% to 90.0%.
+                    // We draw the "Range Bracket".
 
-                    // Marker Line: Chin Limit (Min 3.2cmHead ~ 71% + 10% = 81%)
-                    // Marker Line: Chin Limit (Max 3.6cmHead ~ 80% + 10% = 90%)
-                    // We just mark the ideal "Chin Zone"
-                    const chinY = 10 + 75.5; // ~85.5%
-                    overlay.appendChild(createStyleLine(chinY + '%', '0', '100%', '1px', '1px dashed rgba(255,0,0,0.5)', ''));
+                    // Dashed Line at Top (10%)
+                    overlay.appendChild(createStyleLine(topLimitY + '%', '0', '100%', '1px', '1px dashed red', ''));
 
-                    // Right Bracket for Head Height
-                    // Visualize "3.2~3.6cm"
-                    const rightBracket = createStyleLine(headTopY + '%', '95%', '15px', '75.5%', '', '應介於 3.2 - 3.6 cm', 'right-center');
-                    rightBracket.style.left = 'calc(100% + 10px)';
+                    // Dashed Line at 86% (Avg of 3.2-3.6 base) or just mark the Max/Min?
+                    // Let's mark the "Chin Line" at safe max (90%)?
+                    // Or better: Draw the Bracket encompassing the valid Head Height.
+                    // Bracket Start: 10%
+                    // Bracket End: 10 + 75.5 (Average 3.4cm) ? No user wants range.
+                    // Actually, usually the bracket spans the *actual* head height.
+                    // But here we want to show the Standard.
+                    // Standard Bracket: From 10% to ~86%.
+
+                    const bracketTop = 10.0;
+                    const bracketHeight = 76.0; // 3.42cm (Avg)
+
+                    const rightBracket = createStyleLine(bracketTop + '%', '100%', '10px', bracketHeight + '%', '', '應介於 3.2 - 3.6 cm', 'right-center');
                     rightBracket.style.borderTop = '2px solid red';
                     rightBracket.style.borderBottom = '2px solid red';
                     rightBracket.style.borderRight = '2px solid red';
                     overlay.appendChild(rightBracket);
 
+                    // Also draw dashed line for Chin at bottom of bracket?
+                    overlay.appendChild(createStyleLine((bracketTop + bracketHeight) + '%', '0', '100%', '1px', '1px dashed red', ''));
+
+
                     // Wrapper to hold image + guides together tightly
-                    // Let's create a Wrapper if not exists.
                     if (!document.getElementById('img-wrapper')) {
                         const wrapper = document.createElement('div');
                         wrapper.id = 'img-wrapper';
                         wrapper.style.position = 'relative';
                         wrapper.style.display = 'inline-block';
                         wrapper.style.lineHeight = '0'; // Remove font gap
-                        wrapper.style.boxShadow = '0 0 10px rgba(0,0,0,0.1)';
+                        wrapper.style.boxShadow = '0 0 15px rgba(0,0,0,0.1)';
+                        wrapper.style.margin = '20px'; // Space for rulers
                         mainPreview.parentNode.insertBefore(wrapper, mainPreview);
                         wrapper.appendChild(mainPreview);
                         wrapper.appendChild(overlay);
