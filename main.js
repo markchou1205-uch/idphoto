@@ -1,26 +1,57 @@
 import * as API from './js/api.js';
 import { UI } from './js/ui.js';
-// import { CONFIG } from './js/config.js'; // REMOVED: No such export
+import { DEFAULT_SPECS } from './js/config.js'; // Restore Spec Import
 
 // --- State ---
 let state = {
-    originalImage: null,  // Base64
-    processedImage: null, // Base64
-    faceData: null,       // Azure Face Data
+    originalImage: null,
+    processedImage: null,
+    faceData: null,
     spec: 'passport'
 };
 
 // --- DOM Elements ---
-const uploadInput = document.getElementById('fileInput'); // Fixed ID from 'uploadInput' to 'fileInput'
+const uploadInput = document.getElementById('fileInput');
+const specsContainer = document.getElementById('specs-container');
 
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
     UI.initStyles();
+    initSpecs(); // Restore UI Render
 
     // Legacy support: HTML calls handleFileUpload(this) via onchange.
     // We do NOT need to addEventListener here, or it will fire twice.
-    // Confirmed via Debug Logs: double execution causing duplicate Modals.
 });
+
+// Restore Spec UI Logic
+function initSpecs() {
+    if (!specsContainer) return;
+    specsContainer.innerHTML = '';
+
+    Object.keys(DEFAULT_SPECS).forEach(key => {
+        const s = DEFAULT_SPECS[key];
+        const div = document.createElement('div');
+        div.className = `p-2 border rounded cursor-pointer spec-item ${state.spec === key ? 'bg-primary text-white' : 'bg-light'}`;
+        div.style.cursor = 'pointer';
+        div.innerHTML = `<div class="fw-bold">${s.name}</div><div class="small opacity-75">${s.desc}</div>`;
+        div.onclick = () => {
+            state.spec = key;
+            updateSpecUI();
+        };
+        specsContainer.appendChild(div);
+    });
+}
+
+function updateSpecUI() {
+    Array.from(specsContainer.children).forEach((el, idx) => {
+        const key = Object.keys(DEFAULT_SPECS)[idx];
+        if (key === state.spec) {
+            el.className = 'p-2 border rounded cursor-pointer spec-item bg-primary text-white';
+        } else {
+            el.className = 'p-2 border rounded cursor-pointer spec-item bg-light text-dark';
+        }
+    });
+}
 
 // Expose for HTML inline calls (Legacy support)
 window.handleFileUpload = handleFileUpload;
@@ -28,10 +59,6 @@ window.handleFileUpload = handleFileUpload;
 // --- Handlers ---
 async function handleFileUpload(e) {
     console.log("Upload Handler Triggered", e);
-    // Robust fallback:
-    // Case 1: called via onchange="handleFileUpload(this)" -> e is InputElement
-    // Case 2: called via addEventListener -> e is Event, e.target is InputElement
-    // Case 3: Global fallback
 
     let input = null;
     if (e instanceof HTMLInputElement) {
@@ -42,14 +69,10 @@ async function handleFileUpload(e) {
         input = document.getElementById('fileInput');
     }
 
-    console.log("Input element:", input);
     const file = input && input.files ? input.files[0] : null;
     console.log("File detected:", file);
 
     if (!file) return;
-
-    // Reset input so same file can be selected again if needed (verification)
-    // uploadInput.value = ''; // Wait, if we clear it here, might break change event? Better clear after process.
 
     const reader = new FileReader();
     reader.onload = async (event) => {
@@ -57,21 +80,28 @@ async function handleFileUpload(e) {
         try {
             let rawResult = event.target.result;
 
-            // Debug: Check for double header
-            if (rawResult.startsWith('data:image/jpeg;base64,data:')) {
-                console.warn("DOUBLE HEADER DETECTED! Fixing...");
-                // Replace any sequence of (data:image...base64,)+ with a single one
-                rawResult = rawResult.replace(/^(data:image\/[a-zA-Z]+;base64,)+/, 'data:image/jpeg;base64,');
+            // --- ULTIMATE SANITIZER ---
+            // Issue: Double headers like "data:image/jpeg;base64,data:image/jpeg;base64,..."
+            // Fix: Split by 'base64,' and take the LAST part (the actual data), then re-add prefix.
+
+            if (rawResult.indexOf('base64,') !== -1) {
+                const parts = rawResult.split('base64,');
+                if (parts.length > 2) {
+                    console.warn("Multiple base64 headers detected! Cleaning...");
+                    // parts[parts.length-1] is the data.
+                    const cleanData = parts[parts.length - 1];
+                    rawResult = `data:image/jpeg;base64,${cleanData}`;
+                }
             }
 
             state.originalImage = rawResult;
-            console.log("State Updated (Sanitized), Calling UI.showUseConfirm");
+            console.log("State Updated (Cleaned), Calling UI.showUseConfirm");
 
-            // Step 1: Confirm Usage (Modal 1)
-            UI.showUseConfirm(state.spec === 'passport' ? '護照/身分證 (35x45mm)' : '其他證件', async () => {
+            UI.showUseConfirm(DEFAULT_SPECS[state.spec].name, async () => {
                 console.log("Modal Confirmed, Starting Audit");
                 await runAuditPhase();
             });
+
         } catch (err) {
             console.error("Error inside reader.onload:", err);
         }
@@ -83,15 +113,15 @@ async function handleFileUpload(e) {
 // Phase 1: Audit (Check Only)
 async function runAuditPhase() {
     try {
-        // 1. Detect Face (Get Rect for future crop)
+        console.log("Calling API.detectFace...");
         const detectRes = await API.detectFace(state.originalImage);
-        if (!detectRes.found) {
+
+        if (!detectRes || !detectRes.found) {
             alert('未偵測到人臉，請更換照片');
             return;
         }
-        state.faceData = detectRes; // Store for phase 2
+        state.faceData = detectRes;
 
-        // 2. Run Validation (Azure Analysis) - No Cloudinary cost yet
         console.log("Calling runCheckApi...");
         const checkRes = await API.runCheckApi(state.originalImage, state.spec);
         console.log("runCheckApi Result:", checkRes);
@@ -100,16 +130,12 @@ async function runAuditPhase() {
             throw new Error("Invalid check result from API");
         }
 
-        // Debug Image Data
-        console.log("Original Image Prefix:", state.originalImage.substring(0, 50));
-
-        // Step 2: Show Audit Report (Modal 2)
         console.log("Showing Audit Report Modal...");
         UI.showAuditReport(
             state.originalImage,
             checkRes.results,
-            () => runProductionPhase(), // On Proceed
-            () => { uploadInput.value = ''; } // On Retry
+            () => runProductionPhase(),
+            () => { uploadInput.value = ''; }
         );
 
     } catch (err) {
@@ -121,28 +147,18 @@ async function runAuditPhase() {
 // Phase 2: Production (Processing)
 async function runProductionPhase() {
     try {
-        // 1. Process Image (Crop -> Lighting -> BG)
-        // detailed cropParams come from detectFace in Phase 1
         const processRes = await API.processPreview(state.originalImage, state.faceData.suggestedCrop);
 
         if (processRes && processRes.photos && processRes.photos.length > 0) {
             state.processedImage = 'data:image/jpeg;base64,' + processRes.photos[0];
 
-            // 2. Create Final Canvas Element from Result
             const finalImg = new Image();
             finalImg.onload = () => {
-                // Prepare Side-by-Side View
-                const finalBox = UI.showComparison(state.originalImage, finalImg); // finalImg unused logic in UI helper
-
-                // Clear Box content to customized it
+                const finalBox = UI.showComparison(state.originalImage, finalImg);
                 finalBox.innerHTML = '';
                 finalBox.style.position = 'relative';
                 finalBox.style.display = 'inline-block';
-
-                // Append Image
                 finalBox.appendChild(finalImg);
-
-                // Apply Guides (Ministry Standard)
                 applyGuideOverlay(finalImg);
             };
             finalImg.src = state.processedImage;
@@ -154,9 +170,9 @@ async function runProductionPhase() {
     }
 }
 
-// Helper: Apply Guides (Ministry of Interior Standard)
 function applyGuideOverlay(targetImgElement) {
-    // Create Overlay for Ministry Standard Template
+    // ... Copying guide overlay code from previous step or keeping it if I read it context ...
+    // To save tokens I will re-implement it briefly as it is critical.
     const overlay = document.createElement('div');
     overlay.className = 'guide-overlay';
     overlay.style.position = 'absolute';
@@ -166,7 +182,6 @@ function applyGuideOverlay(targetImgElement) {
     overlay.style.height = '100%';
     overlay.style.pointerEvents = 'none';
 
-    // Helper for Lines
     function createStyleLine(top, left, width, height, border, text, textPos, color = '#d00') {
         const el = document.createElement('div');
         el.style.position = 'absolute';
@@ -177,7 +192,6 @@ function applyGuideOverlay(targetImgElement) {
         if (border) el.style.border = border;
         el.style.boxSizing = 'border-box';
         el.style.zIndex = '10';
-
         if (text) {
             const label = document.createElement('span');
             label.innerText = text;
@@ -186,31 +200,17 @@ function applyGuideOverlay(targetImgElement) {
             label.style.fontSize = '12px';
             label.style.fontWeight = 'bold';
             label.style.whiteSpace = 'nowrap';
-            label.style.fontFamily = 'Arial, sans-serif'; // Clean font
-
+            label.style.fontFamily = 'Arial, sans-serif';
             switch (textPos) {
-                case 'left':
-                    label.style.right = '8px';
-                    label.style.top = '50%';
-                    label.style.transform = 'translateY(-50%)';
-                    break;
-                case 'bottom':
-                    label.style.top = '6px';
-                    label.style.left = '50%';
-                    label.style.transform = 'translateX(-50%)';
-                    break;
-                case 'right-center':
-                    label.style.left = '10px';
-                    label.style.top = '50%';
-                    label.style.transform = 'translateY(-50%)';
-                    break;
+                case 'left': label.style.right = '8px'; label.style.top = '50%'; label.style.transform = 'translateY(-50%)'; break;
+                case 'bottom': label.style.top = '6px'; label.style.left = '50%'; label.style.transform = 'translateX(-50%)'; break;
+                case 'right-center': label.style.left = '10px'; label.style.top = '50%'; label.style.transform = 'translateY(-50%)'; break;
             }
             el.appendChild(label);
         }
         return el;
     }
 
-    // 1. Rulers (Gray)
     const leftRuler = createStyleLine('0%', '-15px', '10px', '100%', '', '4.5公分', 'left', '#333');
     leftRuler.style.borderLeft = '1px solid #999'; leftRuler.style.borderTop = '1px solid #999'; leftRuler.style.borderBottom = '1px solid #999';
     overlay.appendChild(leftRuler);
@@ -220,35 +220,22 @@ function applyGuideOverlay(targetImgElement) {
     bottomRuler.style.borderLeft = '1px solid #999'; bottomRuler.style.borderRight = '1px solid #999'; bottomRuler.style.borderBottom = '1px solid #999';
     overlay.appendChild(bottomRuler);
 
-    // 2. Compliance Bracket (Red)
-    // Head (Hair Top to Chin) = 3.2-3.6cm.
-    // In 4.5cm photo: Start at 10% (0.45cm).
-    // Height of bracket: ~3.4cm = 75.5%.
-
     const bracketTop = 10.0;
     const bracketHeight = 75.5;
-
-    // Top Line (Hair Limit)
     overlay.appendChild(createStyleLine(bracketTop + '%', '0', '100%', '1px', '1px dashed red', ''));
-
-    // The Bracket
     const rightBracket = createStyleLine(bracketTop + '%', '100%', '10px', bracketHeight + '%', '', '應介於 3.2 - 3.6 cm', 'right-center');
     rightBracket.style.borderTop = '2px solid red';
     rightBracket.style.borderBottom = '2px solid red';
     rightBracket.style.borderRight = '2px solid red';
     overlay.appendChild(rightBracket);
-
-    // Bottom Line (Chin Limit)
     overlay.appendChild(createStyleLine((bracketTop + bracketHeight) + '%', '0', '100%', '1px', '1px dashed red', ''));
 
-    // 3. Wrapper
     const wrapper = document.createElement('div');
     wrapper.style.position = 'relative';
     wrapper.style.display = 'inline-block';
-    wrapper.style.marginTop = '20px'; // Space for rulers
+    wrapper.style.marginTop = '20px';
     wrapper.style.marginLeft = '20px';
     wrapper.style.marginBottom = '20px';
-
     targetImgElement.parentNode.insertBefore(wrapper, targetImgElement);
     wrapper.appendChild(targetImgElement);
     wrapper.appendChild(overlay);
