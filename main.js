@@ -154,7 +154,8 @@ function triggerManualEdit() {
             // Re-render result
             renderResult(state.processedImage);
         },
-        () => { console.log("Manual Edit Cancelled"); }
+        () => { console.log("Manual Edit Cancelled"); },
+        state.faceData ? state.faceData.suggestedCrop : null
     );
 }
 

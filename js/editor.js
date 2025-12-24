@@ -1,18 +1,17 @@
 export class ManualEditor {
-    constructor(imageUrl, onConfirm, onCancel) {
+    constructor(imageUrl, onConfirm, onCancel, initialCrop = null) {
         this.imageUrl = imageUrl;
         this.onConfirm = onConfirm;
         this.onCancel = onCancel;
+        this.initialCrop = initialCrop;
 
-        // State
+        // Canvas state
+        this.canvas = null;
+        this.ctx = null;
         this.scale = 1;
-        this.offsetX = 0;
-        this.offsetY = 0;
+        this.offset = { x: 0, y: 0 }; // Use Object for vector
         this.isDragging = false;
-        this.lastX = 0;
-        this.lastY = 0;
-
-        // Constants (350x450 box)
+        this.lastPos = { x: 0, y: 0 };
         this.cw = 350;
         this.ch = 450;
 
@@ -113,52 +112,83 @@ export class ManualEditor {
     loadImage() {
         this.img = new Image();
         this.img.onload = () => {
-            // Initial Fit: Cover
-            const rImg = this.img.width / this.img.height;
-            const rCan = this.cw / this.ch;
+            // Calculated Logic
+            if (this.initialCrop) {
+                // Inherit System Crop
+                // Target Canvas is 350x450
+                // initialCrop = {x,y,w,h} (source coordinates)
 
-            if (rImg > rCan) {
-                // Image wider, fit height
-                this.baseScale = this.ch / this.img.height;
+                // We want: source rect (x,y,w,h) to fill canvas (350,450)
+                // Scale = CanvasW / CropW
+                this.scale = this.canvas.width / this.initialCrop.w;
+
+                // Offset calculation:
+                // We want point (CropX, CropY) to be at (0,0) on canvas
+                // DrawImage(img, offX, offY, imgW*scale, imgH*scale)
+                // So offX = -CropX * scale
+                this.offset = {
+                    x: -this.initialCrop.x * this.scale,
+                    y: -this.initialCrop.y * this.scale
+                };
             } else {
-                // Image taller, fit width
-                this.baseScale = this.cw / this.img.width;
+                // Initial Fit: Cover
+                const rImg = this.img.width / this.img.height;
+                const rCan = this.cw / this.ch;
+
+                if (rImg > rCan) {
+                    // Image wider, fit height
+                    this.baseScale = this.ch / this.img.height;
+                } else {
+                    // Image taller, fit width
+                    this.baseScale = this.cw / this.img.width;
+                }
+                this.scale = this.baseScale;
+
+                // Center
+                this.offset.x = (this.cw - this.img.width * this.scale) / 2;
+                this.offset.y = (this.ch - this.img.height * this.scale) / 2;
             }
-            this.scale = this.baseScale;
-
-            // Center
-            this.offsetX = (this.cw - this.img.width * this.scale) / 2;
-            this.offsetY = (this.ch - this.img.height * this.scale) / 2;
-
             this.draw();
         };
         this.img.src = this.imageUrl;
     }
 
     draw() {
-        this.ctx.clearRect(0, 0, this.cw, this.ch);
-        // Draw with transforms
-        // We draw the image at (offsetX, offsetY) with size (w*scale, h*scale)
-        this.ctx.drawImage(this.img, this.offsetX, this.offsetY, this.img.width * this.scale, this.img.height * this.scale);
+        if (!this.img) return;
+
+        // Clear with WHITE
+        this.ctx.fillStyle = 'white';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        this.ctx.save();
+
+        // Apply Filters (Brightness + Contrast)
+        this.ctx.filter = 'brightness(1.1) contrast(1.05)';
+
+        this.ctx.translate(this.offset.x, this.offset.y);
+        this.ctx.scale(this.scale, this.scale);
+        this.ctx.drawImage(this.img, 0, 0);
+
+        this.ctx.restore();
     }
 
     bindEvents() {
         // Drag
         this.canvas.addEventListener('mousedown', (e) => {
             this.isDragging = true;
-            this.lastX = e.clientX;
-            this.lastY = e.clientY;
+            this.lastPos.x = e.clientX;
+            this.lastPos.y = e.clientY;
         });
 
         window.addEventListener('mousemove', (e) => {
             if (!this.isDragging) return;
-            const dx = e.clientX - this.lastX;
-            const dy = e.clientY - this.lastY;
-            this.lastX = e.clientX;
-            this.lastY = e.clientY;
+            const dx = e.clientX - this.lastPos.x;
+            const dy = e.clientY - this.lastPos.y;
+            this.lastPos.x = e.clientX;
+            this.lastPos.y = e.clientY;
 
-            this.offsetX += dx;
-            this.offsetY += dy;
+            this.offset.x += dx;
+            this.offset.y += dy;
             this.draw();
         });
 
@@ -173,25 +203,20 @@ export class ManualEditor {
             const delta = -e.deltaY * zoomSpeed;
             const newScale = Math.max(0.1, this.scale + delta);
 
-            // Zoom towards center of canvas (simplified) or mouse?
-            // Simplified: Center zoom for stability, or update offsets
-            // Let's do simple scale update, keeping current center?
-            // Actually, usually zoom is towards pointer.
-            // Let's implement Center Zoom based on canvas center (175, 225)
-
+            // Center Zoom based on canvas center
             const rect = this.canvas.getBoundingClientRect();
-            const mx = (rect.left + rect.width / 2) - rect.left; // 175
-            const my = (rect.top + rect.height / 2) - rect.top; // 225
+            const mx = rect.width / 2;
+            const my = rect.height / 2;
 
             // Old World Pos of Center
-            const wx = (mx - this.offsetX) / this.scale;
-            const wy = (my - this.offsetY) / this.scale;
+            const wx = (mx - this.offset.x) / this.scale;
+            const wy = (my - this.offset.y) / this.scale;
 
             this.scale = newScale;
 
             // New Offset
-            this.offsetX = mx - wx * this.scale;
-            this.offsetY = my - wy * this.scale;
+            this.offset.x = mx - wx * this.scale;
+            this.offset.y = my - wy * this.scale;
 
             this.draw();
         });
