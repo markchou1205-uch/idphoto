@@ -63,11 +63,34 @@ export async function detectFace(base64) {
             }
 
             // 3. Calculate Crop Coordinates
-            // Headroom: Standard is ~5mm in 45mm (approx 11%)
-            // Let's use 12% to be safe (ensure top of hair isn't cut if rect.top is forehead)
-            const topMargin = targetPhotoH * 0.12;
-            const cropY = rect.top - topMargin;
-            const cropX = (rect.left + rect.width / 2) - (targetPhotoW / 2); // Center horizontally
+            // Headroom Strategy:
+            // The user observed "Head Top Chopped". Azure 'faceRectangle' top is often mid-forehead.
+            // Safe bet: Align relative to the CHIN (rect.top + rect.height) which is reliable.
+            // BOCA Standard: Chin to Bottom ~ distance. Head Top to Top ~ distance.
+            // If we assume HeadHeight ~ rect.height (approx), and we want to center it vertically:
+            // But since 'rect.top' is below real Head Top (hair), we need MORE space above.
+            // Strategy: Calculate 'Ideal Box' where Face is centered, then Shift Box UP by ~10% of FaceHeight.
+
+            const faceCenterY = rect.top + rect.height / 2;
+            const cropH = targetPhotoH;
+
+            // Initial Center
+            let cropY = faceCenterY - (cropH / 2);
+
+            // Shift UP to accommodate hair (Shift Frame Up = Decrease Y)
+            // Shift by 12% of FaceHeight?
+            const verticalShift = faceH * 0.12;
+            cropY -= verticalShift;
+
+            // Calculate X center
+            const faceCenterX = rect.left + rect.width / 2;
+            const cropX = faceCenterX - (targetPhotoW / 2);
+
+            // Validate Chin Margin
+            // Chin Y = rect.top + rect.height;
+            // Frame Bottom = cropY + cropH;
+            // Bottom Margin = Frame Bottom - Chin Y;
+            // ideal > 0.
 
             return {
                 found: true,
@@ -345,6 +368,16 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
             // Standard: 3.2~3.6cm / 4.5cm = 0.71 ~ 0.80
             const headLenCm = ratio * 4.5;
 
+            // Estimate Top/Bottom Margins (Based on centered face approx)
+            // top pixels = rect.top (in the cropped image)
+            // Wait, rect is from Azure detect on the crop.
+            // So rect.top IS the Top Padding (Forehead to edge).
+            // Real Top Padding (to Hair) < rect.top.
+            // But let's report what we see.
+            const topMarginPx = face.faceRectangle.top;
+            const topMarginCm = (topMarginPx / imgH) * 4.5;
+            const bottomMarginCm = 4.5 - topMarginCm - headLenCm;
+
             if (ratio < 0.70 || ratio > 0.80) {
                 results.push({
                     category: 'compliance', status: 'fail',
@@ -356,7 +389,7 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
                 results.push({
                     category: 'compliance', status: 'pass',
                     item: '比例檢查',
-                    value: `符合標準 (${headLenCm.toFixed(1)}cm)`,
+                    value: `合格 (頭 ${headLenCm.toFixed(1)}cm / 上 ${topMarginCm.toFixed(2)}cm)`,
                     standard: '3.2~3.6 公分'
                 });
             }

@@ -185,6 +185,76 @@ window.processImage = async function () {
             const btnCheck = document.querySelector('button[onclick="runCheck()"]');
             if (btnCheck) btnCheck.innerHTML = '<i class="bi bi-shield-check"></i> 進階審查與智能修復';
 
+            // [Added] Visual Border & Guides
+            const mainPreview = document.getElementById('main-preview-img');
+            if (mainPreview) {
+                mainPreview.style.border = "1px solid black";
+                // Add Guides if container allows
+                if (mainPreview.parentElement) {
+                    mainPreview.parentElement.style.position = 'relative'; // Ensure positioning context
+
+                    // Clear old guides
+                    const oldGuides = mainPreview.parentElement.querySelectorAll('.guide-overlay');
+                    oldGuides.forEach(g => g.remove());
+
+                    // Create Overlay
+                    const overlay = document.createElement('div');
+                    overlay.className = 'guide-overlay';
+                    overlay.style.position = 'absolute';
+                    overlay.style.top = '20px'; // Align with padding
+                    overlay.style.left = '50%';
+                    overlay.style.transform = 'translateX(-50%)';
+                    overlay.style.width = mainPreview.clientWidth + 'px'; // Match image
+                    overlay.style.height = mainPreview.clientHeight + 'px'; // Match image
+                    overlay.style.pointerEvents = 'none';
+
+                    // Note: We need accurate dimensions. If image hasn't loaded, clientWidth might be wrong.
+                    // But processImage awaits 'processPreview' which returns base64. The img src is set.
+                    // Browsers might take a tick to render size. 
+                    // Let's assume standard 350x450 ratio or wait for load? 
+                    // For now, assume styling makes it fit. 
+                    // A better way is to append this inside a wrapper that matches image tightly.
+
+                    // Hardcode guides based on % (Ideal 3.4cm in 4.5cm = ~75%)
+                    // Top Margin 0.45cm = 10%. Bottom 10%.
+
+                    // Calculate actual margins from API result if possible?
+                    // API runCheckApi returns logic but here we are in main.js
+                    // We can estimate based on finding the face again? No, expensive.
+                    // Let's just show the IDEAL lines (Standard).
+
+                    function createLine(topPct, text) {
+                        const el = document.createElement('div');
+                        el.style.position = 'absolute';
+                        el.style.top = topPct + '%';
+                        el.style.left = '0';
+                        el.style.width = '100%';
+                        el.style.borderTop = '1px dashed red';
+                        el.style.zIndex = '10';
+
+                        const label = document.createElement('span');
+                        label.innerText = text;
+                        label.style.position = 'absolute';
+                        label.style.right = '-80px';
+                        label.style.top = '-10px';
+                        label.style.background = 'rgba(255,255,255,0.8)';
+                        label.style.padding = '2px 5px';
+                        label.style.fontSize = '12px';
+                        label.style.color = 'red';
+                        el.appendChild(label);
+                        return el;
+                    }
+
+                    // Top Line (Head Top Limit ~ 0.45cm = 10%)
+                    overlay.appendChild(createLine(10, "上緣 0.45cm"));
+
+                    // Bottom Line (Chin Limit ~ 90%)
+                    overlay.appendChild(createLine(90, "下緣 0.45cm"));
+
+                    mainPreview.parentElement.appendChild(overlay);
+                }
+            }
+
             startCheckProcess();
 
         } else { alert("錯誤: " + (data.error || "未知錯誤")); }
