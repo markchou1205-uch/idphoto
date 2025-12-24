@@ -24,9 +24,12 @@ export async function detectFace(base64) {
     }
 
     try {
+        console.log("detectFace called with base64 length:", base64 ? base64.length : 0);
         const blob = base64ToBlob(base64);
         const endpoint = AZURE.ENDPOINT.endsWith('/') ? AZURE.ENDPOINT.slice(0, -1) : AZURE.ENDPOINT;
         const url = `${endpoint}/face/v1.0/detect?returnFaceId=false&returnFaceLandmarks=false&recognitionModel=recognition_01&detectionModel=detection_01`;
+
+        console.log("Fetching Azure URL:", url);
 
         const res = await fetch(url, {
             method: 'POST',
