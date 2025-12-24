@@ -230,29 +230,51 @@ export async function processPreview(base64, cropParams) {
 // Helper: Local Canvas Crop
 function cropImageLocally(base64, crop) {
     return new Promise((resolve, reject) => {
+        if (!base64) {
+            console.error("Local Crop: No base64 input");
+            return resolve(null); // Fail gracefully
+        }
+
         const img = new Image();
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            // Target size: 350x450 (Standard ID photo resolution we use)
             canvas.width = 350;
             canvas.height = 450;
             const ctx = canvas.getContext('2d');
 
+            // Default crop if missing
+            let x = 0, y = 0, w = img.width, h = img.height;
+            if (crop) {
+                x = crop.x; y = crop.y; w = crop.w; h = crop.h;
+            } else {
+                // Center crop strategy if no face data
+                const targetRatio = 350 / 450;
+                const imgRatio = img.width / img.height;
+                if (imgRatio > targetRatio) {
+                    h = img.height;
+                    w = h * targetRatio;
+                    x = (img.width - w) / 2;
+                    y = 0;
+                } else {
+                    w = img.width;
+                    h = w / targetRatio;
+                    x = 0;
+                    y = (img.height - h) / 2;
+                }
+            }
+
             // Draw cropped portion
-            // source: img, sX, sY, sW, sH, dX, dY, dW, dH
-            ctx.drawImage(
-                img,
-                crop.x, crop.y, crop.w, crop.h, // Source (Crop Box)
-                0, 0, 350, 450                  // Destination (Canvas Size)
-            );
+            ctx.drawImage(img, x, y, w, h, 0, 0, 350, 450);
 
             // Export to Base64
-            // remove prefix manually to match expected API output format
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
             const b64 = dataUrl.split(',')[1];
             resolve(b64);
         };
-        img.onerror = (e) => reject(e);
+        img.onerror = (e) => {
+            console.error("Local Crop Image Load Error:", e);
+            resolve(base64.includes(',') ? base64.split(',')[1] : base64); // Fallback to original
+        };
         img.src = ensureSinglePrefix(base64);
     });
 }

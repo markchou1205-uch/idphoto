@@ -1,75 +1,202 @@
-import { state } from './state.js';
+export class ManualEditor {
+    constructor(imageUrl, onConfirm, onCancel) {
+        this.imageUrl = imageUrl;
+        this.onConfirm = onConfirm;
+        this.onCancel = onCancel;
 
-// 初始化
-export function initEditor() {
-    // 新版 CSS 自動適應，不需 JS 監聽 Resize
-}
+        // State
+        this.scale = 1;
+        this.offsetX = 0;
+        this.offsetY = 0;
+        this.isDragging = false;
+        this.lastX = 0;
+        this.lastY = 0;
 
-// 自動對齊顯示
-export function autoAlignImage() {
-    const img = document.getElementById('previewImg'); // 左側上傳區的預覽
-    const mainImg = document.getElementById('main-preview-img'); // 右側儀表板的主圖
+        // Constants (350x450 box)
+        this.cw = 350;
+        this.ch = 450;
 
-    // 如果主要預覽圖存在 (儀表板模式)，就不需要處理左側小圖的對齊
-    if (mainImg && !mainImg.classList.contains('d-none')) {
-        return;
+        this.initUI();
     }
 
-    if (img) {
-        img.classList.remove('d-none');
-        img.style.transform = 'none'; // 重置所有位移，交給 CSS
-    }
-}
+    initUI() {
+        this.overlay = document.createElement('div');
+        this.overlay.className = 'id-modal-overlay';
+        this.overlay.style.flexDirection = 'column';
+        this.overlay.style.overflow = 'hidden';
 
-export function loadImageToEditor(base64) {
-    const img = document.getElementById('previewImg');
-    // 同時更新右側儀表板的圖 (如果有的話)
-    const mainImg = document.getElementById('main-preview-img');
-    
-    if (img) {
-        img.onload = () => {
-            state.editor.imageWidth = img.naturalWidth;
-            state.editor.imageHeight = img.naturalHeight;
-            updateMaskRatio(); 
-            autoAlignImage();
+        this.overlay.innerHTML = `
+            <div style="color:white; font-size:1.2rem; margin-bottom:10px; font-weight:bold;">手動調整 / 裁切</div>
+            <div style="color:#ccc; margin-bottom:15px; font-size:0.9rem;">
+                滾輪縮放 • 拖曳移動 • 需將頭頂與下巴對齊紅線
+            </div>
+            
+            <div id="editor-stage" style="position:relative; width: 350px; height: 450px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5); border: 2px solid white;">
+                <!-- Canvas Layer -->
+                <canvas id="editor-canvas" width="350" height="450" style="position:absolute; top:0; left:0; cursor: move;"></canvas>
+                
+                <!-- Guidelines Layer (Pointer Events None) -->
+                <div id="editor-guides" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></div>
+            </div>
+            
+            <div style="margin-top:20px; display:flex; gap:15px; z-index:10001">
+                 <button class="id-btn id-btn-secondary" id="editor-cancel">取消</button>
+                 <button class="id-btn id-btn-primary" id="editor-confirm">確認建立成品</button>
+            </div>
+            <div style="margin-top:10px; z-index:10001">
+                 <label style="color:white; cursor:pointer"><input type="checkbox" id="guide-toggle" checked> 顯示對照線</label>
+            </div>
+        `;
+
+        document.body.appendChild(this.overlay);
+
+        this.canvas = this.overlay.querySelector('#editor-canvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.guides = this.overlay.querySelector('#editor-guides');
+
+        this.initGuides();
+        this.loadImage();
+        this.bindEvents();
+
+        // Bind Buttons
+        this.overlay.querySelector('#editor-confirm').onclick = () => this.handleConfirm();
+        this.overlay.querySelector('#editor-cancel').onclick = () => this.close();
+        this.overlay.querySelector('#guide-toggle').onchange = (e) => {
+            this.guides.style.display = e.target.checked ? 'block' : 'none';
         };
-        img.src = base64;
-        img.classList.remove('d-none');
     }
-    
-    if (mainImg) {
-        mainImg.src = base64;
+
+    initGuides() {
+        // Red dashed lines
+        // Top: 0.45cm -> ~10%
+        // Bottom: 0.45cm -> ~10% from bottom (or Chin Max 80%)
+
+        const createLine = (topPercent, color) => {
+            const l = document.createElement('div');
+            l.style.position = 'absolute';
+            l.style.left = '0';
+            l.style.width = '100%';
+            l.style.top = `${topPercent}%`;
+            l.style.borderTop = `1px dashed ${color}`;
+            return l;
+        };
+
+        // Hair Top (10%)
+        this.guides.appendChild(createLine(10, 'red'));
+
+        // Chin Bottom (90%) - ensure head leaves some space
+        this.guides.appendChild(createLine(90, 'red'));
+
+        // Center V-Line
+        const v = document.createElement('div');
+        v.style.position = 'absolute';
+        v.style.top = '0';
+        v.style.height = '100%';
+        v.style.left = '50%';
+        v.style.borderLeft = '1px dashed rgba(255,255,255,0.5)';
+        this.guides.appendChild(v);
     }
-}
 
-export function updateMaskRatio(width_mm, height_mm) {
-    // 1. 取得容器
-    const wrapper = document.querySelector('.image-wrapper');
-    
-    // [關鍵修正] 如果找不到容器 (例如在某些頁面狀態下)，直接離開，不要報錯
-    if (!wrapper) return; 
+    loadImage() {
+        this.img = new Image();
+        this.img.onload = () => {
+            // Initial Fit: Cover
+            const rImg = this.img.width / this.img.height;
+            const rCan = this.cw / this.ch;
 
-    // 2. 取得規格
-    if (!width_mm && state.specConfig[state.currentSpecId]) {
-        width_mm = state.specConfig[state.currentSpecId].width_mm;
-        height_mm = state.specConfig[state.currentSpecId].height_mm;
+            if (rImg > rCan) {
+                // Image wider, fit height
+                this.baseScale = this.ch / this.img.height;
+            } else {
+                // Image taller, fit width
+                this.baseScale = this.cw / this.img.width;
+            }
+            this.scale = this.baseScale;
+
+            // Center
+            this.offsetX = (this.cw - this.img.width * this.scale) / 2;
+            this.offsetY = (this.ch - this.img.height * this.scale) / 2;
+
+            this.draw();
+        };
+        this.img.src = this.imageUrl;
     }
-    if (!width_mm) return;
 
-    // 3. 設定比例 (僅調整容器大小，不畫線)
-    const baseHeight = 300; // 左側預覽區高度較小
-    const ratio = width_mm / height_mm;
-    const newWidth = baseHeight * ratio;
-    
-    wrapper.style.height = `${baseHeight}px`;
-    wrapper.style.width = `${newWidth}px`;
-    wrapper.style.backgroundColor = '#ffffff';
-    
-    // 清空舊遮罩
-    const mask = document.querySelector('.crop-mask');
-    if(mask) mask.innerHTML = '';
-}
+    draw() {
+        this.ctx.clearRect(0, 0, this.cw, this.ch);
+        // Draw with transforms
+        // We draw the image at (offsetX, offsetY) with size (w*scale, h*scale)
+        this.ctx.drawImage(this.img, this.offsetX, this.offsetY, this.img.width * this.scale, this.img.height * this.scale);
+    }
 
-export function getCropParams() {
-    return null; // V6.0+ 全自動，不需前端參數
+    bindEvents() {
+        // Drag
+        this.canvas.addEventListener('mousedown', (e) => {
+            this.isDragging = true;
+            this.lastX = e.clientX;
+            this.lastY = e.clientY;
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!this.isDragging) return;
+            const dx = e.clientX - this.lastX;
+            const dy = e.clientY - this.lastY;
+            this.lastX = e.clientX;
+            this.lastY = e.clientY;
+
+            this.offsetX += dx;
+            this.offsetY += dy;
+            this.draw();
+        });
+
+        window.addEventListener('mouseup', () => {
+            this.isDragging = false;
+        });
+
+        // Wheel Zoom
+        this.canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomSpeed = 0.001;
+            const delta = -e.deltaY * zoomSpeed;
+            const newScale = Math.max(0.1, this.scale + delta);
+
+            // Zoom towards center of canvas (simplified) or mouse?
+            // Simplified: Center zoom for stability, or update offsets
+            // Let's do simple scale update, keeping current center?
+            // Actually, usually zoom is towards pointer.
+            // Let's implement Center Zoom based on canvas center (175, 225)
+
+            const rect = this.canvas.getBoundingClientRect();
+            const mx = (rect.left + rect.width / 2) - rect.left; // 175
+            const my = (rect.top + rect.height / 2) - rect.top; // 225
+
+            // Old World Pos of Center
+            const wx = (mx - this.offsetX) / this.scale;
+            const wy = (my - this.offsetY) / this.scale;
+
+            this.scale = newScale;
+
+            // New Offset
+            this.offsetX = mx - wx * this.scale;
+            this.offsetY = my - wy * this.scale;
+
+            this.draw();
+        });
+    }
+
+    handleConfirm() {
+        // Export the current canvas view
+        // The canvas already contains the pixels we see (it's 350x450).
+        // So we can just export the canvas content!
+        // Wait, standard `toDataURL` exports the CANVAS content, exactly what we want.
+
+        const b64 = this.canvas.toDataURL('image/jpeg', 0.95).split(',')[1];
+        if (this.onConfirm) this.onConfirm(b64);
+        this.close();
+    }
+
+    close() {
+        this.overlay.remove();
+        if (this.onCancel) this.onCancel();
+    }
 }

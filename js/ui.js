@@ -97,17 +97,17 @@ export const UI = {
         }).join('');
 
         const services = [
-            'AI 智能裁切 (3.2-3.6cm)',
-            '背景去除與白底合成',
-            '臉部光線智能補光',
-            '照片尺寸調整 (35x45mm)',
-            '解析度優化'
+            { name: 'AI 智能裁切 (3.2-3.6cm)', status: '待處理', color: '#eee' },
+            { name: '背景去除與白底合成', status: '待處理', color: '#eee' },
+            { name: '臉部光線智能補光', status: '硬體限制 (略過)', color: '#fff3cd' }, // Updated per user request
+            { name: '照片尺寸調整 (35x45mm)', status: '待處理', color: '#eee' },
+            { name: '解析度優化', status: '待處理', color: '#eee' }
         ];
 
         const servicesHtml = services.map(s => `
             <div class="report-item pending">
-                <span>⚡ ${s}</span>
-                <span class="badge" style="background:#eee; color:#666; padding:2px 6px; border-radius:4px; font-size:0.8em">待處理</span>
+                <span>⚡ ${s.name}</span>
+                <span class="badge" style="background:${s.color}; color:#666; padding:2px 6px; border-radius:4px; font-size:0.8em">${s.status}</span>
             </div>
         `).join('');
 
@@ -263,17 +263,12 @@ export const UI = {
             container.id = 'comparison-view';
             container.className = 'compare-container';
             // Insert after main preview area? Or replace it?
-            // The user says "Show Side-by-Side Comparison". 
-            // Ideally we clear the "Main Preview" area and inject this.
             const mainArea = document.querySelector('.preview-area') || document.getElementById('preview-container');
             if (mainArea) {
                 mainArea.innerHTML = '';
                 mainArea.appendChild(container);
             }
         }
-
-        // Convert canvas to img for simple display if needed, or just append canvas.
-        // We need to label them.
 
         container.innerHTML = `
             <div class="compare-box">
@@ -285,19 +280,109 @@ export const UI = {
                 <h4>製作成品 (35x45mm)</h4>
                 <!-- Final Canvas or Img goes here -->
             </div>
+            <div style="width: 100%; text-align: center; margin-top:20px;">
+                <button class="id-btn id-btn-secondary" id="manual-adjust-btn">🛠 手動調整 / 重新裁切</button>
+            </div>
         `;
 
         const finalBox = container.querySelector('#final-result-box');
+
+        // Ensure finalCanvas is styled properly
         finalCanvas.style.height = '300px';
         finalCanvas.style.width = 'auto'; // Keep ratio
         finalCanvas.className = 'compare-img';
 
-        // We need to wrap the final canvas in the "Guide Overlay" wrapper we built in main.js
-        // Ideally we reuse that logic.
-        // But main.js logic appends to 'mainPreview'.
-        // Let's allow main.js to handle the specific "Guide Overlay" logic on the element we created.
+        // Wrap finalCanvas in a relative div for Overlay
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'relative';
+        wrapper.style.display = 'inline-block';
+        wrapper.appendChild(finalCanvas);
+        finalBox.appendChild(wrapper);
 
-        // For now, return the container element so main.js can append the canvas.
-        return finalBox;
+        return {
+            wrapper: wrapper,
+            imgElement: finalCanvas,
+            manualBtn: container.querySelector('#manual-adjust-btn')
+        };
+    },
+
+    // 5. Apply Red Guide Lines (Ministry of Interior Spec)
+    applyResultGuides(wrapperElement) {
+        // Standard: Head (HairTop to Chin) = 3.2cm - 3.6cm
+        // Photo H = 4.5cm.
+        // 3.2/4.5 = 71.1%
+        // 3.6/4.5 = 80.0%
+
+        // Fixed position guides based on Ratio (since it's a standard crop)
+        // We can just draw lines at calculated % positions.
+
+        const createLine = (topPercent, color, text) => {
+            const line = document.createElement('div');
+            line.style.position = 'absolute';
+            line.style.top = `${topPercent}%`;
+            line.style.left = '0';
+            line.style.width = '100%';
+            line.style.borderTop = `1px dashed ${color}`;
+            line.style.zIndex = '10';
+
+            if (text) {
+                const label = document.createElement('span');
+                label.innerText = text;
+                label.style.position = 'absolute';
+                label.style.right = '5px';
+                label.style.top = '-18px';
+                label.style.color = color;
+                label.style.fontSize = '10px';
+                label.style.fontWeight = 'bold';
+                label.style.background = 'rgba(255,255,255,0.7)';
+                line.appendChild(label);
+            }
+            wrapperElement.appendChild(line);
+            return line;
+        };
+
+        // Top Margin ~0.45cm (10%)? Using standard spec logic.
+        // If crop was perfect, Head top is at ~10% (0.45cm).
+        const topRef = 10; // 0.45cm / 4.5cm
+        const headMin = 3.2 / 4.5 * 100; // 71.1%
+        const headMax = 3.6 / 4.5 * 100; // 80%
+
+        // Hair Top Line
+        createLine(topRef, 'red', '頭髮頂端');
+
+        // Chin Bottom Range (Expected)
+        // Chin should be at Top + HeadHeight
+        // Min Chin Y = 10 + 71.1 = 81.1%
+        // Max Chin Y = 10 + 80 = 90%
+
+        const minChin = topRef + headMin;
+        const maxChin = topRef + headMax;
+
+        // Draw Range Box or Lines
+        createLine(maxChin, 'red', '下巴 (3.6cm)');
+        // createLine(minChin, 'orange', '下巴 (3.2cm)');
+
+        // Bracket on the right
+        const bracket = document.createElement('div');
+        bracket.style.position = 'absolute';
+        bracket.style.top = `${topRef}%`;
+        bracket.style.right = '2px';
+        bracket.style.height = `${headMax}%`; // down to max chin
+        bracket.style.width = '10px';
+        bracket.style.borderTop = '2px solid red';
+        bracket.style.borderBottom = '2px solid red';
+        bracket.style.borderRight = '2px solid red';
+        wrapperElement.appendChild(bracket);
+
+        const info = document.createElement('div');
+        info.innerText = '應介於 3.2 - 3.6 cm';
+        info.style.position = 'absolute';
+        info.style.right = '-110px'; // Push out
+        info.style.top = '50%';
+        info.style.transform = 'translateY(-50%)';
+        info.style.color = 'red';
+        info.style.fontSize = '12px';
+        info.style.fontWeight = 'bold';
+        // wrapperElement.appendChild(info); // Might overlay compare arrow, careful
     }
 };
