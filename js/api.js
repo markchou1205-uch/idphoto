@@ -80,7 +80,7 @@ export async function detectFace(base64) {
             // Formula: Hair Top = EyebrowY - (ChinY - EyebrowY) * 0.2
 
             // Default fallback
-            let headTopY = rect.top;
+            let hairTopY = rect.top;
             const chinY = rect.top + rect.height; // Use rect for chin if landmarks unreliable, but formulas need eyebrow
 
             if (data[0].faceLandmarks) {
@@ -94,15 +94,15 @@ export async function detectFace(base64) {
 
                 // Hair Top
                 const estimatedHairHeight = faceCoreH * 0.2;
-                headTopY = eyebrowY - estimatedHairHeight;
+                hairTopY = eyebrowY - estimatedHairHeight;
 
                 console.log(`[Crop Logic] EyebrowY: ${eyebrowY}, ChinY: ${chinY}, CoreH: ${faceCoreH}, HairOffset: ${estimatedHairHeight}`);
             } else {
                 console.warn("[Crop Logic] Landmarks missing, using fallback 20% offset from top");
-                headTopY = rect.top - (rect.height * 0.2);
+                hairTopY = rect.top - (rect.height * 0.2);
             }
 
-            const fullHeadH = chinY - headTopY;     // Total Head Height
+            const fullHeadH = chinY - hairTopY;     // Total Head Height
 
             // 2. Target Ratio
             // Formula: Target Photo Height = Full Head Height / 0.75
@@ -124,7 +124,7 @@ export async function detectFace(base64) {
             const topMarginPx = targetPhotoH * 0.10;
 
             // CropY = HairTopY - TopMarginPx
-            const cropY = headTopY - topMarginPx;
+            const cropY = hairTopY - topMarginPx;
 
             // Center Horizontally
             const cropX = (rect.left + rect.width / 2) - (targetPhotoW / 2);
