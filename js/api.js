@@ -49,7 +49,7 @@ export async function detectFace(base64) {
         }
 
         const data = await res.json();
-        console.log("Azure Detect Data:", data);
+        console.log("Azure Detect Data Length:", data ? data.length : 0);
 
         if (data && data.length > 0) {
             const rect = data[0].faceRectangle;
@@ -61,12 +61,31 @@ export async function detectFace(base64) {
             // New Assumption: Hair/Volume is 35% of Face Height.
 
             // 1. Define Head Boundaries
-            // Azure provides 'rect' (Forehead to Chin).
-            // Real Head Top (Hair) is estimated at 20% above forehead.
-            const faceH = rect.height;
-            const hairOffset = faceH * 0.35; // increased from 0.20
-            const headTopY = rect.top - hairOffset; // True Top
-            const chinY = rect.top + rect.height;   // True Bottom
+            // New Formula (User Request): Hair Top = EyebrowY - (ChinY - EyebrowY) * 0.2
+            // We need landmarks for this.
+
+            // Default fallback if landmarks missing (shouldn't happen with detection_01 & landmarks=true)
+            let headTopY = rect.top;
+            const chinY = rect.top + rect.height;
+
+            if (data[0].faceLandmarks) {
+                const l = data[0].faceLandmarks;
+                // Average Eyebrow Y
+                const eyebrowY = (l.eyebrowLeftOuter.y + l.eyebrowRightOuter.y) / 2;
+                // Distance Chin to Eyebrow
+                // Note: landmarks.underLipBottom is not chin. Azure doesn't give chin landmark explicitly in standard set? 
+                // Wait. Azure 'faceLandmarks' has 'underLipBottom'. Chin is usually 'rect.top + rect.height'.
+                // Let's use rect.bottom as ChinY for robustness.
+
+                const chinEyebrowDist = chinY - eyebrowY;
+                const estimatedHairHeight = chinEyebrowDist * 0.2; // 20% of chin-to-eyebrow distance
+                headTopY = eyebrowY - estimatedHairHeight;
+                console.log(`[Crop Logic] EyebrowY: ${eyebrowY}, ChinY: ${chinY}, Dist: ${chinEyebrowDist}, HairOffset: ${estimatedHairHeight}`);
+            } else {
+                console.warn("[Crop Logic] Landmarks missing, using fallback hair offset");
+                headTopY = rect.top - (rect.height * 0.2);
+            }
+
             const fullHeadH = chinY - headTopY;     // Total Head Height (Hair to Chin)
 
             // 2. Target Ratio

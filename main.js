@@ -95,7 +95,7 @@ async function handleFileUpload(e) {
             }
 
             state.originalImage = rawResult;
-            console.log("State Updated (Cleaned), Calling UI.showUseConfirm");
+            console.log("State Updated (Cleaned), Length:", state.originalImage.length);
 
             UI.showUseConfirm(DEFAULT_SPECS[state.spec].name, async () => {
                 console.log("Modal Confirmed, Starting Audit");
