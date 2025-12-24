@@ -262,19 +262,46 @@ export const UI = {
 
         // Clear previous
         container.innerHTML = '';
-
-        // Hide standard compare view, we will build a custom result view
         if (compareView) compareView.classList.add('d-none');
 
-        const wrapper = document.createElement('div');
-        wrapper.className = 'position-relative text-center animate-fade-in';
-        wrapper.style.maxWidth = '350px';
-        wrapper.style.margin = '0 auto'; // Centering Fix
+        // Main Flex Container
+        const mainWrapper = document.createElement('div');
+        mainWrapper.className = 'd-flex justify-content-center align-items-center gap-5 animate-fade-in';
+        mainWrapper.style.width = '100%';
+        // Ensure responsiveness on small screens
+        mainWrapper.style.flexWrap = 'wrap';
+
+        // 1. Original (Left)
+        const leftCol = document.createElement('div');
+        leftCol.className = 'text-center';
+        leftCol.innerHTML = '<h5 class="fw-bold mb-3">原始照片</h5>';
+
+        // Clone original image to avoid moving the reference if needed, 
+        // or just use valid src. origImg is an Image object.
+        // We really want to display it, so append it.
+        // BUT origImg might be huge.
+        origImg.className = 'shadow-sm rounded';
+        origImg.style.maxHeight = '300px';
+        origImg.style.maxWidth = '100%';
+        origImg.style.objectFit = 'contain';
+        leftCol.appendChild(origImg);
+        mainWrapper.appendChild(leftCol);
+
+        // 2. Arrow (Center)
+        const arrow = document.createElement('div');
+        arrow.className = 'd-none d-md-block'; // Hide on mobile if wrapping
+        arrow.innerHTML = '<i class="bi bi-arrow-right fs-1 text-secondary"></i>';
+        mainWrapper.appendChild(arrow);
+
+        // 3. Result (Right)
+        const rightCol = document.createElement('div');
+        rightCol.className = 'position-relative text-center';
+        rightCol.style.maxWidth = '350px';
 
         const title = document.createElement('h5');
         title.className = 'fw-bold mb-3';
         title.innerHTML = '製作成品 (35x45mm)';
-        wrapper.appendChild(title);
+        rightCol.appendChild(title);
 
         // BG Removal Warning
         if (!bgRemoved) {
@@ -282,29 +309,30 @@ export const UI = {
             warning.className = 'alert alert-warning py-1 small mb-2';
             warning.style.fontSize = '0.8rem';
             warning.innerHTML = '<i class="bi bi-exclamation-triangle"></i> 無法移除背景 (服務授權限制)';
-            wrapper.appendChild(warning);
+            rightCol.appendChild(warning);
         }
 
         // Final Image
         resultImg.className = 'img-fluid shadow-lg rounded';
         resultImg.style.border = '1px solid #ddd';
         resultImg.style.maxHeight = '450px';
-        wrapper.appendChild(resultImg);
+        rightCol.appendChild(resultImg);
 
         // Manual Adjust Button
         const btnContainer = document.createElement('div');
         btnContainer.className = 'mt-3';
         btnContainer.innerHTML = `
             <button id="manual-adjust-btn" class="btn btn-secondary btn-sm shadow-sm">
-                <i class="bi bi-tools"></i> 手動調整 / 重新裁切
+                <i class="bi bi-tools"></i> 🛠 手動調整 / 重新裁切
             </button>
         `;
-        wrapper.appendChild(btnContainer);
+        rightCol.appendChild(btnContainer);
 
-        container.appendChild(wrapper);
+        mainWrapper.appendChild(rightCol);
+        container.appendChild(mainWrapper);
 
         return {
-            wrapper: wrapper,
+            wrapper: rightCol, // Guides attach here
             imgElement: resultImg,
             manualBtn: container.querySelector('#manual-adjust-btn')
         };
