@@ -80,13 +80,20 @@ async function handleFileUpload(e) {
         try {
             let rawResult = event.target.result;
 
-            // --- HARDCORE SANITIZER ---
-            // 1. Remove ALL occurrences of data header (Global Regex)
-            const cleanBody = rawResult.replace(/(data:image\/[a-zA-Z]+;base64,)/g, '');
-            // 2. Add ONE correct header
-            state.originalImage = `data:image/jpeg;base64,${cleanBody}`;
+            // --- ULTIMATE STRUCTURAL SANITIZER ---
+            // Structural split is safer: get the last part (data) and strictly add one header.
 
-            console.log("State Updated (Total Sanitization). Length:", state.originalImage.length);
+            if (rawResult.includes(',')) {
+                // Split by comma to separate any headers from data
+                // The last element is always the raw base64 data
+                const parts = rawResult.split(',');
+                const cleanData = parts.pop();
+                state.originalImage = `data:image/jpeg;base64,${cleanData}`;
+            } else {
+                state.originalImage = rawResult;
+            }
+
+            console.log("State Updated (Split Sanitization). Length:", state.originalImage.length);
 
             UI.showUseConfirm(DEFAULT_SPECS[state.spec].name, async () => {
                 console.log("Modal Confirmed, Starting Audit");
@@ -162,8 +169,6 @@ async function runProductionPhase() {
 }
 
 function applyGuideOverlay(targetImgElement) {
-    // ... Copying guide overlay code from previous step or keeping it if I read it context ...
-    // To save tokens I will re-implement it briefly as it is critical.
     const overlay = document.createElement('div');
     overlay.className = 'guide-overlay';
     overlay.style.position = 'absolute';
