@@ -142,8 +142,6 @@ export const UI = {
                 ${warningBlock}
 
 
-                ${warningBlock}
-
                 <div style="text-align: right; margin-top: 25px;">
                      <button class="id-btn id-btn-secondary" id="modal-retry-btn">重傳照片</button>
                      <button class="id-btn ${proceedBtnClass}" id="modal-proceed-btn">${proceedBtnText}</button>
