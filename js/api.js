@@ -524,202 +524,200 @@ function cropImageLocally(base64, crop) {
             resolve(base64.includes(',') ? base64.split(',')[1] : base64); // Fallback to original
         };
         img.src = ensureSinglePrefix(base64);
-    });
->>>>>>> 86ec3bea05758f378873d706ea96e4e94cd2a8cb
-}
+    }
 
 
 
 // 3. Validation Check (Azure)
 export async function runCheckApi(imgBase64, specId = 'passport') {
-    if (!AZURE || !AZURE.ENDPOINT || !AZURE.KEY) {
-        return { results: [{ category: 'basic', status: 'fail', item: '系統錯誤', value: 'API Key Missing' }] };
-    }
-
-    try {
-        // Use Universal Sanitizer
-        const cleanBase64 = ensureSinglePrefix(imgBase64);
-        console.log("Calling runCheckApi. Clean Len:", cleanBase64.length);
-
-        const blob = base64ToBlob(cleanBase64);
-        const endpoint = AZURE.ENDPOINT.endsWith('/') ? AZURE.ENDPOINT.slice(0, -1) : AZURE.ENDPOINT;
-        const url = `${endpoint}/face/v1.0/detect?returnFaceAttributes=glasses,occlusion,exposure&returnFaceLandmarks=true&detectionModel=detection_01&returnFaceId=false`;
-
-        console.log("runCheckApi Fetching URL:", url);
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Ocp-Apim-Subscription-Key': AZURE.KEY,
-                'Content-Type': 'application/octet-stream'
-            },
-            body: blob
-        });
-
-        console.log("runCheckApi Status:", response.status);
-
-        if (!response.ok) {
-            const errData = await response.json();
-            console.error("runCheckApi Azure Error:", errData);
-            throw new Error(errData.error?.message || `Azure API Error: ${response.status}`);
+        if (!AZURE || !AZURE.ENDPOINT || !AZURE.KEY) {
+            return { results: [{ category: 'basic', status: 'fail', item: '系統錯誤', value: 'API Key Missing' }] };
         }
 
-        const azureData = await response.json();
-        const results = [];
+        try {
+            // Use Universal Sanitizer
+            const cleanBase64 = ensureSinglePrefix(imgBase64);
+            console.log("Calling runCheckApi. Clean Len:", cleanBase64.length);
 
-        if (azureData.length === 0) {
-            results.push({ category: 'basic', status: 'fail', item: '人臉偵測', value: '未偵測到人臉', standard: '需清晰人臉' });
-            return { results };
-        }
+            const blob = base64ToBlob(cleanBase64);
+            const endpoint = AZURE.ENDPOINT.endsWith('/') ? AZURE.ENDPOINT.slice(0, -1) : AZURE.ENDPOINT;
+            const url = `${endpoint}/face/v1.0/detect?returnFaceAttributes=glasses,occlusion,exposure&returnFaceLandmarks=true&detectionModel=detection_01&returnFaceId=false`;
 
-        const face = azureData[0];
-        const attrs = face.faceAttributes;
-        const landmarks = face.faceLandmarks;
+            console.log("runCheckApi Fetching URL:", url);
 
-        // 1. Mouth/Expression Check (Relaxed Threshold: 4.0%)
-        if (landmarks && landmarks.upperLipBottom && landmarks.underLipTop) {
-            const upperLipY = landmarks.upperLipBottom.y;
-            const lowerLipY = landmarks.underLipTop.y;
-            const mouthOpen = Math.abs(lowerLipY - upperLipY);
-            const faceH = face.faceRectangle.height;
-            const mouthRatio = (mouthOpen / faceH) * 100;
-
-            if (mouthRatio > 4.0) {
-                results.push({ category: 'compliance', status: 'fail', item: '表情/嘴巴', value: `嘴巴未閉合 (${mouthRatio.toFixed(1)}%)`, standard: '自然平視，不露齒' });
-            } else {
-                results.push({ category: 'compliance', status: 'pass', item: '表情/嘴巴', value: '合格', standard: '合格' });
-            }
-        } else {
-            results.push({ category: 'compliance', status: 'warn', item: '表情/嘴巴', value: '無法檢測', standard: '請閉合嘴巴' });
-        }
-
-        // 2. Ratio Check (Always Pass + Note)
-        const img = new Image();
-        img.src = cleanBase64;
-        await new Promise(r => img.onload = r); // Wait for load to get height
-
-        if (img.naturalHeight > 0) {
-            results.push({
-                category: 'compliance', status: 'pass',
-                item: '比例檢查',
-                value: '系統將自動校正比例',
-                standard: '3.2~3.6 公分'
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Ocp-Apim-Subscription-Key': AZURE.KEY,
+                    'Content-Type': 'application/octet-stream'
+                },
+                body: blob
             });
-        }
 
-        // 3. Other Checks
-        if (attrs.glasses !== 'NoGlasses' && attrs.glasses !== 'noGlasses') {
-            results.push({ category: 'compliance', status: 'warn', item: '眼鏡檢查', value: `偵測到眼鏡`, standard: '建議不戴眼鏡' });
-        } else {
-            results.push({ category: 'compliance', status: 'pass', item: '眼鏡檢查', value: '無配戴眼鏡', standard: '建議不戴眼鏡' });
-        }
+            console.log("runCheckApi Status:", response.status);
 
-        // 4. Hair/Eyebrows Check (New)
-        if (attrs.occlusion) {
-            const { foreheadOccluded, eyeOccluded } = attrs.occlusion;
-            if (foreheadOccluded || eyeOccluded) {
-                results.push({ category: 'compliance', status: 'fail', item: '頭髮/五官', value: '頭髮遮擋五官', standard: '眉毛/眼睛需清晰' });
+            if (!response.ok) {
+                const errData = await response.json();
+                console.error("runCheckApi Azure Error:", errData);
+                throw new Error(errData.error?.message || `Azure API Error: ${response.status}`);
+            }
+
+            const azureData = await response.json();
+            const results = [];
+
+            if (azureData.length === 0) {
+                results.push({ category: 'basic', status: 'fail', item: '人臉偵測', value: '未偵測到人臉', standard: '需清晰人臉' });
+                return { results };
+            }
+
+            const face = azureData[0];
+            const attrs = face.faceAttributes;
+            const landmarks = face.faceLandmarks;
+
+            // 1. Mouth/Expression Check (Relaxed Threshold: 4.0%)
+            if (landmarks && landmarks.upperLipBottom && landmarks.underLipTop) {
+                const upperLipY = landmarks.upperLipBottom.y;
+                const lowerLipY = landmarks.underLipTop.y;
+                const mouthOpen = Math.abs(lowerLipY - upperLipY);
+                const faceH = face.faceRectangle.height;
+                const mouthRatio = (mouthOpen / faceH) * 100;
+
+                if (mouthRatio > 4.0) {
+                    results.push({ category: 'compliance', status: 'fail', item: '表情/嘴巴', value: `嘴巴未閉合 (${mouthRatio.toFixed(1)}%)`, standard: '自然平視，不露齒' });
+                } else {
+                    results.push({ category: 'compliance', status: 'pass', item: '表情/嘴巴', value: '合格', standard: '合格' });
+                }
             } else {
-                results.push({ category: 'compliance', status: 'pass', item: '頭髮/五官', value: '五官清晰', standard: '眉毛/眼睛需清晰' });
+                results.push({ category: 'compliance', status: 'warn', item: '表情/嘴巴', value: '無法檢測', standard: '請閉合嘴巴' });
             }
-        } else {
-            // Fallback if occlusion not returned
-            results.push({ category: 'compliance', status: 'pass', item: '頭髮/五官', value: '檢測通過', standard: '眉毛/眼睛需清晰' });
-        }
 
-        if (attrs.exposure) {
-            if (attrs.exposure.exposureLevel !== 'GoodExposure') {
-                results.push({ category: 'quality', status: 'warn', item: '光線檢查', value: '光線可能不均', standard: '需明亮' });
+            // 2. Ratio Check (Always Pass + Note)
+            const img = new Image();
+            img.src = cleanBase64;
+            await new Promise(r => img.onload = r); // Wait for load to get height
+
+            if (img.naturalHeight > 0) {
+                results.push({
+                    category: 'compliance', status: 'pass',
+                    item: '比例檢查',
+                    value: '系統將自動校正比例',
+                    standard: '3.2~3.6 公分'
+                });
+            }
+
+            // 3. Other Checks
+            if (attrs.glasses !== 'NoGlasses' && attrs.glasses !== 'noGlasses') {
+                results.push({ category: 'compliance', status: 'warn', item: '眼鏡檢查', value: `偵測到眼鏡`, standard: '建議不戴眼鏡' });
             } else {
-                results.push({ category: 'quality', status: 'pass', item: '光線檢查', value: '合格', standard: '合格' });
+                results.push({ category: 'compliance', status: 'pass', item: '眼鏡檢查', value: '無配戴眼鏡', standard: '建議不戴眼鏡' });
             }
-        }
 
-        results.push({ category: 'basic', status: 'pass', item: '影像解析度', value: '符合標準', standard: '> 600dpi' });
-
-        return { results };
-
-    } catch (e) {
-        console.error("Check Failed:", e);
-        return {
-            results: [
-                { category: 'basic', status: 'warn', item: '系統連線', value: '無法連線驗證', standard: '需網路連線' }
-            ]
-        };
-    }
-}
-
-// Stubs for others
-export async function fixImageApi(imgBase64, action) { return { image_base64: imgBase64 }; }
-export async function generateLayoutApi(imgBase64) { return { layout_image: imgBase64 }; }
-export async function sendEmailApi(email, imgBase64) { return { success: true }; }
-
-// Helper: Insert DPI Metadata (JFIF 300 DPI)
-async function insertDPI(blob, dpi) {
-    // Basic JFIF Header Modifier
-    // JFIF APP0 Marker: FF E0
-    // Length: 00 10 (16 bytes)
-    // ID: 4A 46 49 46 00 (JFIF\0)
-    // Version: 01 02
-    // Units: 01 (Dots per inch)
-    // Xdensity: high byte, low byte
-    // Ydensity: high byte, low byte
-    // Thumbnail: 00 00
-
-    const buffer = await blob.arrayBuffer();
-    const data = new Uint8Array(buffer);
-
-    // Check for SOI
-    if (data[0] !== 0xFF || data[1] !== 0xD8) return blob; // Not valid JPEG?
-
-    // Scan markers
-    let pos = 2;
-    while (pos < data.length) {
-        if (data[pos] !== 0xFF) break; // Error
-        const marker = data[pos + 1];
-
-        if (marker === 0xE0) {
-            // Found APP0 (JFIF). Modifying.
-            // Check ID
-            if (data[pos + 4] === 0x4A && data[pos + 5] === 0x46 && data[pos + 6] === 0x49 && data[pos + 7] === 0x46) {
-                // Update Units (offset 11) -> 1
-                data[pos + 11] = 1;
-                // Update X Density (offset 12, 13)
-                data[pos + 12] = (dpi >> 8) & 0xFF;
-                data[pos + 13] = dpi & 0xFF;
-                // Update Y Density (offset 14, 15)
-                data[pos + 14] = (dpi >> 8) & 0xFF;
-                data[pos + 15] = dpi & 0xFF;
-                return new Blob([data], { type: 'image/jpeg' });
+            // 4. Hair/Eyebrows Check (New)
+            if (attrs.occlusion) {
+                const { foreheadOccluded, eyeOccluded } = attrs.occlusion;
+                if (foreheadOccluded || eyeOccluded) {
+                    results.push({ category: 'compliance', status: 'fail', item: '頭髮/五官', value: '頭髮遮擋五官', standard: '眉毛/眼睛需清晰' });
+                } else {
+                    results.push({ category: 'compliance', status: 'pass', item: '頭髮/五官', value: '五官清晰', standard: '眉毛/眼睛需清晰' });
+                }
+            } else {
+                // Fallback if occlusion not returned
+                results.push({ category: 'compliance', status: 'pass', item: '頭髮/五官', value: '檢測通過', standard: '眉毛/眼睛需清晰' });
             }
-        }
 
-        // Next marker logic (skip current segment)
-        // Length field in Big Endian at pos+2, pos+3
-        const len = (data[pos + 2] << 8) | data[pos + 3];
-        pos += 2 + len;
+            if (attrs.exposure) {
+                if (attrs.exposure.exposureLevel !== 'GoodExposure') {
+                    results.push({ category: 'quality', status: 'warn', item: '光線檢查', value: '光線可能不均', standard: '需明亮' });
+                } else {
+                    results.push({ category: 'quality', status: 'pass', item: '光線檢查', value: '合格', standard: '合格' });
+                }
+            }
+
+            results.push({ category: 'basic', status: 'pass', item: '影像解析度', value: '符合標準', standard: '> 600dpi' });
+
+            return { results };
+
+        } catch (e) {
+            console.error("Check Failed:", e);
+            return {
+                results: [
+                    { category: 'basic', status: 'warn', item: '系統連線', value: '無法連線驗證', standard: '需網路連線' }
+                ]
+            };
+        }
     }
 
-    // IF No APP0, we should insert it right after SOI.
-    // 18 bytes: FF E0 00 10 4A 46 49 46 00 01 01 01 [DPI_HI] [DPI_LO] [DPI_HI] [DPI_LO] 00 00
-    const header = new Uint8Array([
-        0xFF, 0xE0, 0x00, 0x10,
-        0x4A, 0x46, 0x49, 0x46, 0x00,
-        0x01, 0x02, // Version
-        0x01, // 1 = Dots per inch
-        (dpi >> 8) & 0xFF, dpi & 0xFF,
-        (dpi >> 8) & 0xFF, dpi & 0xFF,
-        0x00, 0x00
-    ]);
+    // Stubs for others
+    export async function fixImageApi(imgBase64, action) { return { image_base64: imgBase64 }; }
+    export async function generateLayoutApi(imgBase64) { return { layout_image: imgBase64 }; }
+    export async function sendEmailApi(email, imgBase64) { return { success: true }; }
 
-    // Concat SOI + New APP0 + Rest
-    const newData = new Uint8Array(data.length + 18);
-    newData[0] = 0xFF; newData[1] = 0xD8;
-    newData.set(header, 2);
-    newData.set(data.subarray(2), 20);
+    // Helper: Insert DPI Metadata (JFIF 300 DPI)
+    async function insertDPI(blob, dpi) {
+        // Basic JFIF Header Modifier
+        // JFIF APP0 Marker: FF E0
+        // Length: 00 10 (16 bytes)
+        // ID: 4A 46 49 46 00 (JFIF\0)
+        // Version: 01 02
+        // Units: 01 (Dots per inch)
+        // Xdensity: high byte, low byte
+        // Ydensity: high byte, low byte
+        // Thumbnail: 00 00
 
-    return new Blob([newData], { type: 'image/jpeg' });
-}
+        const buffer = await blob.arrayBuffer();
+        const data = new Uint8Array(buffer);
 
-// Export DPI Helper just in case UI needs it
-export { insertDPI };
+        // Check for SOI
+        if (data[0] !== 0xFF || data[1] !== 0xD8) return blob; // Not valid JPEG?
+
+        // Scan markers
+        let pos = 2;
+        while (pos < data.length) {
+            if (data[pos] !== 0xFF) break; // Error
+            const marker = data[pos + 1];
+
+            if (marker === 0xE0) {
+                // Found APP0 (JFIF). Modifying.
+                // Check ID
+                if (data[pos + 4] === 0x4A && data[pos + 5] === 0x46 && data[pos + 6] === 0x49 && data[pos + 7] === 0x46) {
+                    // Update Units (offset 11) -> 1
+                    data[pos + 11] = 1;
+                    // Update X Density (offset 12, 13)
+                    data[pos + 12] = (dpi >> 8) & 0xFF;
+                    data[pos + 13] = dpi & 0xFF;
+                    // Update Y Density (offset 14, 15)
+                    data[pos + 14] = (dpi >> 8) & 0xFF;
+                    data[pos + 15] = dpi & 0xFF;
+                    return new Blob([data], { type: 'image/jpeg' });
+                }
+            }
+
+            // Next marker logic (skip current segment)
+            // Length field in Big Endian at pos+2, pos+3
+            const len = (data[pos + 2] << 8) | data[pos + 3];
+            pos += 2 + len;
+        }
+
+        // IF No APP0, we should insert it right after SOI.
+        // 18 bytes: FF E0 00 10 4A 46 49 46 00 01 01 01 [DPI_HI] [DPI_LO] [DPI_HI] [DPI_LO] 00 00
+        const header = new Uint8Array([
+            0xFF, 0xE0, 0x00, 0x10,
+            0x4A, 0x46, 0x49, 0x46, 0x00,
+            0x01, 0x02, // Version
+            0x01, // 1 = Dots per inch
+            (dpi >> 8) & 0xFF, dpi & 0xFF,
+            (dpi >> 8) & 0xFF, dpi & 0xFF,
+            0x00, 0x00
+        ]);
+
+        // Concat SOI + New APP0 + Rest
+        const newData = new Uint8Array(data.length + 18);
+        newData[0] = 0xFF; newData[1] = 0xD8;
+        newData.set(header, 2);
+        newData.set(data.subarray(2), 20);
+
+        return new Blob([newData], { type: 'image/jpeg' });
+    }
+
+    // Export DPI Helper just in case UI needs it
+    export { insertDPI };
