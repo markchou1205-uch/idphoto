@@ -406,7 +406,9 @@ export async function processPreview(base64, cropParams, faceData = null) {
                 const transparentBlob = await (await fetch(`data:image/png;base64,${base64Data}`)).blob();
 
                 // Composite
-                return await compositeToWhiteBackground(transparentBlob);
+                const finalB64 = await compositeToWhiteBackground(transparentBlob);
+                const cleanB64 = finalB64.split(',').pop();
+                return { photos: [cleanB64, cleanB64] };
 
             } else {
                 throw new Error(`Cloudinary Upload Failed: ${uploadRes.status}`);
