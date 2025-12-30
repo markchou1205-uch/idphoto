@@ -596,6 +596,6 @@ export const UI = {
 
         // Chin Bottom (90% = 40.5mm, implying 3.6cm head height)
         createLine(90, 'red', '下巴 (3.6cm)');
->>>>>>> 86ec3bea05758f378873d706ea96e4e94cd2a8cb
+
     }
 };
