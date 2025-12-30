@@ -422,7 +422,6 @@ export async function processPreview(base64, cropParams, faceData = null) {
             // To be safe for Localhost user, I will KEEP Local AI as catch-all fallback
             // but log valid warning.
         }
-<<<<<<< HEAD
     }
 
     // 2. Local AI Flow (Fallback)
