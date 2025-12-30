@@ -203,6 +203,46 @@ async function runAuditPhase() {
     }
 }
 
+import { ManualEditor } from './js/editor.js';
+
+// ... (existing helper)
+function triggerManualEdit() {
+    new ManualEditor(
+        state.originalImage,
+        (newBase64) => {
+            state.processedImage = 'data:image/jpeg;base64,' + newBase64;
+            // Re-render result
+            renderResult(state.processedImage);
+        },
+        () => { console.log("Manual Edit Cancelled"); },
+        state.faceData ? state.faceData.suggestedCrop : null
+    );
+}
+
+function renderResult(imgSrc, bgRemoved = false) {
+    // Ensure View Switch
+    const dashboard = document.getElementById('dashboard-area');
+    const resultDash = document.getElementById('result-dashboard');
+    if (dashboard) dashboard.classList.add('d-none');
+    if (resultDash) resultDash.classList.remove('d-none');
+
+    const finalImg = new Image();
+    finalImg.onload = () => {
+        // Use updated UI.showComparison which returns handles
+        const uiRefs = UI.showComparison(state.originalImage, finalImg, bgRemoved);
+
+        // Apply Guides
+        UI.applyResultGuides(uiRefs.wrapper);
+
+        // Bind Manual Button
+        if (uiRefs.manualBtn) {
+            uiRefs.manualBtn.onclick = triggerManualEdit;
+        }
+    };
+    finalImg.src = imgSrc;
+}
+
+
 // Phase 2: Production (Processing)
 // Phase 2: Production (Service + Final)
 async function runProductionPhase() {
@@ -254,74 +294,4 @@ async function runProductionPhase() {
         alert("製作失敗，請重試");
     }
 }
-
-
-
-function applyGuideOverlay(targetImgElement) {
-    const overlay = document.createElement('div');
-    overlay.className = 'guide-overlay';
-    overlay.style.position = 'absolute';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100%';
-    overlay.style.height = '100%';
-    overlay.style.pointerEvents = 'none';
-
-    function createStyleLine(top, left, width, height, border, text, textPos, color = '#d00') {
-        const el = document.createElement('div');
-        el.style.position = 'absolute';
-        el.style.top = top;
-        el.style.left = left;
-        el.style.width = width;
-        el.style.height = height;
-        if (border) el.style.border = border;
-        el.style.boxSizing = 'border-box';
-        el.style.zIndex = '10';
-        if (text) {
-            const label = document.createElement('span');
-            label.innerText = text;
-            label.style.position = 'absolute';
-            label.style.color = color;
-            label.style.fontSize = '12px';
-            label.style.fontWeight = 'bold';
-            label.style.whiteSpace = 'nowrap';
-            label.style.fontFamily = 'Arial, sans-serif';
-            switch (textPos) {
-                case 'left': label.style.right = '8px'; label.style.top = '50%'; label.style.transform = 'translateY(-50%)'; break;
-                case 'bottom': label.style.top = '6px'; label.style.left = '50%'; label.style.transform = 'translateX(-50%)'; break;
-                case 'right-center': label.style.left = '10px'; label.style.top = '50%'; label.style.transform = 'translateY(-50%)'; break;
-            }
-            el.appendChild(label);
-        }
-        return el;
-    }
-
-    const leftRuler = createStyleLine('0%', '-15px', '10px', '100%', '', '4.5公分', 'left', '#333');
-    leftRuler.style.borderLeft = '1px solid #999'; leftRuler.style.borderTop = '1px solid #999'; leftRuler.style.borderBottom = '1px solid #999';
-    overlay.appendChild(leftRuler);
-
-    const bottomRuler = createStyleLine('100%', '0%', '100%', '10px', '', '3.5公分', 'bottom', '#333');
-    bottomRuler.style.top = 'calc(100% + 5px)';
-    bottomRuler.style.borderLeft = '1px solid #999'; bottomRuler.style.borderRight = '1px solid #999'; bottomRuler.style.borderBottom = '1px solid #999';
-    overlay.appendChild(bottomRuler);
-
-    const bracketTop = 10.0;
-    const bracketHeight = 75.5;
-    overlay.appendChild(createStyleLine(bracketTop + '%', '0', '100%', '1px', '1px dashed red', ''));
-    const rightBracket = createStyleLine(bracketTop + '%', '100%', '10px', bracketHeight + '%', '', '應介於 3.2 - 3.6 cm', 'right-center');
-    rightBracket.style.borderTop = '2px solid red';
-    rightBracket.style.borderBottom = '2px solid red';
-    rightBracket.style.borderRight = '2px solid red';
-    overlay.appendChild(rightBracket);
-    overlay.appendChild(createStyleLine((bracketTop + bracketHeight) + '%', '0', '100%', '1px', '1px dashed red', ''));
-
-    const wrapper = document.createElement('div');
-    wrapper.style.position = 'relative';
-    wrapper.style.display = 'inline-block';
-    wrapper.style.marginTop = '20px';
-    wrapper.style.marginLeft = '20px';
-    wrapper.style.marginBottom = '20px';
-    targetImgElement.parentNode.insertBefore(wrapper, targetImgElement);
-    wrapper.appendChild(targetImgElement);
-    wrapper.appendChild(overlay);
-}
+// Removed legacy applyGuideOverlay (logic moved to UI)

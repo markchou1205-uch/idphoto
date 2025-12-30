@@ -422,6 +422,7 @@ export async function processPreview(base64, cropParams, faceData = null) {
             // To be safe for Localhost user, I will KEEP Local AI as catch-all fallback
             // but log valid warning.
         }
+<<<<<<< HEAD
     }
 
     // 2. Local AI Flow (Fallback)
@@ -473,6 +474,75 @@ export async function processPreview(base64, cropParams, faceData = null) {
 
 
     return { photos: [cleanBase64, cleanBase64] };
+=======
+    } catch (e) {
+        console.error("Cloudinary Process Failed/Skipped:", e);
+    }
+
+    // --- FINAL FALLBACK: LOCAL CROP ---
+    console.log("Falling back to Local Canvas Crop...");
+    try {
+        const localResult = await cropImageLocally(base64, cropParams);
+        return { photos: [localResult, localResult], bgRemoved: false }; // Return simple cropped version
+    } catch (localErr) {
+        console.error("Local Crop Failed:", localErr);
+        // Last resort: return original
+        const cleanBase64 = base64.includes(',') ? base64.split(',')[1] : base64;
+        return { photos: [cleanBase64, cleanBase64], bgRemoved: false };
+    }
+}
+
+// Helper: Local Canvas Crop
+function cropImageLocally(base64, crop) {
+    return new Promise((resolve, reject) => {
+        if (!base64) {
+            console.error("Local Crop: No base64 input");
+            return resolve(null); // Fail gracefully
+        }
+
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 350;
+            canvas.height = 450;
+            const ctx = canvas.getContext('2d');
+
+            // Default crop if missing
+            let x = 0, y = 0, w = img.width, h = img.height;
+            if (crop) {
+                x = crop.x; y = crop.y; w = crop.w; h = crop.h;
+            } else {
+                // Center crop strategy if no face data
+                const targetRatio = 350 / 450;
+                const imgRatio = img.width / img.height;
+                if (imgRatio > targetRatio) {
+                    h = img.height;
+                    w = h * targetRatio;
+                    x = (img.width - w) / 2;
+                    y = 0;
+                } else {
+                    w = img.width;
+                    h = w / targetRatio;
+                    x = 0;
+                    y = (img.height - h) / 2;
+                }
+            }
+
+            // Draw cropped portion
+            ctx.drawImage(img, x, y, w, h, 0, 0, 350, 450);
+
+            // Export to Base64
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+            const b64 = dataUrl.split(',')[1];
+            resolve(b64);
+        };
+        img.onerror = (e) => {
+            console.error("Local Crop Image Load Error:", e);
+            resolve(base64.includes(',') ? base64.split(',')[1] : base64); // Fallback to original
+        };
+        img.src = ensureSinglePrefix(base64);
+    });
+>>>>>>> 86ec3bea05758f378873d706ea96e4e94cd2a8cb
 }
 
 

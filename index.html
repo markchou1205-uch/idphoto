@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,165 +10,200 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
-<div class="d-flex w-100 h-100 overflow-hidden">
-    
-    <div id="sidebar-icons" class="d-flex flex-column align-items-center py-3 border-end bg-dark text-white">
-        <div class="mb-4 user-avatar-container" onclick="toggleUserProfile()" title="會員中心">
-            <img src="https://ui-avatars.com/api/?name=User&background=random" class="rounded-circle border border-2 border-light" width="40" height="40">
-            <span class="position-absolute top-0 start-100 translate-middle p-1 bg-success border border-light rounded-circle" style="width:10px;height:10px;"></span>
-        </div>
+    <div class="d-flex w-100 h-100 overflow-hidden">
 
-        <div class="nav flex-column w-100 text-center gap-3 mt-2">
-            <div class="nav-item-icon active" id="nav-id-photo" onclick="switchFeature('id-photo')"><i class="bi bi-person-badge-fill"></i><span class="small d-block">證件照</span></div>
-            <div class="nav-item-icon" id="nav-job-photo" onclick="switchFeature('job-photo')"><i class="bi bi-briefcase-fill"></i><span class="small d-block">求職照</span></div>
-        </div>
-        <div class="mt-auto mb-3 nav-item-icon text-danger" onclick="location.reload()" title="重置"><i class="bi bi-power"></i></div>
-    </div>
-
-    <div id="sidebar-panels" class="bg-white border-end position-relative" style="width: 320px; min-width: 320px;">
-        <div id="panel-id-photo" class="feature-panel h-100 p-4 d-flex flex-column">
-            <h4 class="fw-bold mb-4">證件照製作</h4>
-            
-            <div id="upload-section">
-                <div class="upload-btn-wrapper mb-4">
-                    <input type="file" id="fileInput" accept="image/*" hidden onchange="handleFileUpload(this)">
-                    <button class="btn btn-primary w-100 py-3 shadow-sm fw-bold" onclick="document.getElementById('fileInput').click()"><i class="bi bi-cloud-upload me-2"></i> 上傳照片</button>
-                    <div class="text-center mt-2 small text-muted">支援 JPG, PNG (5MB內)</div>
-                </div>
-                <div id="uploaded-status" class="d-none mb-3 d-flex justify-content-between align-items-center">
-                    <span class="text-success fw-bold"><i class="bi bi-check-circle-fill"></i> 照片已載入</span>
-                    <a href="#" class="text-decoration-none small" onclick="resetUpload()">重選</a>
-                </div>
-            </div>
-            
-            <hr class="my-3 text-secondary opacity-25">
-            
-            <div id="specs-section">
-                <label class="fw-bold text-muted small mb-2 d-block">選擇用途</label>
-                <div id="specs-container" class="vstack gap-2 mb-3"></div>
-                <button id="btn-process" class="btn btn-primary w-100 py-2 fw-bold shadow-sm d-none" onclick="processImage()">
-                    <i class="bi bi-lightning-charge-fill"></i> 開始 AI 製作
-                </button>
+        <div id="sidebar-icons" class="d-flex flex-column align-items-center py-3 border-end bg-dark text-white">
+            <div class="mb-4 user-avatar-container" onclick="toggleUserProfile()" title="會員中心">
+                <img src="https://ui-avatars.com/api/?name=User&background=random"
+                    class="rounded-circle border border-2 border-light" width="40" height="40">
+                <span
+                    class="position-absolute top-0 start-100 translate-middle p-1 bg-success border border-light rounded-circle"
+                    style="width:10px;height:10px;"></span>
             </div>
 
-            <div class="mt-auto">
-                <div class="alert alert-secondary small mb-0" style="font-size: 0.8rem;">
-                    <strong><i class="bi bi-info-circle"></i> 免責聲明：</strong><br>
-                    本服務提供之 AI 預審與修圖結果僅供參考。最終照片是否符合規定，仍以相關主管機關（如外交部領事事務局、戶政事務所）之人工審核為準。
-                </div>
-                <a href="#" class="d-block text-center mt-2 small text-muted text-decoration-none">查看護照/身分證詳細規定 <i class="bi bi-box-arrow-up-right"></i></a>
+            <div class="nav flex-column w-100 text-center gap-3 mt-2">
+                <div class="nav-item-icon active" id="nav-id-photo" onclick="switchFeature('id-photo')"><i
+                        class="bi bi-person-badge-fill"></i><span class="small d-block">證件照</span></div>
+                <div class="nav-item-icon" id="nav-job-photo" onclick="switchFeature('job-photo')"><i
+                        class="bi bi-briefcase-fill"></i><span class="small d-block">求職照</span></div>
             </div>
-        </div>
-        
-        <div id="panel-job-photo" class="feature-panel d-none p-4"><h4>求職照</h4></div>
-    </div>
-
-    <div id="main-content" class="flex-grow-1 bg-light position-relative overflow-hidden">
-        
-        <div id="dashboard-area" class="container py-5 h-100 d-flex flex-column justify-content-center">
-            <div class="text-center mb-5"><h1 class="fw-bold text-dark">AI 影像工作室 Pro</h1><p class="text-muted fs-5">請從左側開始您的製作</p></div>
+            <div class="mt-auto mb-3 nav-item-icon text-danger" onclick="location.reload()" title="重置"><i
+                    class="bi bi-power"></i></div>
         </div>
 
-        <div id="result-dashboard" class="d-none container-fluid h-100 p-0">
-            <div class="row h-100 g-0">
-                <div class="col-md-5 bg-white border-end h-100 overflow-auto p-4" id="report-panel">
-                    <div id="report-loading" class="text-center py-5">
-                        <div class="spinner-border text-primary" role="status"></div>
-                        <p class="mt-3 text-muted">AI 正在進行 28 項合規檢查...</p>
-                        <div class="progress w-75 mx-auto" style="height: 5px;"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div></div>
+        <div id="sidebar-panels" class="bg-white border-end position-relative" style="width: 320px; min-width: 320px;">
+            <div id="panel-id-photo" class="feature-panel h-100 p-4 d-flex flex-column">
+                <h4 class="fw-bold mb-4">證件照製作</h4>
+
+                <div id="upload-section">
+                    <div class="upload-btn-wrapper mb-4">
+                        <input type="file" id="fileInput" accept="image/*" hidden onchange="handleFileUpload(this)">
+                        <button class="btn btn-primary w-100 py-3 shadow-sm fw-bold"
+                            onclick="document.getElementById('fileInput').click()"><i
+                                class="bi bi-cloud-upload me-2"></i> 上傳照片</button>
+                        <div class="text-center mt-2 small text-muted">支援 JPG, PNG (5MB內)</div>
                     </div>
-                    <div id="report-content" class="d-none animate-fade">
+                    <div id="uploaded-status" class="d-none mb-3 d-flex justify-content-between align-items-center">
+                        <span class="text-success fw-bold"><i class="bi bi-check-circle-fill"></i> 照片已載入</span>
+                        <a href="#" class="text-decoration-none small" onclick="resetUpload()">重選</a>
+                    </div>
+                </div>
+
+                <hr class="my-3 text-secondary opacity-25">
+
+                <div id="specs-section">
+                    <label class="fw-bold text-muted small mb-2 d-block">選擇用途</label>
+                    <div id="specs-container" class="vstack gap-2 mb-3"></div>
+                    <button id="btn-process" class="btn btn-primary w-100 py-2 fw-bold shadow-sm d-none"
+                        onclick="processImage()">
+                        <i class="bi bi-lightning-charge-fill"></i> 開始 AI 製作
+                    </button>
+                </div>
+
+                <div class="mt-auto">
+                    <div class="alert alert-secondary small mb-0" style="font-size: 0.8rem;">
+                        <strong><i class="bi bi-info-circle"></i> 免責聲明：</strong><br>
+                        本服務提供之 AI 預審與修圖結果僅供參考。最終照片是否符合規定，仍以相關主管機關（如外交部領事事務局、戶政事務所）之人工審核為準。
+                    </div>
+                    <a href="#" class="d-block text-center mt-2 small text-muted text-decoration-none">查看護照/身分證詳細規定 <i
+                            class="bi bi-box-arrow-up-right"></i></a>
+                </div>
+            </div>
+
+            <div id="panel-job-photo" class="feature-panel d-none p-4">
+                <h4>求職照</h4>
+            </div>
+        </div>
+
+        <div id="main-content" class="flex-grow-1 bg-light position-relative overflow-hidden">
+
+            <div id="dashboard-area" class="container py-5 h-100 d-flex flex-column justify-content-center">
+                <div class="text-center mb-5">
+                    <h1 class="fw-bold text-dark">AI 影像工作室 Pro</h1>
+                    <p class="text-muted fs-5">請從左側開始您的製作</p>
+                </div>
+            </div>
+
+            <div id="result-dashboard" class="d-none container-fluid h-100 p-0">
+                <div class="row h-100 g-0">
+                    <!-- Report Panel Removed -->
+                    <div class="col-md-12 h-100 d-flex flex-column bg-light">
+                        <div class="flex-grow-1 d-flex justify-content-center align-items-center p-4 position-relative"
+                            id="preview-container">
+                            <img id="main-preview-img" class="img-fluid shadow-sm rounded border d-none"
+                                style="max-height: 80%; background:white;">
+
+                            <div id="compare-view"
+                                class="d-none w-100 h-100 d-flex gap-3 align-items-center justify-content-center">
+                                <div class="text-center opacity-50"><small>原圖</small><br><img id="compare-orig"
+                                        class="img-fluid rounded border" style="max-height: 150px;"></div>
+                                <div class="text-center opacity-75"><small>基礎</small><br><img id="compare-basic"
+                                        class="img-fluid rounded border" style="max-height: 150px;"></div>
+                                <div class="text-center flex-grow-1"><span
+                                        class="badge bg-warning text-dark mb-1">修復後</span><br><img id="compare-fix"
+                                        class="img-fluid rounded border shadow" style="max-height: 400px;"></div>
+                            </div>
                         </div>
-                </div>
 
-                <div class="col-md-7 h-100 d-flex flex-column bg-light">
-                    <div class="flex-grow-1 d-flex justify-content-center align-items-center p-4 position-relative" id="preview-container">
-                        <img id="main-preview-img" class="img-fluid shadow-sm rounded border d-none" style="max-height: 80%; background:white;">
-                        
-                        <div id="compare-view" class="d-none w-100 h-100 d-flex gap-3 align-items-center justify-content-center">
-                            <div class="text-center opacity-50"><small>原圖</small><br><img id="compare-orig" class="img-fluid rounded border" style="max-height: 150px;"></div>
-                            <div class="text-center opacity-75"><small>基礎</small><br><img id="compare-basic" class="img-fluid rounded border" style="max-height: 150px;"></div>
-                            <div class="text-center flex-grow-1"><span class="badge bg-warning text-dark mb-1">修復後</span><br><img id="compare-fix" class="img-fluid rounded border shadow" style="max-height: 400px;"></div>
+                        <div class="bg-white border-top p-3 d-flex justify-content-between align-items-center shadow-sm"
+                            id="action-bar">
                         </div>
                     </div>
+                </div>
+            </div>
 
-                    <div class="bg-white border-top p-3 d-flex justify-content-between align-items-center shadow-sm" id="action-bar">
+            <div id="user-profile-panel"
+                class="d-none position-absolute top-0 end-0 h-100 bg-white shadow-lg p-4 animate-slide-in"
+                style="width: 350px; z-index: 1050;">
+                <div class="d-flex justify-content-between mb-4">
+                    <h4 class="fw-bold">會員中心</h4>
+                    <button class="btn-close" onclick="toggleUserProfile()"></button>
+                </div>
+                <div class="text-center mb-4">
+                    <img src="https://ui-avatars.com/api/?name=User&background=random" class="rounded-circle mb-2"
+                        width="80">
+                    <h5 id="user-name">訪客用戶</h5>
+                    <span class="badge bg-secondary" id="user-plan">免費版</span>
+                </div>
+                <hr>
+                <div class="vstack gap-3">
+                    <div class="d-flex justify-content-between"><span>剩餘點數</span><span class="fw-bold">0</span></div>
+                    <div class="d-flex justify-content-between"><span>訂閱狀態</span><span class="text-muted">未訂閱</span>
+                    </div>
+                </div>
+                <div class="mt-auto pt-5">
+                    <button class="btn btn-outline-danger w-100" onclick="alert('登出')">登出</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="modal fade" id="paymentModal" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark border-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-stars"></i> 升級進階服務，解鎖完美證件照</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body bg-light p-5">
+                    <div class="row g-4" id="pricing-cards">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    </div>
+
+    <!-- Spec Confirmation Modal -->
+    <div class="modal fade" id="checkSpecModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="checkSpecLabel">製作規格確認</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info d-flex align-items-center mb-3">
+                        <i class="bi bi-info-circle-fill me-2 fs-4"></i>
+                        <div>
+                            系統將自動進行：<br>
+                            <strong>1. AI 智能人臉偵測與裁切</strong><br>
+                            <strong>2. 自動去背與換白底 (電子檔/列印用)</strong><br>
+                            <strong>3. 尺寸調整為 3.5cm x 4.5cm (300DPI)</strong>
                         </div>
+                    </div>
+                    <p class="mb-0 text-muted small">請確保您上傳的照片五官清晰、無遮擋，以利 AI 正確辨識。</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="btn-confirm-use">確認開始製作</button>
                 </div>
             </div>
         </div>
-
-        <div id="user-profile-panel" class="d-none position-absolute top-0 end-0 h-100 bg-white shadow-lg p-4 animate-slide-in" style="width: 350px; z-index: 1050;">
-            <div class="d-flex justify-content-between mb-4">
-                <h4 class="fw-bold">會員中心</h4>
-                <button class="btn-close" onclick="toggleUserProfile()"></button>
-            </div>
-            <div class="text-center mb-4">
-                <img src="https://ui-avatars.com/api/?name=User&background=random" class="rounded-circle mb-2" width="80">
-                <h5 id="user-name">訪客用戶</h5>
-                <span class="badge bg-secondary" id="user-plan">免費版</span>
-            </div>
-            <hr>
-            <div class="vstack gap-3">
-                <div class="d-flex justify-content-between"><span>剩餘點數</span><span class="fw-bold">0</span></div>
-                <div class="d-flex justify-content-between"><span>訂閱狀態</span><span class="text-muted">未訂閱</span></div>
-            </div>
-            <div class="mt-auto pt-5">
-                <button class="btn btn-outline-danger w-100" onclick="alert('登出')">登出</button>
-            </div>
-        </div>
-
     </div>
-</div>
 
-</div>
-
-<!-- Spec Confirmation Modal -->
-<div class="modal fade" id="checkSpecModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="checkSpecLabel">製作規格確認</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-info d-flex align-items-center mb-3">
-                    <i class="bi bi-info-circle-fill me-2 fs-4"></i>
-                    <div>
-                        系統將自動進行：<br>
-                        <strong>1. AI 智能人臉偵測與裁切</strong><br>
-                        <strong>2. 自動去背與換白底 (電子檔/列印用)</strong><br>
-                        <strong>3. 尺寸調整為 3.5cm x 4.5cm (300DPI)</strong>
+    <div class="modal fade" id="paymentModal" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-dark border-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-stars"></i> 升級進階服務，解鎖完美證件照</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body bg-light p-5">
+                    <div class="row g-4" id="pricing-cards">
                     </div>
                 </div>
-                <p class="mb-0 text-muted small">請確保您上傳的照片五官清晰、無遮擋，以利 AI 正確辨識。</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-primary" id="btn-confirm-use">確認開始製作</button>
             </div>
         </div>
     </div>
-</div>
 
-<div class="modal fade" id="paymentModal" tabindex="-1">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-warning text-dark border-0">
-                <h5 class="modal-title fw-bold"><i class="bi bi-stars"></i> 升級進階服務，解鎖完美證件照</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body bg-light p-5">
-                <div class="row g-4" id="pricing-cards">
-                    </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script type="module" src="main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module" src="main.js"></script>
 </body>
+
 </html>

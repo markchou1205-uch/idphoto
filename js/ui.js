@@ -465,8 +465,148 @@ export const UI = {
 
         container.appendChild(img);
 
+<<<<<<< HEAD
         // Action Bar Cleanup
         const actionBar = document.getElementById('action-bar');
         if (actionBar) actionBar.innerHTML = '';
+=======
+
+        document.getElementById('modal-proceed-btn').onclick = () => {
+            overlay.remove();
+            onProceed(); // Go to Stage 2: Production
+        };
+        document.getElementById('modal-retry-btn').onclick = () => {
+            overlay.remove();
+            onRetry();
+        };
+    },
+
+
+
+    showComparison(origImg, resultImg, bgRemoved = true) {
+        const container = document.getElementById('preview-container');
+        const compareView = document.getElementById('compare-view');
+
+        // Clear previous
+        container.innerHTML = '';
+        if (compareView) compareView.classList.add('d-none');
+
+        // Main Flex Container
+        const mainWrapper = document.createElement('div');
+        mainWrapper.className = 'd-flex justify-content-center align-items-center gap-5 animate-fade-in';
+        mainWrapper.style.width = '100%';
+        // Ensure responsiveness on small screens
+        mainWrapper.style.flexWrap = 'wrap';
+
+        // 1. Original (Left)
+        const leftCol = document.createElement('div');
+        leftCol.className = 'text-center';
+        leftCol.innerHTML = '<h5 class="fw-bold mb-3">原始照片</h5>';
+
+        let imgEl;
+        if (typeof origImg === 'string') {
+            imgEl = new Image();
+            imgEl.src = origImg;
+        } else {
+            imgEl = origImg; // Assume it's an element
+        }
+
+        imgEl.className = 'shadow-sm rounded';
+        imgEl.style.maxHeight = '300px';
+        imgEl.style.maxWidth = '100%';
+        imgEl.style.objectFit = 'contain';
+        leftCol.appendChild(imgEl);
+        mainWrapper.appendChild(leftCol);
+
+        // 2. Arrow (Center)
+        const arrow = document.createElement('div');
+        arrow.className = 'd-none d-md-block'; // Hide on mobile if wrapping
+        arrow.innerHTML = '<i class="bi bi-arrow-right fs-1 text-secondary"></i>';
+        mainWrapper.appendChild(arrow);
+
+        // 3. Result (Right)
+        const rightCol = document.createElement('div');
+        rightCol.className = 'position-relative text-center';
+        rightCol.style.maxWidth = '350px';
+
+        const title = document.createElement('h5');
+        title.className = 'fw-bold mb-3';
+        title.innerHTML = '製作成品 (35x45mm)';
+        rightCol.appendChild(title);
+
+        // BG Removal Warning
+        if (!bgRemoved) {
+            const warning = document.createElement('div');
+            warning.className = 'alert alert-warning py-1 small mb-2';
+            warning.style.fontSize = '0.8rem';
+            warning.innerHTML = '<i class="bi bi-exclamation-triangle"></i> 無法移除背景 (服務授權限制)';
+            rightCol.appendChild(warning);
+        }
+
+        // Final Image
+        resultImg.className = 'img-fluid shadow-lg rounded';
+        resultImg.style.border = '1px solid #ddd';
+        resultImg.style.maxHeight = '450px';
+        rightCol.appendChild(resultImg);
+
+        // Manual Adjust Button
+        const btnContainer = document.createElement('div');
+        btnContainer.className = 'mt-3';
+        btnContainer.innerHTML = `
+            <button id="manual-adjust-btn" class="btn btn-secondary btn-sm shadow-sm">
+                <i class="bi bi-tools"></i> 🛠 手動調整 / 重新裁切
+            </button>
+        `;
+        rightCol.appendChild(btnContainer);
+
+        mainWrapper.appendChild(rightCol);
+        container.appendChild(mainWrapper);
+
+        return {
+            wrapper: rightCol, // Guides attach here
+            imgElement: resultImg,
+            manualBtn: container.querySelector('#manual-adjust-btn')
+        };
+    },
+
+    // 5. Apply Red Guide Lines (Ministry of Interior Spec)
+    applyResultGuides(wrapperElement) {
+        // Ensure relative context
+        wrapperElement.style.position = 'relative';
+
+        const createLine = (topPercent, color, text) => {
+            const line = document.createElement('div');
+            line.style.position = 'absolute';
+            line.style.top = `${topPercent}%`;
+            line.style.left = '0';
+            line.style.right = '0';
+            line.style.width = '100%';
+            line.style.borderTop = `2px dashed ${color}`;
+            line.style.zIndex = '10';
+            line.style.pointerEvents = 'none';
+
+            if (text) {
+                const label = document.createElement('span');
+                label.innerText = text;
+                label.style.position = 'absolute';
+                label.style.right = '5px';
+                label.style.top = '-22px'; // Above the line
+                label.style.color = color;
+                label.style.fontSize = '12px';
+                label.style.fontWeight = 'bold';
+                label.style.background = 'rgba(255,255,255,0.8)';
+                label.style.padding = '1px 4px';
+                label.style.borderRadius = '3px';
+                line.appendChild(label);
+            }
+            wrapperElement.appendChild(line);
+        };
+
+        // Hair Top Line (10% = 4.5mm)
+        createLine(10, 'red', '頭髮頂端');
+
+        // Chin Bottom (90% = 40.5mm, implying 3.6cm head height)
+        createLine(90, 'red', '下巴 (3.6cm)');
+>>>>>>> 86ec3bea05758f378873d706ea96e4e94cd2a8cb
     }
 };
