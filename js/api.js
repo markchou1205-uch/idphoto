@@ -472,23 +472,7 @@ export async function processPreview(base64, cropParams, faceData = null) {
     }
 
 
-    return { photos: [cleanBase64, cleanBase64] };
-=======
-    } catch (e) {
-        console.error("Cloudinary Process Failed/Skipped:", e);
-    }
 
-    // --- FINAL FALLBACK: LOCAL CROP ---
-    console.log("Falling back to Local Canvas Crop...");
-    try {
-        const localResult = await cropImageLocally(base64, cropParams);
-        return { photos: [localResult, localResult], bgRemoved: false }; // Return simple cropped version
-    } catch (localErr) {
-        console.error("Local Crop Failed:", localErr);
-        // Last resort: return original
-        const cleanBase64 = base64.includes(',') ? base64.split(',')[1] : base64;
-        return { photos: [cleanBase64, cleanBase64], bgRemoved: false };
-    }
 }
 
 // Helper: Local Canvas Crop
