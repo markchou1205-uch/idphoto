@@ -465,20 +465,9 @@ export const UI = {
 
         container.appendChild(img);
 
-<<<<<<< HEAD
         // Action Bar Cleanup
         const actionBar = document.getElementById('action-bar');
         if (actionBar) actionBar.innerHTML = '';
-=======
-
-        document.getElementById('modal-proceed-btn').onclick = () => {
-            overlay.remove();
-            onProceed(); // Go to Stage 2: Production
-        };
-        document.getElementById('modal-retry-btn').onclick = () => {
-            overlay.remove();
-            onRetry();
-        };
     },
 
 
