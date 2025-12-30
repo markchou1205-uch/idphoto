@@ -464,7 +464,11 @@ export async function processPreview(base64, cropParams, faceData = null) {
         const processedBlob = await removeBackground(imageBlob, config);
 
         // 4. Composite to White Background and return Base64
-        return await compositeToWhiteBackground(processedBlob);
+        const finalB64 = await compositeToWhiteBackground(processedBlob);
+        // Ensure format matches Vercel API response
+        // Remove prefix if it exists to be consistent, main.js adds it back if needed
+        const cleanB64 = finalB64.split(',').pop();
+        return { photos: [cleanB64, cleanB64] };
 
     } catch (e) {
         console.error("Local AI Execution Error:", e);
