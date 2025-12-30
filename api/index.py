@@ -2,9 +2,11 @@ from http.server import BaseHTTPRequestHandler
 import os
 import io
 import requests
+import base64
 import numpy as np
 from PIL import Image
 import onnxruntime as ort
+import json
 
 # Configuration
 # Switching to U2NetP (Light weight) ~4.7MB to avoid Vercel Memory/Timeout limits.
@@ -98,6 +100,16 @@ class handler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(img_str.encode())
+            
+        except Exception as e:
+            # Capture and return actual error details
+            error_msg = f"Internal Error: {str(e)}"
+            self.send_response(500)
+            self.send_header('Content-Type', 'text/plain')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(error_msg.encode())
+
             
         except Exception as e:
             import traceback
