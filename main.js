@@ -7,8 +7,18 @@ let state = {
     originalImage: null,
     processedImage: null,
     faceData: null,
+    auditResults: null, // Store validation results
     spec: 'passport'
 };
+
+// Optimization: Pre-load AI Model to save time later
+function preloadLocalAI() {
+    console.log("Pre-loading Local AI Model...");
+    // Silent import to trigger download/cache
+    import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm')
+        .then(() => console.log("AI Model Pre-loaded"))
+        .catch(err => console.warn("AI Pre-load failed:", err));
+}
 
 // --- DOM Elements ---
 const uploadInput = document.getElementById('fileInput');
@@ -54,7 +64,16 @@ function updateSpecUI() {
 }
 
 // Expose for HTML inline calls (Legacy support)
+// Export for HTML access
 window.handleFileUpload = handleFileUpload;
+
+// Expose AI Loading Updater for api.js
+window.updateAILoading = (text) => {
+    const reportLoadingText = document.querySelector('#report-loading p');
+    if (reportLoadingText) {
+        reportLoadingText.innerText = text;
+    }
+};
 
 // --- Handlers ---
 async function handleFileUpload(e) {
@@ -73,6 +92,11 @@ async function handleFileUpload(e) {
     console.log("File detected:", file);
 
     if (!file) return;
+
+    // Optimization: Trigger AI Pre-load immediately
+    if (typeof preloadLocalAI === 'function') {
+        preloadLocalAI();
+    }
 
     const reader = new FileReader();
     reader.onload = async (event) => {
@@ -97,6 +121,20 @@ async function handleFileUpload(e) {
 
             UI.showUseConfirm(DEFAULT_SPECS[state.spec].name, async () => {
                 console.log("Modal Confirmed, Starting Audit");
+
+                // [NEW FLOW]: UX Improvements
+                // 1. Hide Sidebar
+                UI.toggleSidebar(false);
+                // 2. Switch to Result View
+                UI.switchView('result');
+                // 3. Show Spinner in Preview
+                UI.showLoadingPreview();
+                // 4. Init Table Headers
+                UI.initAuditTable('#report-content');
+                // 5. Hide Loading Text in Sidebar (since we use table)
+                const reportLoading = document.getElementById('report-loading');
+                if (reportLoading) reportLoading.classList.add('d-none');
+
                 await runAuditPhase();
             });
 
@@ -116,6 +154,7 @@ async function runAuditPhase() {
 
         if (!detectRes || !detectRes.found) {
             alert('未偵測到人臉，請更換照片');
+            location.reload(); // Simple reset
             return;
         }
         state.faceData = detectRes;
@@ -127,47 +166,96 @@ async function runAuditPhase() {
         if (!checkRes || !checkRes.results) {
             throw new Error("Invalid check result from API");
         }
+        state.auditResults = checkRes.results; // Save for final report
 
-        console.log("Showing Audit Report Modal...");
-        UI.showAuditReport(
-            state.originalImage,
-            checkRes.results,
-            state.faceData, // Pass Face Data for UI lines
-            () => runProductionPhase(),
-            () => { uploadInput.value = ''; }
-        );
+        // [NEW FLOW]: Animate Results in Sidebar Table
+        console.log("Animating Audit Results...");
+
+        // We add "Future Steps" to the results for the animation effect if needed, 
+        // OR we just show the "Check" phase first.
+        // User asked for "Progressive Tick".
+        // Let's pass the check results.
+
+        // [NEW FLOW]: Animate Basic Results
+        console.log("Animating Basic Audit Results...");
+
+        UI.renderBasicAudit(state.auditResults, () => {
+            console.log("Basic Audit Complete. Showing Pass State.");
+            // On Complete: Show "Generate" Button + Success Msg
+            UI.showBasicPassState(() => {
+                console.log("User clicked Generate. Starting Production...");
+                runProductionPhase();
+            });
+
+            // Still show the image with lines (Audit Success Visuals) immediately?
+            // Yes, showAuditSuccess was for the visual.
+            // But wait, renderBasicAudit just ticks boxes.
+            // We should Show the image *after* basic audit? Or *during*?
+            // "Show Audit Success" function name is confusing, it actually draws the preview.
+            // Let's call it to show the visual result.
+            UI.showAuditSuccess(state.originalImage, state.faceData, null);
+        });
 
     } catch (err) {
         console.error("Audit Failed:", err);
         alert("審查過程發生錯誤，請稍後再試。");
+        location.reload();
     }
 }
 
 // Phase 2: Production (Processing)
+// Phase 2: Production (Service + Final)
 async function runProductionPhase() {
     try {
-        const processRes = await API.processPreview(state.originalImage, state.faceData.suggestedCrop);
+        // 2. Animate Services (simulated or real)
+        UI.renderServiceAnimation(async () => {
 
-        if (processRes && processRes.photos && processRes.photos.length > 0) {
-            state.processedImage = 'data:image/jpeg;base64,' + processRes.photos[0];
+            // 3. Process Image (Real API/Crop)
+            // 3. Process Image (Real API/Crop)
+            const processRes = await API.processPreview(
+                state.originalImage,
+                state.faceData.suggestedCrop,
+                state.faceData
+            );
+            console.log("API.processPreview Returned", processRes ? "Success" : "Empty");
 
-            const finalImg = new Image();
-            finalImg.onload = () => {
-                const finalBox = UI.showComparison(state.originalImage, finalImg);
-                finalBox.innerHTML = '';
-                finalBox.style.position = 'relative';
-                finalBox.style.display = 'inline-block';
-                finalBox.appendChild(finalImg);
-                applyGuideOverlay(finalImg);
-            };
-            finalImg.src = state.processedImage;
-        }
+            if (processRes && processRes.photos && processRes.photos.length > 0) {
+                // Ensure proper Base64 prefix
+                let b64 = processRes.photos[0];
+                if (!b64.startsWith('data:image/')) {
+                    b64 = `data:image/jpeg;base64,${b64}`;
+                }
+                state.processedImage = b64;
+                console.log("Processed Image State Updated. Length:", b64.length);
+
+                // Convert to Blob for download
+                // Fix: Fetching a Data URL is valid, but let's be explicit and safe
+                console.log("Converting to Blob...");
+                const res = await fetch(state.processedImage);
+                const blob = await res.blob();
+                console.log("Blob Created. Size:", blob.size);
+
+                // 4. Show Final Result & Download Options
+                console.log("Updating UI (AuditSuccess)...");
+                UI.showAuditSuccess(state.processedImage, state.faceData, null);
+
+                // Show Buttons (Single + 4x2)
+                console.log("Showing Download Options...");
+                UI.showDownloadOptions(blob);
+                console.log("UI Update Complete.");
+            } else {
+                console.error("No photos returned from API");
+                alert("生成失敗：無回傳影像");
+            }
+        });
 
     } catch (err) {
         console.error("Production Failed:", err);
-        alert("製作過程發生錯誤，請稍後再試。");
+        alert("製作失敗，請重試");
     }
 }
+
+
 
 function applyGuideOverlay(targetImgElement) {
     const overlay = document.createElement('div');

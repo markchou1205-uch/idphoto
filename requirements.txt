@@ -1,0 +1,4 @@
+rembg
+pillow
+requests
+numpy
