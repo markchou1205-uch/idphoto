@@ -56,12 +56,19 @@ def postprocess(pred, original_size):
     # Pred: (1, 1, 320, 320) -> Alpha Mask
     ma = np.squeeze(pred) # (320, 320)
     
-    # Normalize 0..1 to 0..255
+    # 1. Normalize 0..1
     ma = (ma - ma.min()) / (ma.max() - ma.min() + 1e-8)
     
-    # Resize back to original size
+    # 2. Hardening Edges (Contrast Boost)
+    # Push semi-transparent pixels towards 0 or 1 to reduce blur
+    # Thresholding: values < 0.2 become 0, values > 0.8 become 1
+    # This simulates a "Harder" mask common in higher res models
+    ma = (ma - 0.2) / (0.8 - 0.2) 
+    ma = np.clip(ma, 0, 1)
+
+    # 3. Resize back to original size with High Quality Interpolation
     ma_img = Image.fromarray((ma * 255).astype(np.uint8), mode='L')
-    ma_img = ma_img.resize(original_size, Image.BILINEAR)
+    ma_img = ma_img.resize(original_size, Image.LANCZOS)
     return ma_img
 
 class handler(BaseHTTPRequestHandler):
