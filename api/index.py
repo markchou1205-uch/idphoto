@@ -7,14 +7,9 @@ from PIL import Image
 import onnxruntime as ort
 
 # Configuration
-# U2Net (Standard) is best for general use, but its ONNX is ~170MB.
-# U2NetP (Light) is ~4.7MB.
-# Given Vercel strict limits, let's try U2NetP first for speed/size, 
-# OR use U2Net but download to /tmp (ephemeral storage doesn't count for 250MB limit).
-# Let's use standard U2Net for quality, downloading it at runtime.
-
-MODEL_URL = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx"
-MODEL_PATH = "/tmp/u2net.onnx"
+# Switching to U2NetP (Light weight) ~4.7MB to avoid Vercel Memory/Timeout limits.
+MODEL_URL = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx"
+MODEL_PATH = "/tmp/u2netp.onnx"
 
 class U2NetSession:
     def __init__(self):
