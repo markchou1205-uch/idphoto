@@ -110,16 +110,6 @@ class handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(error_msg.encode())
 
-            
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            self.send_response(500)
-            self.send_header('Content-Type', 'text/plain')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(str(e).encode())
-
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
