@@ -395,9 +395,13 @@ export async function processPreview(base64, cropParams, faceData = null) {
 
                 // CALL VERCEL BACKEND
                 console.log("Calling Vercel Backend for Cleanup...");
+
+                // RESIZE OPTIMIZATION: Max 1000px to avoid Timeout
+                const optimizedBlob = await resizeImage(croppedBlob, 1000);
+
                 const vercelRes = await fetch('/api/remove-bg', {
                     method: 'POST',
-                    body: croppedBlob
+                    body: optimizedBlob
                 });
 
                 if (!vercelRes.ok) throw new Error(`Vercel Backend Error ${vercelRes.status}`);
@@ -659,6 +663,43 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
 export async function fixImageApi(imgBase64, action) { return { image_base64: imgBase64 }; }
 export async function generateLayoutApi(imgBase64) { return { layout_image: imgBase64 }; }
 export async function sendEmailApi(email, imgBase64) { return { success: true }; }
+
+// Helper: Resize Image (Max Dimension)
+function resizeImage(blob, maxDim) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            URL.revokeObjectURL(img.src);
+            let w = img.width;
+            let h = img.height;
+            // If already small enough, return original
+            if (w <= maxDim && h <= maxDim) {
+                resolve(blob);
+                return;
+            }
+
+            // Calculate new size
+            const ratio = Math.min(maxDim / w, maxDim / h);
+            w = Math.floor(w * ratio);
+            h = Math.floor(h * ratio);
+
+            console.log(`Resizing image for Vercel: ${img.width}x${img.height} -> ${w}x${h}`);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+
+            canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.95);
+        };
+        img.onerror = (e) => {
+            URL.revokeObjectURL(img.src);
+            reject(e);
+        };
+        img.src = URL.createObjectURL(blob);
+    });
+}
 
 // Helper: Insert DPI Metadata (JFIF 300 DPI)
 async function insertDPI(blob, dpi) {
