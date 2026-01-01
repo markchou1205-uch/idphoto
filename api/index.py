@@ -134,9 +134,12 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        # Warmup Endpoint
+        # Warmup Endpoint - REAL LOAD
+        # Force model load into memory
+        u2net.ensure_session()
+        
         self.send_response(200)
         self.send_header('Content-Type', 'text/plain')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
-        self.wfile.write(b"Warmed Up")
+        self.wfile.write(b"Warmed Up & Model Loaded")
