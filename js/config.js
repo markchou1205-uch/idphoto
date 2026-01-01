@@ -21,15 +21,15 @@ export const DEFAULT_SPECS = {
         "face_multiplier": 1.85, "top_margin": 0.09
     },
     "resume": {
-        "name": "健保卡 / 履歷 / 半身照",
-        "desc": "2吋 (42x47mm)",
+        "name": "健保卡 / 國際駕照",
+        "desc": "2吋 (42x47mm) - 半身照",
         "width_mm": 42, "height_mm": 47,
         "ratio": 42 / 47,
         "face_multiplier": 2.5, "top_margin": 0.15
     },
     "inch1": {
         "name": "駕照 / 執照 / 證書",
-        "desc": "1吋 (28x35mm)",
+        "desc": "1吋 (2.8x3.5cm) - 光面背景/五官清晰",
         "width_mm": 28, "height_mm": 35,
         "ratio": 28 / 35,
         "face_multiplier": 2.0, "top_margin": 0.12
