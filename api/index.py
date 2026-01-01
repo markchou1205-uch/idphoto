@@ -51,13 +51,12 @@ def preprocess(image):
     # For safety, let's stick to standard ImageNet normalization as it's robust for most.
     # Mean: [0.485, 0.456, 0.406], Std: [0.229, 0.224, 0.225]
     
-    img_np /= 255.0
-    # Standard ImageNet Normalization (Required for U2NetP)
-    # Mean: [0.485, 0.456, 0.406], Std: [0.229, 0.224, 0.225]
-    img_np -= np.array([0.485, 0.456, 0.406])
-    img_np /= np.array([0.229, 0.224, 0.225])
+    # U2Net/U2NetP Standard Normalization (Range -1 to 1)
+    # This is (x - 0.5) / 0.5
+    img_np -= np.array([0.5, 0.5, 0.5])
+    img_np /= np.array([0.5, 0.5, 0.5])
     
-    # HWC -> CHW (1, 3, 1024, 1024)
+    # HWC -> CHW (1, 3, 320, 320)
     img_np = img_np.transpose((2, 0, 1))
     img_np = np.expand_dims(img_np, axis=0)
     return img_np
@@ -66,15 +65,17 @@ def postprocess(pred, original_size):
     # Pred: (1, 1, 320, 320) -> Alpha Mask
     ma = np.squeeze(pred) # (320, 320)
     
-    # 1. Normalize 0..1
+    # 1. Normalize 0..1 (Min-Max)
     ma = (ma - ma.min()) / (ma.max() - ma.min() + 1e-8)
     
-    # 2. Hardening Edges (Contrast Boost)
-    # Push semi-transparent pixels towards 0 or 1 to reduce blur
-    # Thresholding: values < 0.2 become 0, values > 0.8 become 1
-    # This simulates a "Harder" mask common in higher res models
-    ma = (ma - 0.2) / (0.8 - 0.2) 
-    ma = np.clip(ma, 0, 1)
+    # 2. Relaxed Contrast (Sigmoid-like but simpler)
+    # Was (ma - 0.2) / 0.6 -> Too aggressive, kills soft edges.
+    # New: Gentle S-Curve to push values apart without clipping hard
+    # Or just return raw normalized mask for safety first.
+    # Let's just create the image from normalized 0..1 directly.
+    
+    # 3. Resize back to original size with High Quality Interpolation
+    ma_img = Image.fromarray((ma * 255).astype(np.uint8), mode='L')
 
     # 3. Resize back to original size with High Quality Interpolation
     ma_img = Image.fromarray((ma * 255).astype(np.uint8), mode='L')
