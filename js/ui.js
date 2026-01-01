@@ -43,7 +43,10 @@ export const UI = {
         if (specsSection) specsSection.classList.add('d-none'); // Force Hide Spec Selector
         if (uploadSection) uploadSection.classList.add('d-none'); // Hide Upload Area logic if distinct
 
-        // 3. Bind Buttons
+        // 4. Initialize Service Table immediately (Pending State)
+        this.initServiceTable('#service-table-container');
+
+        // 5. Bind Buttons
         const btnProd = document.getElementById('btn-start-production');
         const btnAudit = document.getElementById('btn-start-audit');
 
@@ -65,14 +68,31 @@ export const UI = {
             const newBtn = btnAudit.cloneNode(true);
             btnAudit.parentNode.replaceChild(newBtn, btnAudit);
             newBtn.addEventListener('click', () => {
-                // Show Audit Panel
-                if (auditPanel) {
-                    auditPanel.classList.remove('d-none');
-                    // Scroll to it?
-                    auditPanel.scrollIntoView({ behavior: 'smooth' });
-                }
                 if (onAudit) onAudit();
             });
+        }
+    },
+
+    // NEW: Toggle between Service Table and Audit Report
+    toggleAuditView(showAudit) {
+        const serviceTable = document.getElementById('service-table-container');
+        const auditReport = document.getElementById('audit-report-container');
+
+        if (showAudit) {
+            if (serviceTable) serviceTable.classList.add('d-none');
+            if (auditReport) auditReport.classList.remove('d-none');
+        } else {
+            if (serviceTable) serviceTable.classList.remove('d-none');
+            if (auditReport) auditReport.classList.add('d-none');
+        }
+    },
+
+    // NEW: Set Audit Button to Urgent (Red)
+    setAuditButtonRed() {
+        const btn = document.getElementById('btn-start-audit');
+        if (btn) {
+            btn.classList.remove('btn-outline-secondary');
+            btn.classList.add('btn-danger', 'text-white', 'shadow-sm'); // Red style
         }
     },
 
@@ -196,23 +216,15 @@ export const UI = {
         }
     },
 
-    // Initialize Split Audit Tables
-    initAuditTable(selector) {
+    // Initialize Service Table (Visible by Default)
+    initServiceTable(selector) {
         const container = document.querySelector(selector);
         if (container) {
+            container.innerHTML = '';
             container.classList.remove('d-none');
 
-            // 1. Basic Checks (BOCA) - 6 items
-            const basicItems = [
-                { item: '表情/嘴巴' },
-                { item: '比例檢查' },
-                { item: '眼鏡檢查' },
-                { item: '頭髮/五官' }, // Added
-                { item: '光線檢查' },
-                { item: '影像解析度' }
-            ];
-
-            // 2. Service Items - Start Index 6
+            // Service Items - Start Index 6 (to match legacy IDs or reset to 0?)
+            // Let's use specific IDs for services to avoid collision
             const serviceItems = [
                 { item: 'AI 智能裁切' },
                 { item: '背景去除' },
@@ -221,43 +233,75 @@ export const UI = {
                 { item: '解析度優化' }
             ];
 
-            const getStandardText = (item) => {
-                if (item.includes('表情')) return '表情自然 / 不露齒 / 嘴巴閉合';
-                if (item.includes('比例')) return '頭部居中 / 佔70~80%高度';
-                if (item.includes('眼鏡')) return '無反光 / 不遮擋眼睛 / 忌粗框';
-                if (item.includes('頭髮')) return '眉毛/眼睛需清晰 / 不遮擋';
-                if (item.includes('光線')) return '光線均勻 / 無陰影 / 無紅眼';
-                if (item.includes('影像')) return '531x413px 以上 / 清晰度標準';
-                if (item.includes('裁切')) return '頭頂至下巴 3.2~3.6cm';
-                if (item.includes('背景')) return '去除背景 / 均勻白色';
-                if (item.includes('尺寸')) return '35x45mm (2吋)';
-                if (item.includes('補光')) return '智慧型臉部打光';
-                return '符合國際民航組織(ICAO)規範';
+            const createServiceRows = (items) => {
+                return items.map((res, i) => {
+                    const idx = i + 100; // Offset to avoid checks
+                    return `
+                        <tr class="audit-row show" id="audit-row-${idx}">
+                            <td class="small fw-bold">${res.item}</td>
+                            <td class="text-center">
+                                <span class="text-muted small" id="audit-text-${idx}">待處理</span>
+                                <div class="spinner-border spinner-border-sm text-primary d-none" id="audit-spinner-${idx}" role="status"></div>
+                                <span class="check-icon d-none" id="audit-icon-${idx}"></span>
+                            </td>
+                            <td class="text-end">
+                                <span class="badge bg-light text-secondary border" id="audit-badge-${idx}">待處理</span>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
             };
 
-            const createRows = (items, type) => {
+            container.innerHTML = `
+                <div class="mb-2">
+                    <h6 class="fw-bold text-success small"><i class="bi bi-stars"></i> 加值服務項目</h6>
+                    <table class="audit-table table-sm" style="font-size:0.9rem;">
+                        <tbody id="audit-service-body">${createServiceRows(serviceItems)}</tbody>
+                    </table>
+                </div>
+                <div id="audit-action-area" class="mt-2 text-center"></div>
+            `;
+        }
+    },
+
+    // Initialize Audit Table (Hidden until clicked)
+    initAuditTable(selector) {
+        const container = document.querySelector(selector);
+        if (container) {
+            container.innerHTML = '';
+            container.classList.remove('d-none');
+
+            const basicItems = [
+                { item: '表情/嘴巴' },
+                { item: '比例檢查' },
+                { item: '眼鏡檢查' },
+                { item: '頭髮/五官' },
+                { item: '光線檢查' },
+                { item: '影像解析度' }
+            ];
+
+            const getStandardText = (item) => {
+                if (item.includes('表情')) return '表情自然/不露齒';
+                if (item.includes('比例')) return '頭部居中';
+                if (item.includes('眼鏡')) return '無反光/不遮擋';
+                if (item.includes('頭髮')) return '五官清晰';
+                if (item.includes('光線')) return '光線均勻';
+                if (item.includes('影像')) return '清晰度標準';
+                return '符合規範';
+            };
+
+            const createRows = (items) => {
                 return items.map((res, i) => {
-                    // ID offsets: Basic 0-5, Service 6-10
-                    const idx = type === 'basic' ? i : i + 6;
-                    const isService = type === 'service';
-
-                    const statusContent = isService
-                        ? `<span class="text-muted small" id="audit-text-${idx}">待處理</span>
-                           <div class="spinner-border spinner-border-sm text-primary d-none" id="audit-spinner-${idx}" role="status"></div>
-                           <span class="check-icon d-none" id="audit-icon-${idx}"></span>`
-                        : `<div class="spinner-border spinner-border-sm text-secondary" id="audit-spinner-${idx}" role="status"></div>
-                           <span class="check-icon d-none" id="audit-icon-${idx}"></span>`;
-
-                    const badgeContent = isService
-                        ? `<span class="badge bg-light text-secondary border" id="audit-badge-${idx}">待處理</span>`
-                        : `<span class="badge bg-light text-secondary border" id="audit-badge-${idx}">待檢測</span>`;
-
+                    const idx = i; // 0-5
                     return `
                         <tr class="audit-row show" id="audit-row-${idx}">
                             <td>${res.item}</td>
                             <td class="small text-muted">${getStandardText(res.item)}</td>
-                            <td class="text-center">${statusContent}</td>
-                            <td>${badgeContent}</td>
+                            <td class="text-center">
+                                <div class="spinner-border spinner-border-sm text-secondary" id="audit-spinner-${idx}" role="status"></div>
+                                <span class="check-icon d-none" id="audit-icon-${idx}"></span>
+                            </td>
+                            <td><span class="badge bg-light text-secondary border" id="audit-badge-${idx}">待檢測</span></td>
                         </tr>
                     `;
                 }).join('');
@@ -265,21 +309,12 @@ export const UI = {
 
             container.innerHTML = `
                 <div class="mb-3">
-                    <h6 class="fw-bold text-primary"><i class="bi bi-shield-check"></i> 基本審查</h6>
-                    <table class="audit-table">
-                        <thead><tr><th style="width:25%">項目</th><th style="width:40%">標準</th><th style="width:15%">狀態</th><th style="width:20%">結果</th></tr></thead>
-                        <tbody id="audit-basic-body">${createRows(basicItems, 'basic')}</tbody>
+                    <h6 class="fw-bold text-primary"><i class="bi bi-shield-check"></i> 檢測報告</h6>
+                    <table class="audit-table w-100">
+                        <thead><tr><th>項目</th><th>標準</th><th>狀態</th><th>結果</th></tr></thead>
+                        <tbody id="audit-basic-body">${createRows(basicItems)}</tbody>
                     </table>
                 </div>
-                
-                <div class="mb-3">
-                    <h6 class="fw-bold text-success"><i class="bi bi-stars"></i> 加值服務</h6>
-                    <table class="audit-table">
-                        <thead><tr><th style="width:25%">項目</th><th style="width:40%">標準</th><th style="width:15%">狀態</th><th style="width:20%">結果</th></tr></thead>
-                        <tbody id="audit-service-body">${createRows(serviceItems, 'service')}</tbody>
-                    </table>
-                </div>
-                
                 <div id="audit-action-area" class="mt-4 text-center"></div>
             `;
         }
@@ -362,10 +397,10 @@ export const UI = {
         }
     },
 
-    // Stage 2: Service Animation (Bottom Table)
+    // Stage 2: Service Animation (Service Table)
     renderServiceAnimation(onComplete) {
-        // Correct Indices for 5 services starting after 6 basic items
-        const serviceIndices = [6, 7, 8, 9, 10];
+        // Correct Indices for 5 services using 100+ offset
+        const serviceIndices = [100, 101, 102, 103, 104];
         let i = 0;
 
         function animateNext() {
@@ -505,34 +540,54 @@ export const UI = {
         });
     },
 
-    // Helper: Create 4x2 Layout (4x6 inch @ 300dpi)
-    create4x2Canvas(imgSrc) {
+    // Helper: Create 4x2 Layout (4x6 inch @ 300dpi) - STRICT DIMENSIONS
+    create4x2Canvas(imgSrc, specData) {
         return new Promise((resolve, reject) => {
             if (!imgSrc) return reject("No Image Source");
             const img = new Image();
             img.crossOrigin = "Anonymous";
             img.onload = () => {
                 const canvas = document.createElement('canvas');
+                // 4x6 inch @ 300 DPI = 1200x1800 px (Portrait) or 1800x1200 (Landscape)
+                // Standard 4R is usually 4x6 inches.
+                // Let's assume Landscape 1800x1200 for fitting rows.
                 canvas.width = 1800;
                 canvas.height = 1200;
                 const ctx = canvas.getContext('2d');
                 ctx.fillStyle = 'white';
                 ctx.fillRect(0, 0, 1800, 1200);
 
-                const photoW = 413;
-                const photoH = 531;
-                const gapX = 30;
-                const gapY = 50;
+                // STRICT Dimensions in pixels
+                // Default to Passport (35x45mm) if missing
+                const mmW = specData ? specData.width_mm : 35;
+                const mmH = specData ? specData.height_mm : 45;
 
-                const startX = (1800 - (4 * photoW + 3 * gapX)) / 2;
-                const startY = (1200 - (2 * photoH + gapY)) / 2;
+                const photoW = Math.round(mmW / 25.4 * 300);
+                const photoH = Math.round(mmH / 25.4 * 300);
 
-                for (let row = 0; row < 2; row++) {
-                    for (let col = 0; col < 4; col++) {
-                        const x = startX + col * (photoW + gapX);
-                        const y = startY + row * (photoH + gapY);
+                // Calculate Layout
+                const gapX = 30; // ~2.5mm
+                const gapY = 30; // ~2.5mm
+
+                // How many cols fit in 1800?
+                const cols = Math.floor((1800 - gapX) / (photoW + gapX));
+                // How many rows fit in 1200?
+                const rows = Math.floor((1200 - gapY) / (photoH + gapY));
+
+                console.log(`Layout Config: ${mmW}x${mmH}mm -> ${photoW}x${photoH}px | Fits ${cols}x${rows}`);
+
+                // Center Grid
+                const totalGridW = cols * photoW + (cols - 1) * gapX;
+                const totalGridH = rows * photoH + (rows - 1) * gapY;
+                const startX = (1800 - totalGridW) / 2;
+                const startY = (1200 - totalGridH) / 2;
+
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const x = startX + c * (photoW + gapX);
+                        const y = startY + r * (photoH + gapY);
                         ctx.drawImage(img, x, y, photoW, photoH);
-                        ctx.strokeStyle = '#cccccc';
+                        ctx.strokeStyle = '#dddddd'; // Faint line for cutting
                         ctx.lineWidth = 1;
                         ctx.strokeRect(x, y, photoW, photoH);
                     }

@@ -157,8 +157,9 @@ async function runAuditPhase() {
     try {
         console.log("Starting Audit Phase...");
 
-        // Init UI for Audit
-        UI.initAuditTable('#report-content');
+        // Init UI for Audit (Report Only)
+        UI.initAuditTable('#audit-report-container');
+        UI.toggleAuditView(true); // Switch view to Audit Report
 
         console.log("Calling API.detectFace...");
         const detectRes = await API.detectFace(state.originalImage);
@@ -274,12 +275,7 @@ async function runProductionPhase() {
             state.faceData = detectRes;
         }
 
-        // 2. [FIX]: Initialize Audit Table structure so Download Buttons have a container
-        UI.initAuditTable('#report-content');
-        const auditPanel = document.getElementById('audit-panel');
-        if (auditPanel) auditPanel.classList.remove('d-none');
-
-        // 3. Animate Services (simulated or real)
+        // 2. Animate Services (simulated or real)
         UI.renderServiceAnimation(async () => {
 
             // 4. Process Image (Real API/Crop)

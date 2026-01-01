@@ -100,13 +100,25 @@
                                 <i class="bi bi-magic"></i> 開始製作證件照
                             </button>
 
-                            <!-- Secondary Action (Optional) -->
+                            <!-- Service Status Table (Visible by Default) -->
+                            <div id="service-table-container" class="mt-2">
+                                <!-- Service items injected here -->
+                            </div>
+
+                            <hr class="my-2 opacity-25">
+
+                            <!-- Secondary Action (Audit) - Starts secondary, becomes Urgent (Red) -->
                             <button id="btn-start-audit" class="btn btn-outline-secondary w-100">
-                                <i class="bi bi-shield-check"></i> 合規審查 (選用)
+                                <i class="bi bi-shield-check"></i> 合規審查 (檢測報告)
                             </button>
 
+                            <!-- Audit Report (Hidden by Default) -->
+                            <div id="audit-report-container" class="d-none">
+                                <!-- Audit items injected here -->
+                            </div>
+
                             <!-- MOFA Info -->
-                            <div class="mt-4 p-3 bg-light rounded border">
+                            <div class="mt-2 p-3 bg-light rounded border">
                                 <h6 class="fw-bold text-muted mb-2"><small>外交部相關規定</small></h6>
                                 <ul class="list-unstyled small text-muted mb-2 ps-1" style="font-size: 0.85rem;">
                                     <li>• 最近6個月內拍攝</li>
@@ -118,18 +130,6 @@
                                     class="small text-primary text-decoration-none">
                                     <i class="bi bi-box-arrow-up-right"></i> 詳細規範連結
                                 </a>
-                            </div>
-                        </div>
-
-                        <!-- Audit Report (Hidden by default) -->
-                        <div id="audit-panel" class="p-4 border-top d-none animate-fade-in">
-                            <h5 class="fw-bold mb-3"><i class="bi bi-file-earmark-medical"></i> 檢測報告</h5>
-                            <div id="report-loading" class="text-center py-5 text-muted d-none">
-                                <div class="spinner-border text-primary mb-2" role="status"></div>
-                                <p class="mb-0">正在準備分析...</p>
-                            </div>
-                            <div id="report-content" class="d-none">
-                                <!-- Audit Table Injected Here -->
                             </div>
                         </div>
                     </div>
