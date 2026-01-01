@@ -11,8 +11,8 @@ import json
 # Configuration
 # Switching to ISNet-General-Use (~110MB) for High Precision (Hair/Edge details).
 # To avoid timeouts, we rely on Frontend resizing (max 1000px) and fast inference.
-MODEL_URL = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/silueta.onnx"
-MODEL_PATH = "/tmp/silueta.onnx"
+MODEL_URL = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx"
+MODEL_PATH = "/tmp/isnet-general-use.onnx"
 
 class U2NetSession:
     def __init__(self):
@@ -38,8 +38,8 @@ class U2NetSession:
 u2net = U2NetSession()
 
 def preprocess(image):
-    # Resize to 320x320 (Silueta Native Resolution)
-    img = image.resize((320, 320), Image.BILINEAR)
+    # Resize to 1024x1024 (ISNet Native Resolution)
+    img = image.resize((1024, 1024), Image.BILINEAR)
     
     img_np = np.array(img).astype(np.float32)
     # Normalize: (Img - Mean) / Std
