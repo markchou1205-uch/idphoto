@@ -23,7 +23,7 @@ class U2NetSession:
             return self.session
         
         if not os.path.exists(MODEL_PATH):
-            print("Downloading ISNet Model (110MB)...")
+            print(f"Downloading ISNet Model to {MODEL_PATH}...")
             response = requests.get(MODEL_URL, stream=True)
             with open(MODEL_PATH, "wb") as f:
                 for chunk in response.iter_content(chunk_size=32768): # Larger chunk size for speed
