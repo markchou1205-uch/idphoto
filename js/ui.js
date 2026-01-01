@@ -138,12 +138,26 @@ export const UI = {
 
 
     // Show Check Spec Modal
-    showUseConfirm(specName, onConfirm) {
+    showUseConfirm(specData, onConfirm) {
+        // specData should be the full object from config
+        const specName = specData ? specData.name : "未知規格";
         console.log("UI.showUseConfirm called for:", specName);
+
         const title = document.getElementById('checkSpecLabel');
         const btn = document.getElementById('btn-confirm-use');
+        const dimText = document.getElementById('confirm-spec-dims');
 
-        if (title) title.innerText = `製作規格确认: ${specName}`;
+        if (title) title.innerText = `製作規格確認: ${specName}`;
+
+        // Dynamic Dimension Text
+        if (dimText && specData) {
+            const wCm = specData.width_mm / 10;
+            const hCm = specData.height_mm / 10;
+            dimText.innerText = `3. 尺寸調整為 ${wCm}cm x ${hCm}cm (300DPI)`;
+            // Provide visual cue
+            dimText.classList.add('text-primary');
+        }
+
         if (btn) {
             const newBtn = btn.cloneNode(true);
             btn.parentNode.replaceChild(newBtn, btn);

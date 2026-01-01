@@ -119,7 +119,7 @@ async function handleFileUpload(e) {
 
             console.log("State Updated (Split Sanitization). Length:", state.originalImage.length);
 
-            UI.showUseConfirm(DEFAULT_SPECS[state.spec].name, async () => {
+            UI.showUseConfirm(DEFAULT_SPECS[state.spec], async () => {
                 console.log("Modal Confirmed, Showing Action Panel");
 
                 // [NEW FLOW]: UX Improvements
