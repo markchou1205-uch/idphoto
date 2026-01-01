@@ -52,9 +52,9 @@ def preprocess(image):
     # Mean: [0.485, 0.456, 0.406], Std: [0.229, 0.224, 0.225]
     
     img_np /= 255.0
-    # ISNet Normalization: Mean [0.5, 0.5, 0.5], Std [1.0, 1.0, 1.0]
-    img_np -= np.array([0.5, 0.5, 0.5])
-    img_np /= np.array([1.0, 1.0, 1.0])
+    # Standard ImageNet Normalization (Required for Silueta)
+    img_np -= np.array([0.485, 0.456, 0.406])
+    img_np /= np.array([0.229, 0.224, 0.225])
     
     # HWC -> CHW (1, 3, 1024, 1024)
     img_np = img_np.transpose((2, 0, 1))
