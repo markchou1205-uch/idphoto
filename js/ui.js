@@ -240,6 +240,7 @@ export const UI = {
             // Service Items - Start Index 6 (to match legacy IDs or reset to 0?)
             // Let's use specific IDs for services to avoid collision
             const serviceItems = [
+                { item: '臉部識別推算' },
                 { item: 'AI 智能裁切' },
                 { item: '背景去除' },
                 { item: '臉部補光' },
