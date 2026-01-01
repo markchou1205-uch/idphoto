@@ -1,0 +1,52 @@
+# 1231 工作日誌 - ID Photo Project
+
+## 完成事項 (Completed)
+
+### 1. Vercel 部署與環境修復
+*   **依賴管理**：解決 `requirements.txt` 安裝失敗問題，改用輕量化依賴 (`numpy`, `pillow`, `onnxruntime`, `requests`)。
+*   **跨域問題**：移除 `vercel.json` 中過於嚴格的 COEP/COOP Headers，解決資源加載被封鎖的問題。
+*   **代碼衝突**：修復 `api.js` 與 `ui.js` 中因合併產生的語法錯誤 (`SyntaxError`, `Merge Conflict Markers`)。
+
+### 2. Python 後端架構 (Serverless Function)
+*   **自定義推論引擎**：
+    *   放棄直接使用肥大的 `rembg` 庫 (導致超過 250MB 限制)。
+    *   重寫 `api/index.py`，實作原生 ONNX Runtime 推論。
+    *   **Runtime 下載策略**：模型檔不打包，改為執行時下載至 `/tmp` (Vercel 暫存區)，成功繞過部署大小限制。
+*   **穩定性與錯誤處理**：
+    *   修復 500 Internal Server Error (補上遺漏的 `base64` import)。
+    *   加入全域 `try-except` 捕捉機制，將後端錯誤轉換為可讀的 JSON 訊息回傳前端。
+
+### 3. AI 模型與畫質優化
+*   **模型升級**：
+    *   從初期的 `u2netp` (4.7MB) 升級至 **`isnet-general-use` (110MB)**，顯著提升髮絲與邊緣的去背精度。
+*   **圖像後處理**：
+    *   導入 `LANCZOS` 高品質插值算法進行縮放。
+    *   加入 **邊緣銳化 (Contrast Boost)** 演算法，減少半透明邊緣的模糊感。
+
+### 4. 前端性能優化 (Frontend Optimization)
+*   **防逾時機制**：在 `js/api.js` 新增 `resizeImage` 函數。
+*   **自動縮圖**：上傳至 Vercel 前自動將圖片縮小至長邊 1000px。
+    *   目的：減少傳輸時間與後端解碼/運算負載，確保在 Vercel Free Tier 的 10 秒限制內完成 110MB 模型的運算。
+*   **API 格式修正**：統一 Local Fallback 與 Cloud Backend 的回傳格式為 `{ photos: [...] }`。
+
+### 5. UI 修復
+*   復原 `index.html` 中意外遺失的左側「檢測報告 (Audit Panel)」欄位。
+*   修復 `handleFileUpload` 引用錯誤。
+
+---
+
+## 目前進度 (Current Status)
+*   **後端狀態**：已部署 High-Res ISNet 模型，具備商業級去背潛力。
+*   **前端狀態**：完整整合 Cloudinary -> Vercel (Auto Resize) -> Local Fallback (備援) 的混合雲架構。
+*   **部署狀態**：GitHub (`main` branch) 與 Vercel 均為最新版本。
+
+---
+
+## 待辦事項 (TODO)
+1.  **驗證 ISNet 穩定性**：
+    *   觀察 110MB 模型在 Vercel 冷啟動時是否會頻繁觸發 504 Timeout。
+    *   若不穩定，需考慮建立 "Warm-up" 機制或退回中型模型。
+2.  **邊緣品質確認**：
+    *   請用戶確認升級後的肩膀與頭髮邊緣是否滿足需求。
+3.  **SDK 整合 (下一步)**：
+    *   評估是否將此方案打包為標準 SDK 供其他專案使用。

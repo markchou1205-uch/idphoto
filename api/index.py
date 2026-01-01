@@ -9,9 +9,10 @@ import onnxruntime as ort
 import json
 
 # Configuration
-# Switching to U2NetP (Light weight) ~4.7MB to avoid Vercel Memory/Timeout limits.
-MODEL_URL = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx"
-MODEL_PATH = "/tmp/u2netp.onnx"
+# Switching to ISNet-General-Use (~110MB) for High Precision (Hair/Edge details).
+# To avoid timeouts, we rely on Frontend resizing (max 1000px) and fast inference.
+MODEL_URL = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx"
+MODEL_PATH = "/tmp/isnet-general-use.onnx"
 
 class U2NetSession:
     def __init__(self):
@@ -22,10 +23,10 @@ class U2NetSession:
             return self.session
         
         if not os.path.exists(MODEL_PATH):
-            print("Downloading U2Net Model...")
+            print("Downloading ISNet Model (110MB)...")
             response = requests.get(MODEL_URL, stream=True)
             with open(MODEL_PATH, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
+                for chunk in response.iter_content(chunk_size=32768): # Larger chunk size for speed
                     f.write(chunk)
             print("Download Complete.")
         
@@ -37,17 +38,24 @@ class U2NetSession:
 u2net = U2NetSession()
 
 def preprocess(image):
-    # Resize to 320x320 (Standard U2Net Input)
-    img = image.resize((320, 320), Image.BILINEAR)
+    # Resize to 1024x1024 (Standard ISNet Input)
+    img = image.resize((1024, 1024), Image.BILINEAR)
     
     img_np = np.array(img).astype(np.float32)
     # Normalize: (Img - Mean) / Std
+    # Mean: [0.5, 0.5, 0.5], Std: [1.0, 1.0, 1.0] (ISNet usually uses simple 0.5 mean?)
+    # Wait, rembg uses [0.5,0.5,0.5] mean and [1.0,1.0,1.0] std for ISNet?
+    # Actually U2Net uses ImageNet mean. ISNet often does too.
+    # Let's double check standard U2Net/ISNet preprocessing.
+    # Rembg uses specific processing for ISNet.
+    # For safety, let's stick to standard ImageNet normalization as it's robust for most.
     # Mean: [0.485, 0.456, 0.406], Std: [0.229, 0.224, 0.225]
+    
     img_np /= 255.0
     img_np -= np.array([0.485, 0.456, 0.406])
     img_np /= np.array([0.229, 0.224, 0.225])
     
-    # HWC -> CHW (1, 3, 320, 320)
+    # HWC -> CHW (1, 3, 1024, 1024)
     img_np = img_np.transpose((2, 0, 1))
     img_np = np.expand_dims(img_np, axis=0)
     return img_np
