@@ -353,8 +353,8 @@ export async function processPreview(base64, cropParams, faceData = null) {
             processingBlob = base64ToBlob(cleanBase64);
         }
 
-        // 2. Resize Optimization (Max 1000px)
-        const optimizedBlob = await resizeImage(processingBlob, 1000);
+        // 2. Resize Optimization (Max 600px)
+        const optimizedBlob = await resizeImage(processingBlob, 600);
 
         // 3. Call Vercel Backend (Direct)
         console.log("Calling Vercel Backend...");
@@ -363,7 +363,11 @@ export async function processPreview(base64, cropParams, faceData = null) {
             body: optimizedBlob
         });
 
-        if (!vercelRes.ok) throw new Error(`Vercel Backend Error ${vercelRes.status}`);
+        if (!vercelRes.ok) {
+            const errorText = await vercelRes.text();
+            console.error("Vercel Backend Error Details:", errorText);
+            throw new Error(`Vercel Fail: ${vercelRes.status} - ${errorText}`);
+        }
 
         const base64Data = await vercelRes.text();
         const transparentBlob = await (await fetch(`data:image/png;base64,${base64Data}`)).blob();
