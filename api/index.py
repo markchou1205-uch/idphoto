@@ -38,8 +38,8 @@ class U2NetSession:
 u2net = U2NetSession()
 
 def preprocess(image):
-    # Resize to 1024x1024 (Standard ISNet Input)
-    img = image.resize((1024, 1024), Image.BILINEAR)
+    # Resize to 512x512 (Optimized for speed)
+    img = image.resize((512, 512), Image.BILINEAR)
     
     img_np = np.array(img).astype(np.float32)
     # Normalize: (Img - Mean) / Std
