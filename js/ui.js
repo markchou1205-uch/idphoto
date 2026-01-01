@@ -27,6 +27,45 @@ export const UI = {
         }
     },
 
+    // NEW: Render Action Panel
+    renderActionPanel(onProduction, onAudit) {
+        // 1. Show Result Dashboard
+        this.switchView('result');
+
+        // 2. Hide specific parts if needed (e.g. loading states)
+        const actionPanel = document.getElementById('action-panel');
+        const auditPanel = document.getElementById('audit-panel');
+        if (actionPanel) actionPanel.classList.remove('d-none');
+        if (auditPanel) auditPanel.classList.add('d-none'); // Ensure hidden initially
+
+        // 3. Bind Buttons
+        const btnProd = document.getElementById('btn-start-production');
+        const btnAudit = document.getElementById('btn-start-audit');
+
+        if (btnProd) {
+            // Remove old listeners by cloning
+            const newBtn = btnProd.cloneNode(true);
+            btnProd.parentNode.replaceChild(newBtn, btnProd);
+            newBtn.addEventListener('click', () => {
+                if (onProduction) onProduction();
+            });
+        }
+
+        if (btnAudit) {
+            const newBtn = btnAudit.cloneNode(true);
+            btnAudit.parentNode.replaceChild(newBtn, btnAudit);
+            newBtn.addEventListener('click', () => {
+                // Show Audit Panel
+                if (auditPanel) {
+                    auditPanel.classList.remove('d-none');
+                    // Scroll to it?
+                    auditPanel.scrollIntoView({ behavior: 'smooth' });
+                }
+                if (onAudit) onAudit();
+            });
+        }
+    },
+
     // Show Check Spec Modal
     showUseConfirm(specName, onConfirm) {
         console.log("UI.showUseConfirm called for:", specName);

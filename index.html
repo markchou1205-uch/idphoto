@@ -90,14 +90,48 @@
             <div id="result-dashboard" class="d-none container-fluid h-100 p-0">
                 <div class="row h-100 g-0">
                     <!-- Sidebar: Audit Report (Restored) -->
-                    <div class="col-md-3 h-100 bg-white border-end shadow-sm overflow-auto">
-                        <div class="p-4">
+                    <!-- Sidebar: Action & Audit Panel -->
+                    <div class="col-md-3 h-100 bg-white border-end shadow-sm overflow-auto" id="sidebar-container">
+
+                        <!-- NEW: Action Panel (Show after upload) -->
+                        <div id="action-panel" class="p-4 d-flex flex-column gap-3">
+                            <h5 class="fw-bold mb-2">請選擇下一步</h5>
+
+                            <!-- Primary Action -->
+                            <button id="btn-start-production"
+                                class="btn btn-primary btn-lg w-100 py-3 shadow-sm fw-bold">
+                                <i class="bi bi-magic"></i> 開始製作證件照
+                            </button>
+
+                            <!-- Secondary Action (Optional) -->
+                            <button id="btn-start-audit" class="btn btn-outline-secondary w-100">
+                                <i class="bi bi-shield-check"></i> 合規審查 (選用)
+                            </button>
+
+                            <!-- MOFA Info -->
+                            <div class="mt-4 p-3 bg-light rounded border">
+                                <h6 class="fw-bold text-muted mb-2"><small>外交部相關規定</small></h6>
+                                <ul class="list-unstyled small text-muted mb-2 ps-1" style="font-size: 0.85rem;">
+                                    <li>• 最近6個月內拍攝</li>
+                                    <li>• 白色背景</li>
+                                    <li>• 脫帽、五官清晰 (眉毛/耳朵)</li>
+                                    <li>• 不露齒、表情自然</li>
+                                </ul>
+                                <a href="https://www.boca.gov.tw/cp-16-4123-c2932-1.html" target="_blank"
+                                    class="small text-primary text-decoration-none">
+                                    <i class="bi bi-box-arrow-up-right"></i> 詳細規範連結
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Audit Report (Hidden by default) -->
+                        <div id="audit-panel" class="p-4 border-top d-none animate-fade-in">
                             <h5 class="fw-bold mb-3"><i class="bi bi-file-earmark-medical"></i> 檢測報告</h5>
                             <div id="report-loading" class="text-center py-5 text-muted d-none">
                                 <div class="spinner-border text-primary mb-2" role="status"></div>
                                 <p class="mb-0">正在準備分析...</p>
                             </div>
-                            <div id="report-content" class="d-none animate-fade-in">
+                            <div id="report-content" class="d-none">
                                 <!-- Audit Table Injected Here -->
                             </div>
                         </div>

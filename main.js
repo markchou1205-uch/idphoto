@@ -120,22 +120,28 @@ async function handleFileUpload(e) {
             console.log("State Updated (Split Sanitization). Length:", state.originalImage.length);
 
             UI.showUseConfirm(DEFAULT_SPECS[state.spec].name, async () => {
-                console.log("Modal Confirmed, Starting Audit");
+                console.log("Modal Confirmed, Showing Action Panel");
 
                 // [NEW FLOW]: UX Improvements
-                // 1. Hide Sidebar
-                UI.toggleSidebar(false);
-                // 2. Switch to Result View
-                UI.switchView('result');
-                // 3. Show Spinner in Preview
-                UI.showLoadingPreview();
-                // 4. Init Table Headers
-                UI.initAuditTable('#report-content');
-                // 5. Hide Loading Text in Sidebar (since we use table)
-                const reportLoading = document.getElementById('report-loading');
-                if (reportLoading) reportLoading.classList.add('d-none');
+                // 1. Hide Spec Selector Sidebar (if separate) or just replace content
+                // UI.toggleSidebar(false); // Action Panel is inside sidebar now, verify this logic.
 
-                await runAuditPhase();
+                // 2. Render Action Panel (Production vs Audit)
+                UI.renderActionPanel(runProductionPhase, runAuditPhase);
+
+                // 3. Show Original Image Preview
+                const previewImg = document.getElementById('main-preview-img');
+                if (previewImg) {
+                    previewImg.src = state.originalImage;
+                    previewImg.classList.remove('d-none');
+                }
+
+                // Hide Compare View if open
+                const compareView = document.getElementById('compare-view');
+                if (compareView) compareView.classList.add('d-none');
+
+                // Ensure Result Dashboard is visible (swapped by renderActionPanel but double check)
+                UI.switchView('result');
             });
 
         } catch (err) {
@@ -146,15 +152,20 @@ async function handleFileUpload(e) {
     reader.readAsDataURL(file);
 }
 
-// Phase 1: Audit (Check Only)
+// Phase 1: Audit (Check Only) - Triggered by Button
 async function runAuditPhase() {
     try {
+        console.log("Starting Audit Phase...");
+
+        // Init UI for Audit
+        UI.initAuditTable('#report-content');
+
         console.log("Calling API.detectFace...");
         const detectRes = await API.detectFace(state.originalImage);
 
         if (!detectRes || !detectRes.found) {
             alert('未偵測到人臉，請更換照片');
-            location.reload(); // Simple reset
+            // location.reload(); // Don't reload, just reset UI?
             return;
         }
         state.faceData = detectRes;
@@ -295,3 +306,7 @@ async function runProductionPhase() {
     }
 }
 // Removed legacy applyGuideOverlay (logic moved to UI)
+// Expose functions to Global Scope for HTML Buttons / UI
+window.handleFileUpload = handleFileUpload;
+window.runProductionPhase = runProductionPhase;
+window.runAuditPhase = runAuditPhase;
