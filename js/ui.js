@@ -35,8 +35,13 @@ export const UI = {
         // 2. Hide specific parts if needed (e.g. loading states)
         const actionPanel = document.getElementById('action-panel');
         const auditPanel = document.getElementById('audit-panel');
+        const specsSection = document.getElementById('specs-section');
+        const uploadSection = document.getElementById('upload-section'); // Also hide upload button if visible?
+
         if (actionPanel) actionPanel.classList.remove('d-none');
         if (auditPanel) auditPanel.classList.add('d-none'); // Ensure hidden initially
+        if (specsSection) specsSection.classList.add('d-none'); // Force Hide Spec Selector
+        if (uploadSection) uploadSection.classList.add('d-none'); // Hide Upload Area logic if distinct
 
         // 3. Bind Buttons
         const btnProd = document.getElementById('btn-start-production');

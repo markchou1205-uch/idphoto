@@ -255,13 +255,28 @@ function renderResult(imgSrc, bgRemoved = false) {
 
 
 // Phase 2: Production (Processing)
+// Phase 2: Production (Processing)
 // Phase 2: Production (Service + Final)
 async function runProductionPhase() {
     try {
+
+        // [Safety Check]: Ensure Face Data exists (Critical for Direct Production Flow)
+        if (!state.faceData) {
+            console.log("No existing face data. Running detection...");
+            // Optional: Show spinner
+            const detectRes = await API.detectFace(state.originalImage);
+            if (!detectRes || !detectRes.found) {
+                alert('未偵測到人臉，請更換照片');
+                // Reload or Reset
+                location.reload();
+                return;
+            }
+            state.faceData = detectRes;
+        }
+
         // 2. Animate Services (simulated or real)
         UI.renderServiceAnimation(async () => {
 
-            // 3. Process Image (Real API/Crop)
             // 3. Process Image (Real API/Crop)
             const processRes = await API.processPreview(
                 state.originalImage,
