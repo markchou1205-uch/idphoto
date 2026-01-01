@@ -102,6 +102,9 @@ async function handleFileUpload(e) {
     reader.onload = async (event) => {
         console.log("File Reader Loaded");
         try {
+            // Perf: Warmup Backend Immediately
+            API.warmupBackend();
+
             let rawResult = event.target.result;
 
             // --- ULTIMATE STRUCTURAL SANITIZER ---

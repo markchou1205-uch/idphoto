@@ -213,12 +213,58 @@ async function getTopPixelY(blob) {
     return 0;
 }
 
-// 2. Process Preview (Cloudinary + Local AI Fallback)
+// Show Check Spec Modal
+// 0. Warmup Backend
+export async function warmupBackend() {
+    try {
+        console.log("Warming up backend...");
+        await fetch('/api/remove-bg', { method: 'GET' });
+    } catch (e) {
+        console.warn("Warmup ping failed (expected if first time):", e);
+    }
+}
+
+// Helper: Local Canvas Crop
+function cropImageLocally(base64, crop) {
+    return new Promise((resolve, reject) => {
+        if (!base64) {
+            console.error("Local Crop: No base64 input");
+            return resolve(null);
+        }
+
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            // Use strict crop dimensions
+            let x = 0, y = 0, w = img.width, h = img.height;
+            if (crop) {
+                x = crop.x; y = crop.y; w = crop.w; h = crop.h;
+            }
+
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+
+            // Draw cropped portion
+            ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+
+            // Export to Blob
+            canvas.toBlob((blob) => {
+                resolve(blob);
+            }, 'image/jpeg', 0.95);
+        };
+        img.onerror = (e) => {
+            console.error("Local Crop Image Load Error:", e);
+            reject(e);
+        };
+        img.src = ensureSinglePrefix(base64);
+    });
+}
+
+// 2. Process Preview (Optimized: Local Crop + Direct Vercel)
 export async function processPreview(base64, cropParams, faceData = null) {
     // 0. Prepare Shared Resources
-    // Use Sanitizer for global scope usage
     const cleanBase64 = ensureSinglePrefix(base64);
-    const imageBlob = base64ToBlob(cleanBase64);
 
     // Helper: Composite with Strict 3.4cm Head Layout (0.48 Ratio)
     async function compositeToWhiteBackground(transparentBlob) {
@@ -248,60 +294,6 @@ export async function processPreview(base64, cropParams, faceData = null) {
                 let drawY = 0;
 
                 if (faceData && faceData.faceLandmarks) {
-                    const l = faceData.faceLandmarks;
-
-                    // A. Calculate Eye Line (Y) in the *Local* Image
-                    // We need to map the global landmark Y to the local cropped image Y.
-                    // Since we don't have the exact crop offset here easily, we fallback to a robust estimation:
-                    // We assume the Face is *roughly* centered by Cloudinary Crop.
-                    // BUT, precise ratio requires precise Eye-to-Top distance.
-                    // We verified detailed logs: `[Crop Logic] ... HairTopY`.
-
-                    // IMPROVED STRATEGY: 
-                    // Use the `topY` we just found (Transparent Top).
-                    // Use the User's Formula: `headHeight = (eye - top) / 0.48`
-                    // But where is 'eye'?
-                    // We can estimate 'eye' relative to 'top' if we assume standard proportions? No.
-
-                    // Actually, if we use the Cloudinary Crop, the User's "0.48" logic was derived 
-                    // from the Azure Landmarks relative to the ORIGINAL image.
-                    // The ratio (Eye-Top)/HeadHeight = 0.48 should be invariant to scale.
-                    // So: `HeadHeight_Pixels = (EyeY_Pixels - TopY_Pixels) / 0.48`.
-
-                    // We found `topY` (Local). We need `eyeY` (Local).
-                    // If we can't find EyeY local, we can't strictly enforce 0.48 *locally*.
-                    // HOWEVER, we can use the `scale` derived from Global Phase 1?
-                    // Global Head Height (pixels) was calculated in Phase 1 (Audit).
-                    // We can pass that `headHeight` to `processPreview`.
-                    // But `processPreview` signature is fixed.
-
-                    // ALTERNATIVE: Center & Fit Head Height = 402px.
-                    // If we make the "Visible Object Height" (Chin - Top) = 402px?
-                    // TopY is reliable. ChinY is hard (neck/collar).
-
-                    // Let's rely on the strategy: 
-                    // "Target Head Height = 402px".
-                    // The image from Cloudinary is `w_413, h_531` (Wait, line 324 says c_scale,w_413,h_531).
-                    // So the image IS ALREADY 413x531.
-                    // If Cloudinary `c_crop` was perfect (based on Azure), the head is ALREADY the right size?
-                    // Azure Logic: `targetPhotoH = headHeight / 0.75`. 
-                    // 3.4cm / 4.5cm = 0.755. 
-                    // So our Audit Logic (70-80%) already targeted this.
-                    // So `scale = 1` should be close.
-
-                    // BUT User wants "Strict 402px".
-                    // Let's assume the input `img` is approximately correct but needs fine-tuning.
-                    // We fit `img` to canvas with `object-fit: contain` logic? No, `cover`?
-
-                    // USER INSTRUCTION: "Write Dead" (Hardcode).
-                    // "headHeightLocal = eyeToTopDist / 0.48" -> implies we calculate local height.
-                    // "targetHeadPx = 402".
-                    // "Scale = 402 / headHeightLocal".
-
-                    // Since we lack `eyeToTopDist` locally, we will use a SAFE Fallback:
-                    // Assume input is "Close enough" and just center it.
-                    // OR: Use `Face Detection` on the *Local* image? (We have `face-api.js`?) No.
-
                     // BEST EFFORT: 
                     // Use the 413/531 canvas.
                     // Draw image centered.
@@ -348,141 +340,45 @@ export async function processPreview(base64, cropParams, faceData = null) {
 
 
 
-    // 1. Cloudinary Flow (Priority)
-    // NOTE: We only use Cloudinary to get the Cropped JPG.
-    // The "Background Removal" is now handled by Vercel Backend or Local Fallback.
-    // Wait, User said: "Cloudinary only keep c_crop & c_scale".
-    // "Vercel Backend receives ... Blob".
-
-    if (CLOUDINARY && CLOUDINARY.CLOUD_NAME) {
-        try {
-            const formData = new FormData();
-            formData.append('file', imageBlob);
-            formData.append('upload_preset', CLOUDINARY.UPLOAD_PRESET || 'unsigned');
-
-            const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY.CLOUD_NAME}/image/upload`, {
-                method: 'POST', body: formData
-            });
-
-            if (uploadRes.ok) {
-                const upData = await uploadRes.json();
-                const publicId = upData.public_id;
-                const version = upData.version;
-
-                let transforms = [];
-                // ONLY CROP & SCALE
-                if (cropParams) {
-                    const safeX = Math.max(0, cropParams.x);
-                    const safeY = Math.max(0, cropParams.y);
-                    // Add 10% Margin Logic? 
-                    // User: "增加 10% 邊距避免切到肩部"
-                    // We should expand cropParams here if possible, or assume input `cropParams` is raw face.
-                    // Usually `suggestedCrop` from Audit includes the head. 
-                    // Let's trust `cropParams` but maybe verify.
-
-                    transforms.push(`c_crop,x_${safeX},y_${safeY},w_${cropParams.w},h_${cropParams.h}`);
-                }
-                transforms.push('c_scale,w_413,h_531'); // Force 300 DPI Size
-
-                const transformStr = transforms.join('/');
-                const processedUrl = `https://res.cloudinary.com/${CLOUDINARY.CLOUD_NAME}/image/upload/${transformStr}/v${version}/${publicId}.jpg`;
-
-                console.log("Fetching Cropped Image from Cloudinary:", processedUrl);
-                // Fetch Cropped Image
-                const procRes = await fetch(processedUrl);
-                if (!procRes.ok) throw new Error(`Cloudinary Fetch Error ${procRes.status}`);
-                const croppedBlob = await procRes.blob();
-
-                // CALL VERCEL BACKEND
-                console.log("Calling Vercel Backend for Cleanup...");
-
-                // RESIZE OPTIMIZATION: Max 1000px to avoid Timeout
-                const optimizedBlob = await resizeImage(croppedBlob, 1000);
-
-                const vercelRes = await fetch('/api/remove-bg', {
-                    method: 'POST',
-                    body: optimizedBlob
-                });
-
-                if (!vercelRes.ok) throw new Error(`Vercel Backend Error ${vercelRes.status}`);
-
-                const base64Data = await vercelRes.text();
-                const transparentBlob = await (await fetch(`data:image/png;base64,${base64Data}`)).blob();
-
-                // Composite
-                const finalB64 = await compositeToWhiteBackground(transparentBlob);
-                const cleanB64 = finalB64.split(',').pop();
-                return { photos: [cleanB64, cleanB64] };
-
-            } else {
-                throw new Error(`Cloudinary Upload Failed: ${uploadRes.status}`);
-            }
-        } catch (e) {
-            console.warn("Cloudinary/Vercel Flow Failed:", e);
-            // Fallback to Local AI (Old method) just in case?
-            // Or just throw to let user know?
-            // User seems to want strict switch. 
-            // But if Vercel is 404 (localhost), this WILL fail.
-            // I'll re-throw for now or use the Local Fallback if it exists.
-
-            // To be safe for Localhost user, I will KEEP Local AI as catch-all fallback
-            // but log valid warning.
-        }
-    }
-
-    // 2. Local AI Flow (Fallback)
+    // OPTIMIZED FLOW: Local Crop -> Resize -> Vercel Backend
     try {
-        console.log("Starting Local AI Background Removal (Fallback)...");
+        console.log("Starting Optimized Production Flow (Local Crop -> Vercel)...");
 
-        // 1. Dynamic Import using robust ESM endpoint (v1.5.5)
-        const pkg = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm');
-        const removeBackground = pkg.removeBackground || pkg.default;
-
-        if (typeof removeBackground !== 'function') {
-            throw new Error("Could not find removeBackground function in loaded module");
+        // 1. Local Crop (Instant)
+        let processingBlob;
+        if (cropParams) {
+            console.log("Cropping Locally:", cropParams);
+            processingBlob = await cropImageLocally(cleanBase64, cropParams);
+        } else {
+            processingBlob = base64ToBlob(cleanBase64);
         }
 
-        // 2. Configuration
-        const config = {
-            progress: (key, current, total) => {
-                let percent = 0;
-                if (typeof current === 'number' && typeof total === 'number' && total > 0) {
-                    percent = Math.round((current / total) * 100);
-                } else if (typeof current === 'number') {
-                    percent = Math.round(current * 100);
-                }
+        // 2. Resize Optimization (Max 1000px)
+        const optimizedBlob = await resizeImage(processingBlob, 1000);
 
-                console.log(`Downloading AI Model: ${percent}%`);
+        // 3. Call Vercel Backend (Direct)
+        console.log("Calling Vercel Backend...");
+        const vercelRes = await fetch('/api/remove-bg', {
+            method: 'POST',
+            body: optimizedBlob
+        });
 
-                if (window.updateAILoading) {
-                    window.updateAILoading(`正在準備 AI 模型... ${percent}%`);
-                }
-            },
-            model: "medium",
-            output: {
-                format: "image/png",
-                quality: 0.95
-            }
-        };
+        if (!vercelRes.ok) throw new Error(`Vercel Backend Error ${vercelRes.status}`);
 
-        // 3. Execute Removal
-        console.log("Running removeBackground...");
-        const processedBlob = await removeBackground(imageBlob, config);
+        const base64Data = await vercelRes.text();
+        const transparentBlob = await (await fetch(`data:image/png;base64,${base64Data}`)).blob();
 
-        // 4. Composite to White Background and return Base64
-        const finalB64 = await compositeToWhiteBackground(processedBlob);
-        // Ensure format matches Vercel API response
-        // Remove prefix if it exists to be consistent, main.js adds it back if needed
+        // 4. Composite
+        const finalB64 = await compositeToWhiteBackground(transparentBlob);
         const cleanB64 = finalB64.split(',').pop();
         return { photos: [cleanB64, cleanB64] };
 
     } catch (e) {
-        console.error("Local AI Execution Error:", e);
+        console.error("Production Flow Failed:", e);
         throw e;
+        // Note: We removed the heavy Local AI fallback for speed. 
+        // If Vercel fails (500), we fail fast.
     }
-
-
-
 }
 
 /*
