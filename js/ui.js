@@ -259,7 +259,7 @@ export const UI = {
                         <tbody id="audit-service-body">${createServiceRows(serviceItems)}</tbody>
                     </table>
                 </div>
-                <div id="audit-action-area" class="mt-2 text-center"></div>
+                <div id="service-action-area" class="mt-2 text-center"></div>
             `;
         }
     },
@@ -444,13 +444,14 @@ export const UI = {
 
     // Final Stage: Download Options
     showDownloadOptions(singleBlob, specData) {
-        const area = document.getElementById('audit-action-area');
+        // [FIX]: Look for Service Area primarily, fallback to audit
+        const area = document.getElementById('service-action-area') || document.getElementById('audit-action-area');
         if (!area) return;
 
         const make4x2 = async () => {
             try {
                 const singleUrl = (singleBlob instanceof Blob) ? URL.createObjectURL(singleBlob) : singleBlob;
-                const layoutUrl = await UI.create4x2Canvas(singleUrl);
+                const layoutUrl = await UI.create4x2Canvas(singleUrl, specData); // Pass specData
 
                 const a = document.createElement('a');
                 a.href = layoutUrl;

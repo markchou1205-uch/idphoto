@@ -312,6 +312,9 @@ async function runProductionPhase() {
                 // [FIX]: Update Button to "Re-upload"
                 UI.updateToReuploadMode();
 
+                // Set Audit Button to Red (Urgent)
+                UI.setAuditButtonRed();
+
                 console.log("UI Update Complete.");
             } else {
                 console.error("No photos returned from API");
