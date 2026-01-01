@@ -52,10 +52,10 @@ def preprocess(image):
     # Mean: [0.485, 0.456, 0.406], Std: [0.229, 0.224, 0.225]
     
     img_np /= 255.0
-    # U2Net/U2NetP Standard Normalization (Range -1 to 1)
-    # This is (x - 0.5) / 0.5
-    img_np -= np.array([0.5, 0.5, 0.5])
-    img_np /= np.array([0.5, 0.5, 0.5])
+    # Standard ImageNet Normalization (Required for U2NetP)
+    # Mean: [0.485, 0.456, 0.406], Std: [0.229, 0.224, 0.225]
+    img_np -= np.array([0.485, 0.456, 0.406])
+    img_np /= np.array([0.229, 0.224, 0.225])
     
     # HWC -> CHW (1, 3, 1024, 1024)
     img_np = img_np.transpose((2, 0, 1))
