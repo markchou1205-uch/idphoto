@@ -43,12 +43,37 @@ export async function detectFace(base64) {
         console.log("detectFace called. Base64 len:", base64 ? base64.length : 0);
         // Clean input before Blob creation
         const cleanBase64 = ensureSinglePrefix(base64);
-        const originalBlob = base64ToBlob(cleanBase64);
+        // Resizing Logic with Scale Tracking
+        const originalImg = new Image();
+        const loadPromise = new Promise(r => originalImg.onload = r);
+        originalImg.src = ensureSinglePrefix(base64);
+        await loadPromise;
+
+        const origW = originalImg.width;
+        const origH = originalImg.height;
 
         // RESIZE BEFORE UPLOAD (Speed Optimization)
         // If image is huge (e.g. 4000px), Azure upload takes 10s. Resize to 1500px.
-        const resizedBlob = await resizeImage(originalBlob, 1500);
-        console.log(`[Azure] Resized Blob Size: ${originalBlob.size} -> ${resizedBlob.size}`);
+        // We use 1500px as safe limit for Azure Face API.
+        const maxDim = 1500;
+        let scale = 1;
+
+        let resizedBlob;
+        if (origW > maxDim || origH > maxDim) {
+            scale = Math.min(maxDim / origW, maxDim / origH);
+            const w = Math.floor(origW * scale);
+            const h = Math.floor(origH * scale);
+            console.log(`[Azure] Resizing ${origW}x${origH} -> ${w}x${h} (Scale: ${scale.toFixed(4)})`);
+
+            // Create resized blob
+            const cvs = document.createElement('canvas');
+            cvs.width = w;
+            cvs.height = h;
+            cvs.getContext('2d').drawImage(originalImg, 0, 0, w, h);
+            resizedBlob = await new Promise(r => cvs.toBlob(r, 'image/jpeg', 0.95));
+        } else {
+            resizedBlob = originalBlob;
+        }
 
         const endpoint = AZURE.ENDPOINT.endsWith('/') ? AZURE.ENDPOINT.slice(0, -1) : AZURE.ENDPOINT;
         // Fix: Enable returnFaceLandmarks=true
@@ -77,9 +102,29 @@ export async function detectFace(base64) {
         console.log("Azure Detect Data Length:", data ? data.length : 0);
 
         if (data && data.length > 0) {
-            const rect = data[0].faceRectangle;
+            // Apply Reverse Scaling to Coordinates
+            const reverseScale = 1 / scale;
+            console.log(`[Azure] Reverse Scale Factor: ${reverseScale.toFixed(4)}`);
 
-            // --- Precision Zoom Calculation (User Spec) ---
+            const rawRect = data[0].faceRectangle;
+            const rect = {
+                left: rawRect.left * reverseScale,
+                top: rawRect.top * reverseScale,
+                width: rawRect.width * reverseScale,
+                height: rawRect.height * reverseScale
+            };
+
+            // Scale Landmarks
+            const rawL = data[0].faceLandmarks;
+            const l = {};
+            if (rawL) {
+                for (const k in rawL) {
+                    l[k] = {
+                        x: rawL[k].x * reverseScale,
+                        y: rawL[k].y * reverseScale
+                    };
+                }
+            }
 
             // --- Precision Zoom Calculation (User Spec) ---
             // 1. Define Head Boundaries
@@ -89,8 +134,7 @@ export async function detectFace(base64) {
             let hairTopY = rect.top;
             let chinY = rect.top + rect.height;
 
-            if (data[0].faceLandmarks) {
-                const l = data[0].faceLandmarks;
+            if (Object.keys(l).length > 0) { // Check if we have scaled landmarks
                 const eyebrowY = (l.eyebrowLeftOuter.y + l.eyebrowRightOuter.y) / 2;
 
                 // Fix: Use underLipBottom to define Chin more accurately (avoiding collar)

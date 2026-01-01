@@ -106,36 +106,9 @@ class handler(BaseHTTPRequestHandler):
             # 3. Post Process (Mask)
             mask = postprocess(output[0], input_image.size)
             
-            # --- DEBUG VISUALIZATION MODE ---
-            # Create a side-by-side comparison with stats
-            w, h = input_image.size
-            debug_img = Image.new("RGB", (w * 2, h + 50), (255, 255, 255))
-            
-            # 1. Input Image
-            debug_img.paste(input_image, (0, 0))
-            
-            # 2. Raw Mask (Visualized)
-            # Ensure mask is visible even if faint
-            mask_np = np.array(mask)
-            mask_debug = mask.convert("RGB")
-            debug_img.paste(mask_debug, (w, 0))
-            
-            # 3. Stats Text (Draw manually if no font)
-            # We'll just encode simple stats in the bottom bar
-            from PIL import ImageDraw
-            draw = ImageDraw.Draw(debug_img)
-            
-            # Helper to get stats
-            in_np = np.array(input_image)
-            in_stats = f"In: Min={in_np.min()} Max={in_np.max()} Mean={in_np.mean():.1f}"
-            mask_stats = f"Mask: Min={mask_np.min()} Max={mask_np.max()} Mean={mask_np.mean():.1f}"
-            
-            draw.text((10, h + 10), in_stats, fill=(0, 0, 0))
-            draw.text((w + 10, h + 10), mask_stats, fill=(0, 0, 0))
-            
-            # Return Debug Image instead of composite
-            final_image = debug_img
-            # --------------------------------
+            # 4. Apply Mask
+            empty = Image.new("RGBA", input_image.size, 0)
+            final_image = Image.composite(input_image, empty, mask)
             
             # 5. Output
             buffered = io.BytesIO()
