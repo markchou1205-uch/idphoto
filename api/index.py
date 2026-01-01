@@ -11,8 +11,7 @@ import json
 # Configuration
 # Switching to ISNet-General-Use (~110MB) for High Precision (Hair/Edge details).
 # To avoid timeouts, we rely on Frontend resizing (max 1000px) and fast inference.
-MODEL_URL = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/isnet-general-use.onnx"
-MODEL_PATH = "/tmp/isnet-general-use.onnx"
+MODEL_PATH = os.path.join(os.path.dirname(__file__), 'isnet-general-use.onnx')
 
 class U2NetSession:
     def __init__(self):
@@ -23,14 +22,10 @@ class U2NetSession:
             return self.session
         
         if not os.path.exists(MODEL_PATH):
-            print(f"Downloading ISNet Model to {MODEL_PATH}...")
-            response = requests.get(MODEL_URL, stream=True)
-            with open(MODEL_PATH, "wb") as f:
-                for chunk in response.iter_content(chunk_size=32768): # Larger chunk size for speed
-                    f.write(chunk)
-            print("Download Complete.")
+           # Fail fast if model is missing in production
+           raise FileNotFoundError(f"Model file not found at {MODEL_PATH}")
         
-        print("Loading ONNX Session...")
+        print(f"Loading ONNX Session from {MODEL_PATH}...")
         self.session = ort.InferenceSession(MODEL_PATH)
         return self.session
 
