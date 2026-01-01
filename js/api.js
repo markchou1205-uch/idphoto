@@ -43,7 +43,12 @@ export async function detectFace(base64) {
         console.log("detectFace called. Base64 len:", base64 ? base64.length : 0);
         // Clean input before Blob creation
         const cleanBase64 = ensureSinglePrefix(base64);
-        const blob = base64ToBlob(cleanBase64);
+        const originalBlob = base64ToBlob(cleanBase64);
+
+        // RESIZE BEFORE UPLOAD (Speed Optimization)
+        // If image is huge (e.g. 4000px), Azure upload takes 10s. Resize to 1500px.
+        const resizedBlob = await resizeImage(originalBlob, 1500);
+        console.log(`[Azure] Resized Blob Size: ${originalBlob.size} -> ${resizedBlob.size}`);
 
         const endpoint = AZURE.ENDPOINT.endsWith('/') ? AZURE.ENDPOINT.slice(0, -1) : AZURE.ENDPOINT;
         // Fix: Enable returnFaceLandmarks=true
@@ -57,7 +62,7 @@ export async function detectFace(base64) {
                 'Ocp-Apim-Subscription-Key': AZURE.KEY,
                 'Content-Type': 'application/octet-stream'
             },
-            body: blob
+            body: resizedBlob
         });
 
         console.log("Azure Response Status:", res.status);
@@ -112,10 +117,10 @@ export async function detectFace(base64) {
 
             const fullHeadH = chinY - hairTopY;
 
-            // 2. Target Ratio (Strict 75%)
-            // Formula: Target Photo Height = Full Head Height / 0.75
-            // This ensures head occupies exactly 75% of the photo height
-            let targetPhotoH = fullHeadH / 0.75;
+            // 2. Target Ratio (Relaxed to 72% for better shoulder visibility)
+            // Formula: Target Photo Height = Full Head Height / 0.72
+            // Spec allows 70-80%. We target 72% (approaching 3.2cm min) to include more body.
+            let targetPhotoH = fullHeadH / 0.72;
 
             // 3. Aspect Ratio (35:45)
             // W = H * (35/45)
