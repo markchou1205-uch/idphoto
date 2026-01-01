@@ -408,7 +408,7 @@ export const UI = {
     },
 
     // Final Stage: Download Options
-    showDownloadOptions(singleBlob) {
+    showDownloadOptions(singleBlob, specData) {
         const area = document.getElementById('audit-action-area');
         if (!area) return;
 
@@ -432,13 +432,25 @@ export const UI = {
         };
 
         const dlSingle = async () => {
-            // Resize to 413x531 before download to ensure 35x45mm @ 300dpi compliance
+            // Use spec data if available, otherwise default to Passport (35x45mm)
+            const widthMm = specData ? specData.width_mm : 35;
+            const heightMm = specData ? specData.height_mm : 45;
+            const filename = specData ? `idphoto_${specData.width_mm}x${specData.height_mm}mm.jpg` : 'idphoto_single.jpg';
+
             const url = (singleBlob instanceof Blob) ? URL.createObjectURL(singleBlob) : singleBlob;
             try {
-                const resizedUrl = await UI.resizeToPassport(url);
+                // Determine pixel size at 300 DPI
+                // 1 inch = 25.4 mm, 300 px/inch
+                // pixels = mm / 25.4 * 300
+                const wPx = Math.round(widthMm / 25.4 * 300);
+                const hPx = Math.round(heightMm / 25.4 * 300);
+
+                console.log(`Downloading Single: ${widthMm}x${heightMm}mm => ${wPx}x${hPx}px`);
+
+                const resizedUrl = await UI.resizeToSpec(url, wPx, hPx);
                 const a = document.createElement('a');
                 a.href = resizedUrl;
-                a.download = 'idphoto_single_35x45mm.jpg';
+                a.download = filename;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -448,7 +460,7 @@ export const UI = {
                 // Fallback
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = 'idphoto_single.jpg';
+                a.download = filename;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -474,18 +486,18 @@ export const UI = {
         document.getElementById('btn-dl-4x2').onclick = make4x2;
     },
 
-    // Helper: Resize for Single Download (35x45mm @ 300dpi = 413x531px)
-    resizeToPassport(imgSrc) {
+    // Helper: Resize for Single Download (Generic 300 DPI)
+    resizeToSpec(imgSrc, widthPx, heightPx) {
         return new Promise((resolve, reject) => {
             const img = new Image();
             img.crossOrigin = 'Anonymous';
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                canvas.width = 413;
-                canvas.height = 531;
+                canvas.width = widthPx;
+                canvas.height = heightPx;
                 const ctx = canvas.getContext('2d');
                 // Draw scaled
-                ctx.drawImage(img, 0, 0, 413, 531);
+                ctx.drawImage(img, 0, 0, widthPx, heightPx);
                 resolve(canvas.toDataURL('image/jpeg', 0.95));
             };
             img.onerror = reject;

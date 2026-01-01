@@ -124,7 +124,7 @@ async function handleFileUpload(e) {
 
                 // [NEW FLOW]: UX Improvements
                 // 1. Hide Spec Selector Sidebar (if separate) or just replace content
-                // UI.toggleSidebar(false); // Action Panel is inside sidebar now, verify this logic.
+                UI.toggleSidebar(false); // Action Panel is inside sidebar now, verify this logic.
 
                 // 2. Render Action Panel (Production vs Audit)
                 UI.renderActionPanel(runProductionPhase, runAuditPhase);
@@ -307,7 +307,7 @@ async function runProductionPhase() {
 
                 // Show Buttons (Single + 4x2)
                 console.log("Showing Download Options...");
-                UI.showDownloadOptions(blob);
+                UI.showDownloadOptions(blob, DEFAULT_SPECS[state.spec]);
                 console.log("UI Update Complete.");
             } else {
                 console.error("No photos returned from API");
