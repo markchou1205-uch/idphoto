@@ -448,22 +448,14 @@ export const UI = {
         const area = document.getElementById('service-action-area') || document.getElementById('audit-action-area');
         if (!area) return;
 
-        const make4x2 = async () => {
+        const make4x2PDF = async () => {
             try {
                 const singleUrl = (singleBlob instanceof Blob) ? URL.createObjectURL(singleBlob) : singleBlob;
-                const layoutUrl = await UI.create4x2Canvas(singleUrl, specData); // Pass specData
-
-                const a = document.createElement('a');
-                a.href = layoutUrl;
-                a.download = 'idphoto_4x2.jpg';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
+                await UI.generate4x2PDF(singleUrl, specData); // Use PDF Generator
                 if (singleBlob instanceof Blob) URL.revokeObjectURL(singleUrl);
-
             } catch (e) {
                 console.error(e);
-                alert('排版生成失敗');
+                alert('PDF 生成失敗');
             }
         };
 
@@ -507,19 +499,19 @@ export const UI = {
         area.innerHTML = `
             <div class="d-flex gap-2 justify-content-center">
                 <button class="btn btn-outline-primary flex-fill" id="btn-dl-single">
-                    <i class="bi bi-download"></i> 下載單張 (電子檔)
+                    <i class="bi bi-download"></i> 下載單張 (JPG)
                 </button>
                 <button class="btn btn-success flex-fill" id="btn-dl-4x2">
-                    <i class="bi bi-grid-3x3"></i> 下載 4x2 排版 (4x6相紙)
+                    <i class="bi bi-printer"></i> 下載 4x2 排版 (PDF)
                 </button>
             </div>
             <div class="mt-2 text-center text-muted small">
-                <i class="bi bi-info-circle"></i> 單張符合 35x45mm 標準 / 4x2 排版可直接列印
+                <i class="bi bi-info-circle"></i> 單張為 JPG 電子檔 / 4x2 為 PDF 列印檔 (固定尺寸)
             </div>
         `;
 
         document.getElementById('btn-dl-single').onclick = dlSingle;
-        document.getElementById('btn-dl-4x2').onclick = make4x2;
+        document.getElementById('btn-dl-4x2').onclick = make4x2PDF;
     },
 
     // Helper: Resize for Single Download (Generic 300 DPI)
@@ -597,6 +589,69 @@ export const UI = {
             };
             img.onerror = reject;
             img.src = imgSrc;
+        });
+    },
+
+    // Helper: Generate PDF for 4x2 (Strict Physical Size)
+    // Uses jsPDF to enforce mm dimensions
+    generate4x2PDF(imgSrc, specData) {
+        return new Promise((resolve, reject) => {
+            if (!window.jspdf) {
+                alert("PDF Library not loaded");
+                return reject("jsPDF not found");
+            }
+            const { jsPDF } = window.jspdf;
+
+            // Default to 4x6 inch paper (101.6 x 152.4 mm)
+            // Note: Valid 4R is exactly 4x6 inches.
+            // Orientation: Landscape (152.4 mm wide, 101.6 mm high)
+            const doc = new jsPDF({
+                orientation: 'landscape',
+                unit: 'mm',
+                format: [101.6, 152.4] // h, w
+            });
+
+            // Spec Sizes
+            const mmW = specData ? specData.width_mm : 35;
+            const mmH = specData ? specData.height_mm : 45;
+
+            // Calculate Fit
+            // Paper: 152.4 x 101.6
+            // Margin/Gap
+            const gap = 2.5; // 2.5mm gap
+
+            // Cols
+            const cols = Math.floor((152.4 - gap) / (mmW + gap));
+            const rows = Math.floor((101.6 - gap) / (mmH + gap));
+
+            console.log(`PDF Layout: ${cols}x${rows}`);
+
+            // Center
+            const totalW = cols * mmW + (cols - 1) * gap;
+            const totalH = rows * mmH + (rows - 1) * gap;
+            const startX = (152.4 - totalW) / 2;
+            const startY = (101.6 - totalH) / 2;
+
+            const img = new Image();
+            img.src = imgSrc;
+            img.onload = () => {
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const x = startX + c * (mmW + gap);
+                        const y = startY + r * (mmH + gap);
+
+                        // Add Image (x, y, w, h) in MM
+                        doc.addImage(img, 'JPEG', x, y, mmW, mmH);
+
+                        // Optional: Draw cutting lines (light gray)
+                        doc.setDrawColor(220, 220, 220);
+                        doc.rect(x, y, mmW, mmH);
+                    }
+                }
+                doc.save('idphoto_print_4x6_inch.pdf');
+                resolve();
+            };
+            img.onerror = reject;
         });
     },
 
