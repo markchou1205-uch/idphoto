@@ -262,6 +262,13 @@ function renderResult(imgSrc, bgRemoved = false) {
 // Phase 2: Production (Processing)
 // Phase 2: Production (Service + Final)
 async function runProductionPhase() {
+    // UX: Disable Button
+    const btn = document.getElementById('btn-start-production');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '製作中... (Processing)';
+    }
+
     try {
 
         // [Safety Check]: Ensure Face Data exists (Critical for Direct Production Flow)

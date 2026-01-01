@@ -11,8 +11,8 @@ import json
 # Configuration
 # Switching to ISNet-General-Use (~110MB) for High Precision (Hair/Edge details).
 # To avoid timeouts, we rely on Frontend resizing (max 1000px) and fast inference.
-MODEL_URL = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/silueta.onnx"
-MODEL_PATH = "/tmp/silueta.onnx"
+MODEL_URL = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx"
+MODEL_PATH = "/tmp/u2netp.onnx"
 
 class U2NetSession:
     def __init__(self):
