@@ -274,10 +274,15 @@ async function runProductionPhase() {
             state.faceData = detectRes;
         }
 
-        // 2. Animate Services (simulated or real)
+        // 2. [FIX]: Initialize Audit Table structure so Download Buttons have a container
+        UI.initAuditTable('#report-content');
+        const auditPanel = document.getElementById('audit-panel');
+        if (auditPanel) auditPanel.classList.remove('d-none');
+
+        // 3. Animate Services (simulated or real)
         UI.renderServiceAnimation(async () => {
 
-            // 3. Process Image (Real API/Crop)
+            // 4. Process Image (Real API/Crop)
             const processRes = await API.processPreview(
                 state.originalImage,
                 state.faceData.suggestedCrop,
@@ -295,19 +300,22 @@ async function runProductionPhase() {
                 console.log("Processed Image State Updated. Length:", b64.length);
 
                 // Convert to Blob for download
-                // Fix: Fetching a Data URL is valid, but let's be explicit and safe
                 console.log("Converting to Blob...");
                 const res = await fetch(state.processedImage);
                 const blob = await res.blob();
                 console.log("Blob Created. Size:", blob.size);
 
-                // 4. Show Final Result & Download Options
+                // 5. Show Final Result & Download Options
                 console.log("Updating UI (AuditSuccess)...");
                 UI.showAuditSuccess(state.processedImage, state.faceData, null);
 
                 // Show Buttons (Single + 4x2)
                 console.log("Showing Download Options...");
                 UI.showDownloadOptions(blob, DEFAULT_SPECS[state.spec]);
+
+                // [FIX]: Update Button to "Re-upload"
+                UI.updateToReuploadMode();
+
                 console.log("UI Update Complete.");
             } else {
                 console.error("No photos returned from API");
