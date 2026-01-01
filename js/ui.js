@@ -76,6 +76,28 @@ export const UI = {
         }
     },
 
+    // Switch to Re-upload Mode
+    updateToReuploadMode() {
+        const btn = document.getElementById('btn-start-production');
+        // Find disclaimer check container (it's the .form-check inside action-panel)
+        const check = document.getElementById('disclaimer-check');
+        const checkDiv = check ? check.closest('.form-check') : null;
+
+        if (btn) {
+            btn.innerHTML = '<i class="bi bi-cloud-upload"></i> 重新上傳照片';
+            btn.classList.remove('btn-primary', 'shadow-sm');
+            btn.classList.add('btn-outline-primary', 'shadow-none');
+
+            // Rebind
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+            newBtn.addEventListener('click', () => {
+                location.reload();
+            });
+        }
+        if (checkDiv) checkDiv.classList.add('d-none');
+    },
+
     // Show Disclaimer Modal
     showDisclaimerModal() {
         const modalEl = document.getElementById('disclaimerModal');
