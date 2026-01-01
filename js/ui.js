@@ -54,7 +54,7 @@ export const UI = {
             newBtn.addEventListener('click', () => {
                 const check = document.getElementById('disclaimer-check');
                 if (check && !check.checked) {
-                    alert('請先閱讀並勾選「我已瞭解應注意事項」方可繼續。');
+                    alert('請勾選"我已瞭解注意事項"');
                     return;
                 }
                 if (onProduction) onProduction();
