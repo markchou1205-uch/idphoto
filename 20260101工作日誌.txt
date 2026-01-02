@@ -30,6 +30,23 @@
 - **診斷機制**：
   - 暫時性實作了「Debug Visualization」模式，輸出 Input/Mask 對比圖，成功協助定位上述的座標偏移問題。
 
+## 5. 部署挑戰與待辦 (23:00 更新)
+- **狀況**：
+  - 為了縮短 27s -> 5s 的冷啟動時間，嘗試將 `isnet-general-use.onnx` (170MB) 模型內置於專案中。
+  - 使用 Git LFS 上傳模型後，Vercel 部署失敗，錯誤訊息 `internal error: [onnxruntimeerror] : 7 : invalid_protobuf`。
+  - **診斷**：Vercel 建置過程未能正確拉取 LFS 實體檔案，導致 Runtime 讀取到的是 LFS 指針檔 (Pointer File) 而非模型二進位檔。
+
+- **執行計畫 (明日待辦)**：
+  - **方案 A (棄用)**：Vercel 對 LFS 的支援可能不穩定或需額外付費設定，且 170MB 逼近 Lambda 250MB 極限，風險過高。
+  - **方案 B (推薦)**：改用輕量級模型 **Silueta (40MB)** 或 **U2NetP (4MB)**。
+    - 這能完全繞過 Git LFS 需求。
+    - 雖然邊緣細節可能略遜於 ISNet，但在證件照場景下（背景單純）差異應可接受。
+    - 體積大幅縮小，能進一步優化冷啟動速度。
+  - **行動**：
+    1.  移除 LFS 設定與大檔。
+    2.  下載 `silueta.onnx` 並改寫 `index.py` 載入它。
+    3.  重新部署驗證。
+
 ---
 **結語**：
 系統現已恢復正常運作，且具備更強健的錯誤處理與座標換算機制。祝新年快樂！

@@ -27,10 +27,10 @@ def preprocess(image):
     
     img_np = np.array(img).astype(np.float32)
     
-    # TEST: -1 to 1 Normalization
+    # ImageNet Normalization
     img_np /= 255.0
-    img_np -= np.array([0.5, 0.5, 0.5])
-    img_np /= np.array([0.5, 0.5, 0.5])
+    img_np -= np.array([0.485, 0.456, 0.406])
+    img_np /= np.array([0.229, 0.224, 0.225])
     
     # HWC -> CHW
     img_np = img_np.transpose((2, 0, 1))

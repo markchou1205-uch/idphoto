@@ -1,0 +1,23 @@
+# 2026/01/02 工作日誌 - 模型輕量化與部署優化
+
+## 1. 核心變更：切換至 Silueta 模型
+- **執行項目**：
+  - 已移除 `isnet-general-use.onnx` (170MB) 及 Git LFS 設定。
+  - 下載並整合 `silueta.onnx` (44MB) 至 `api/` 目錄。
+  - **目的**：解決 Vercel 部署失敗 (LFS Error) 並顯著降低 Cold Start 時間。
+
+## 2. API 修正 (api/index.py)
+- **模型路徑**：更新為 `api/silueta.onnx`。
+- **預處理邏輯**：
+  - 解析度：調整為 320x320 (Silueta 原生解析度)。
+  - 正規化：改用 ImageNet 標準 (Mean=[0.485, 0.456, 0.406], Std=[0.229, 0.224, 0.225])，符合 Rembg/U2Net 規範。
+
+## 3. 驗證狀態
+- **本地驗證**：
+  - `verify_deployment.py` 測試通過：模型成功載入，輸入張量為 [1, 3, 320, 320]。
+  - `test_local.py` 同步更新：確保本地測試腳本與 API 邏輯一致。
+
+## 4. 下一步
+- 請推送到 GitHub 並觸發 Vercel 部署。
+- 觀察 Vercel Logs，確認 Cold Start 時間是否改善 (預期應在 5s 內)。
+- 驗證證件照去背品質（Silueta 在邊緣細節上可能略遜於 ISNet，但在純色背景下通常表現良好）。

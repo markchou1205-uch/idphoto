@@ -9,9 +9,8 @@ import onnxruntime as ort
 import json
 
 # Configuration
-# Switching to ISNet-General-Use (~110MB) for High Precision (Hair/Edge details).
-# To avoid timeouts, we rely on Frontend resizing (max 1000px) and fast inference.
-MODEL_PATH = os.path.join(os.path.dirname(__file__), 'isnet-general-use.onnx')
+# Switching to Silueta (~40MB) for lightweight deployment.
+MODEL_PATH = os.path.join(os.path.dirname(__file__), 'silueta.onnx')
 
 class U2NetSession:
     def __init__(self):
@@ -33,8 +32,8 @@ class U2NetSession:
 u2net = U2NetSession()
 
 def preprocess(image):
-    # Resize to 1024x1024 (ISNet Native Resolution)
-    img = image.resize((1024, 1024), Image.BILINEAR)
+    # Resize to 320x320 (Silueta Native Resolution)
+    img = image.resize((320, 320), Image.BILINEAR)
     
     img_np = np.array(img).astype(np.float32)
     # Normalize: (Img - Mean) / Std
@@ -48,10 +47,10 @@ def preprocess(image):
     
     
     img_np /= 255.0
-    # Silueta/ISNet Default Normalization: Mean [0.5, 0.5, 0.5], Std [1.0, 1.0, 1.0]
-    # This maps 0..1 to -0.5..0.5
-    img_np -= np.array([0.5, 0.5, 0.5])
-    img_np /= np.array([1.0, 1.0, 1.0])
+    # ImageNet Normalization (Standard for Silueta/U2Net)
+    # Mean: [0.485, 0.456, 0.406], Std: [0.229, 0.224, 0.225]
+    img_np -= np.array([0.485, 0.456, 0.406])
+    img_np /= np.array([0.229, 0.224, 0.225])
     
     # HWC -> CHW (1, 3, 320, 320)
     img_np = img_np.transpose((2, 0, 1))
