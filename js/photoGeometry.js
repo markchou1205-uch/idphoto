@@ -33,10 +33,9 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
     const finalScale = target.headPx / (headHeight_Pct * currentImgH);
 
     // 5. Centering Logic
-    const eyeMidX_Global = (landmarks.pupilLeft.x + landmarks.pupilRight.x) / 2;
-    const eyeMidX_Pct = (eyeMidX_Global - cropRect.x) / cropRect.w;
-    // Calculate the drawn width of the image at finalScale
+    // 5. Centering Logic (Safe Centering Revison)
     const drawnWidth = (currentImgH * (cropRect.w / cropRect.h)) * finalScale;
+    const drawnHeight = currentImgH * finalScale;
 
     // DEBUG: exposing internal calculation for logging if needed
     const resultingHeadPx = headHeight_Pct * currentImgH * finalScale;
@@ -44,8 +43,9 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
 
     return {
         scale: finalScale,
-        y: target.topMarginPx - (topY_Pct * currentImgH * finalScale),
-        // Center image horizontally based on drawn width
+        // Fix Y: Use direct topMargin relative to the scaled image top
+        y: target.topMarginPx - (topY_Pct * drawnHeight),
+        // Fix X: Force Center the entire drawn image within the 413px canvas
         x: (target.canvasW - drawnWidth) / 2,
         canvasW: target.canvasW,
         canvasH: target.canvasH,
