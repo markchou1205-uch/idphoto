@@ -432,7 +432,7 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
                 rCtx.moveTo(0, margin - 1);
                 rCtx.lineTo(canvas.width, margin - 1);
 
-                const wMM = specData.width_mm || 35;
+                const wMM = config.canvas_mm[0] || 35;
                 for (let mm = 0; mm <= wMM; mm++) {
                     const x = mm * (canvas.width / wMM);
                     const isMajor = (mm % 5 === 0);
@@ -451,7 +451,7 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
                 rCtx.moveTo(rightBaseX, margin);
                 rCtx.lineTo(rightBaseX, ruledCanvas.height);
 
-                const hMM = specData.height_mm || 45;
+                const hMM = config.canvas_mm[1] || 45;
                 for (let mm = 0; mm <= hMM; mm++) {
                     const y = margin + (mm * (canvas.height / hMM));
                     const isMajor = (mm % 5 === 0);
@@ -487,7 +487,7 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
                     rCtx.stroke();
 
                     // Measurement Label
-                    const targetHeadCm = ((specData.target_head_mm || 34) / 10).toFixed(1);
+                    const targetHeadCm = ((config.head_mm[0] + config.head_mm[1]) / 2 / 10).toFixed(1);
                     rCtx.fillStyle = 'red';
                     rCtx.font = 'bold 12px Arial';
                     rCtx.setLineDash([]);
@@ -503,7 +503,7 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
     }
 
     try {
-        console.log("Process Preview Start. Spec:", specData.name);
+        console.log("Process Preview Start. Spec:", config.name);
 
         // 1. Prepare Upload Blob (Resize & Compress)
         // Note: prepareImageForUpload is assumed to be in this file scope (lines 80+)
@@ -528,7 +528,7 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
         // 3. Composite
         const cropRect = cropParams || { x: 0, y: 0, w: cleanBase64.length, h: cleanBase64.length };
 
-        const finalB64 = await compositeToWhiteBackground(transparentBlob, faceData, cropRect, specData, userAdjustments);
+        const finalB64 = await compositeToWhiteBackground(transparentBlob, faceData, cropRect, config, userAdjustments);
         const retB64 = finalB64.split(',').pop();
         return { photos: [retB64, retB64] };
 
