@@ -354,14 +354,36 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
                             config
                         );
 
-                        // Debug logging to verify image height and scale calculation
+                        // === COMPREHENSIVE DEBUG LOGGING ===
+                        console.log("=== GEOMETRY DEBUG START ===");
+                        console.log("1. Input Image Height (Vercel Output):", img.height, "px");
+                        console.log("2. topY_Resized (Hair Top in Vercel Output):", topY_Resized, "px");
+                        console.log("3. cropRect (Original Coords):", cropRect);
+
                         const eyeMidY_Global = (faceData.faceLandmarks.pupilLeft.y + faceData.faceLandmarks.pupilRight.y) / 2;
+                        console.log("4. eyeMidY_Global (Original Coords):", eyeMidY_Global, "px");
+
                         const eyeMidY_Pct = (eyeMidY_Global - cropRect.y) / cropRect.h;
                         const topY_Pct = topY_Resized / img.height;
-                        const eyeToTop_Pct = eyeMidY_Pct - topY_Pct;
-                        const resultingHeadPx = (layout.scale * (eyeToTop_Pct / 0.48) * img.height);
+                        console.log("5. eyeMidY_Pct (relative to cropRect.h):", (eyeMidY_Pct * 100).toFixed(2), "%");
+                        console.log("6. topY_Pct (relative to img.height):", (topY_Pct * 100).toFixed(2), "%");
 
-                        console.log(`DEBUG: Scaling Image Height ${img.height} with Scale ${layout.scale.toFixed(4)}, Resulting Head Px: ${resultingHeadPx.toFixed(1)}`);
+                        const eyeToTop_Pct = eyeMidY_Pct - topY_Pct;
+                        console.log("7. eyeToTop_Pct (MISMATCH?):", (eyeToTop_Pct * 100).toFixed(2), "%");
+
+                        const headHeight_Pct = eyeToTop_Pct / 0.48;
+                        console.log("8. headHeight_Pct:", (headHeight_Pct * 100).toFixed(2), "%");
+
+                        const headPx_In_Source = headHeight_Pct * img.height;
+                        console.log("9. headPx_In_Source:", headPx_In_Source.toFixed(1), "px");
+                        console.log("10. Target headPx:", 402, "px");
+                        console.log("11. Calculated Scale:", layout.scale.toFixed(4));
+
+                        const resultingHeadPx = headPx_In_Source * layout.scale;
+                        console.log("12. RESULTING HEAD SIZE:", resultingHeadPx.toFixed(1), "px (Target: 402px)");
+                        console.log("13. RESULTING HEAD SIZE IN CM:", (resultingHeadPx / (300 / 25.4)).toFixed(2), "cm (Target: 3.4cm)");
+                        console.log("=== GEOMETRY DEBUG END ===");
+
                         console.log(`[Universal Layout] Scale: ${layout.scale.toFixed(4)}, X: ${layout.x.toFixed(1)}, Y: ${layout.y.toFixed(1)}`);
 
                         // Self-Verification Log
