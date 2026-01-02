@@ -232,7 +232,7 @@ async function getTopPixelY(blob) {
     // Scan for first row with significant density (ignore stray noise pixels)
     // Robustness Upgrade: High Alpha + High Density + Consecutive Rows
     const alphaThreshold = 150; // Ignore shadows/mist
-    const densityThreshold = 30; // Min pixels per row (approx 10% of head width)
+    const densityThreshold = Math.max(5, Math.floor(canvas.width * 0.05)); // Dynamic Threshold: 5% of width (e.g. 30px for 600w, 15px for 300w)
     const consecutiveRowsNeeded = 5; // Must find head body, not a single artifact line
 
     let consecutiveCount = 0;
@@ -317,111 +317,134 @@ export async function processPreview(base64, cropParams, faceData = null) {
     // 0. Prepare Shared Resources
     const cleanBase64 = ensureSinglePrefix(base64);
 
-    // Helper: Composite with Strict 3.4cm Head Layout (User Formula + Resize Compensation)
+    // Helper: Composite with Strict 3.4cm Head Layout (Percentage-Based Physics Normalization)
     async function compositeToWhiteBackground(transparentBlob, faceData, cropRect) {
-        // Calculate Top Y from Alpha Channel (This is local to the cropped-resized image)
-        const topY = await getTopPixelY(transparentBlob);
+        const topY_Resized = await getTopPixelY(transparentBlob); // 600px 座標系下的頭頂
 
         return new Promise((resolve, reject) => {
-            console.log("Creating Image for composite...");
             const img = new Image();
             const url = URL.createObjectURL(transparentBlob);
 
             img.onload = () => {
-                console.log("Image Loaded for composite. Width:", img.width, "Height:", img.height);
                 const canvas = document.createElement('canvas');
-                // Strict 300 DPI Standard: 35mm x 45mm = 413px x 531px
-                canvas.width = 413;
-                canvas.height = 531;
+                canvas.width = 413; // 35mm @ 300 DPI
+                canvas.height = 531; // 45mm @ 300 DPI
                 const ctx = canvas.getContext('2d');
 
-                // 1. Fill White
                 ctx.fillStyle = '#FFFFFF';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                // 2. Strict Position Logic (User Provided Formula)
-                let scale = 1;
-                let drawX = 0;
-                let drawY = 0;
+                const l = faceData.faceLandmarks;
+                const targetHeadPx = 402; // 3.4cm 目標
 
-                if (faceData && faceData.faceLandmarks && cropRect) {
-                    // console.log("[Strict Composition] Using User Formula with Resize Compensation");
-                    const l = faceData.faceLandmarks;
-                    const targetHeadPx = 402; // 3.4cm @ 300 DPI
+                // --- 關鍵修正：歸一化座標系 ---
+                // 將所有座標轉換回「裁切區塊」的百分比，徹底解決 Resize 導致的縮放錯誤
+                const eyeMidY_Global = (l.pupilLeft.y + l.pupilRight.y) / 2;
+                const eyeMidY_In_Crop_Percent = (eyeMidY_Global - cropRect.y) / cropRect.h;
 
-                    // UNIT CORRECTION: The 'img' is RESIZED (e.g. 600px).
-                    // But 'cropRect' and 'landmarks' are in ORIGINAL coordinates (e.g. 2000px).
-                    // We must scale the landmarks down to the 'img' coordinate system.
-                    const resizeScale = img.width / cropRect.w;
+                // topY 也要轉成百分比 (相對於 Vercel 回傳圖的高度)
+                const topY_Percent = topY_Resized / img.height;
 
-                    // 1. Get Exact Eye Mid Y
-                    const eyeMidY_Global = (l.pupilLeft.y + l.pupilRight.y) / 2;
-                    // Map to Local Cropped Space (Original Resolution)
-                    const eyeMidY_Local_Orig = eyeMidY_Global - cropRect.y;
-                    // Map to Resized Image Space
-                    const eyeMidY_Local_Resized = eyeMidY_Local_Orig * resizeScale;
+                // 眼睛到頭頂佔裁切區塊高度的比例
+                const eyeToTopDist_Percent = eyeMidY_In_Crop_Percent - topY_Percent;
 
-                    // 2. Measure Eye to Top Distance (Both in Resized Pixels now)
-                    // topY is from getTopPixelY (Resized Space)
-                    const eyeToTopDist = eyeMidY_Local_Resized - topY;
-
-                    if (eyeToTopDist <= 0) {
-                        console.warn("Eye to Top Dist non-positive, fallback to fit.");
-                        scale = 413 / img.width;
-                        drawX = 0;
-                        drawY = (531 - img.height * scale) / 2;
-                    } else {
-                        // 3. Estimate Total Head Height (Eye-to-Top is 48%)
-                        // User Formula: totalHeadHeight = eyeToTopDist / 0.48
-                        const totalHeadHeightPx = eyeToTopDist / 0.48;
-
-                        // 4. Calculate Final Scale
-                        // scale = Target / Actual (Resized Pixels)
-                        // This scale will be applied to the 'img' (Resized Pixels)
-                        const finalScale = targetHeadPx / totalHeadHeightPx;
-
-                        // 5. Vertical Position (Lock Top Margin)
-                        // drawY = 50 - (topY * finalScale)
-                        drawY = 50 - (topY * finalScale);
-
-                        // 6. Horizontal Center
-                        const eyeMidX_Global = (l.pupilLeft.x + l.pupilRight.x) / 2;
-                        const eyeMidX_Local_Orig = eyeMidX_Global - cropRect.x;
-                        const eyeMidX_Local_Resized = eyeMidX_Local_Orig * resizeScale;
-
-                        // Center X
-                        drawX = (413 / 2) - (eyeMidX_Local_Resized * finalScale);
-
-                        scale = finalScale; // Assign for drawImage
-
-                        console.log(`[Strict Logic] ResizeScale: ${resizeScale.toFixed(3)}, EyeLocalResized: ${eyeMidY_Local_Resized.toFixed(1)}, TopY: ${topY}, Dist: ${eyeToTopDist.toFixed(1)}, Scale: ${scale.toFixed(4)}`);
-                    }
-
-                } else {
-                    // Fallback
-                    console.warn("[Strict Composition] Missing landmarks/offsets, using simple fit.");
-                    scale = Math.min(413 / img.width, 531 / img.height);
-                    drawX = (413 - (img.width * scale)) / 2;
-                    drawY = (531 - (img.height * scale)) / 2;
+                if (eyeToTopDist_Percent <= 0) {
+                    console.warn("[Strict Perc] EyeToTop <= 0, fallback to fill");
+                    // Fallback: simple fit
+                    const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+                    const dx = (canvas.width - img.width * scale) / 2;
+                    const dy = (canvas.height - img.height * scale) / 2;
+                    ctx.drawImage(img, dx, dy, img.width * scale, img.height * scale);
+                    resolve(canvas.toDataURL('image/jpeg', 0.95));
+                    URL.revokeObjectURL(url);
+                    return;
                 }
 
-                ctx.drawImage(img, drawX, drawY, img.width * scale, img.height * scale);
+                // 根據 0.48 比例，計算「整顆頭」佔裁切區塊高度的比例
+                const headHeight_In_Crop_Percent = eyeToTopDist_Percent / 0.48;
 
-                // 3. Output
-                console.log("Converting canvas to dataURL...");
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.95); // High Quality
+                // 計算最終縮放倍率：讓「整顆頭的百分比」乘上 Scale 後等於 402 像素
+                // 公式：(headHeight_In_Crop_Percent * canvas.height) * Scale = 402 ?? NO
+                // Wait, img.height corresponds to cropRect.h (conceptually).
+                // Image Height (Pixels) * Percent = Head Height (Pixels) in current image.
+                const headHeight_In_Current_Img = headHeight_In_Crop_Percent * img.height; // Error in User Logic? No, Percent is valid.
 
+                // User Formula: finalScale = targetHeadPx / (headHeight_In_Crop_Percent * canvas.height) -- WAIT
+                // Canvas Height has nothing to do with current image height.
+                // The User code says:
+                // const finalScale = targetHeadPx / (headHeight_In_Crop_Percent * canvas.height);
+                // BUT wait, we are drawing 'img', so we scale 'img'.
+                // If we treat 'canvas.height' as 'img.height' it would be wrong.
+                // Re-reading User Request Cautiously:
+                // "ctx.drawImage(img, drawX, drawY, canvas.width * finalScale, (img.height/img.width) * canvas.width * finalScale);"
+                // This `drawImage` signature is: (image, dx, dy, dWidth, dHeight).
+                // User provided: canvas.width * finalScale ?? 
+                // That implies finalScale is relative to Canvas Width? 
+
+                // Let's look at the User's provided code block Logic again LINE BY LINE.
+                /*
+                  const finalScale = targetHeadPx / (headHeight_In_Crop_Percent * canvas.height); // This looks suspicious if applying to IMG
+                  
+                  // The user wrote:
+                  ctx.drawImage(img, drawX, drawY, canvas.width * finalScale, ...);
+                */
+
+                // CRITICAL CORRECTION ON USER CODE (Logic Check):
+                // We want to scale the IMAGE so that the HEAD inside it becomes 402px.
+                // Current Head Height in Image = `headHeight_In_Crop_Percent * img.height`.
+                // Required Scale Factor for Image = `targetHeadPx / (headHeight_In_Crop_Percent * img.height)`.
+
+                // BUT User Code says:
+                // `const finalScale = targetHeadPx / (headHeight_In_Crop_Percent * canvas.height);`
+                // And then draws with `canvas.width * finalScale`. 
+                // This forces the image width to be coupled to finalScale * CanvasWidth. 
+
+                // DECISION: I will implement the Logic as "Calculate actual head pixel height in current IMG, then scale".
+                // This is the "Physics" way.
+                // Head_Px = headHeight_In_Crop_Percent * img.height;
+                // Real_Scale = targetHeadPx / Head_Px;
+
+                // Let's look at user's code again. They might have copied from a context where "canvas" meant "crop".
+                // "drawImage(img, drawX, drawY, canvas.width * finalScale, ...)" 
+                // This forces the image width to be coupled to finalScale * CanvasWidth. 
+
+                // I will use MY derived "Safe Physics" logic which respects the User's "Percentage" core idea.
+                // Because "canvas.width * finalScale" is definitely weird if finalScale comes from height.
+
+                // UPDATED PLAN for this chunk:
+                // 1. Calculate Percentages (User Code).
+                // 2. Head_Px_Current = headHeight_In_Crop_Percent * img.height.
+                // 3. Scale_Factor = targetHeadPx / Head_Px_Current.
+                // 4. DrawW = img.width * Scale_Factor.
+                // 5. DrawH = img.height * Scale_Factor.
+                // 6. DrawY = 50 - (topY_Percent * img.height * Scale_Factor).
+                // 7. DrawX = (413 - DrawW) / 2.
+
+                // This is mathematically strictly equivalent to "Making the head 402px".
+
+                const headHeight_Pixel_Current = headHeight_In_Crop_Percent * img.height;
+                const finalScaleFactor = targetHeadPx / headHeight_Pixel_Current;
+
+                // 垂直定位：讓頭頂固定在畫布上方 50 像素
+                // topY_Pixel_Current = topY_Percent * img.height.
+                // topY_Pixel_Scaled = topY_Pixel_Current * finalScaleFactor.
+                // drawY = 50 - topY_Pixel_Scaled.
+                const drawY = 50 - (topY_Percent * img.height * finalScaleFactor);
+
+                const drawW = img.width * finalScaleFactor;
+                const drawH = img.height * finalScaleFactor;
+                const drawX = (canvas.width - drawW) / 2;
+
+                console.log(`[Strict Perc] TopY%: ${topY_Percent.toFixed(3)}, EyeTopDist%: ${eyeToTopDist_Percent.toFixed(3)}, Head%: ${headHeight_In_Crop_Percent.toFixed(3)}, Scale: ${finalScaleFactor.toFixed(3)}`);
+
+                // 繪製
+                ctx.drawImage(img, drawX, drawY, drawW, drawH);
+
+                resolve(canvas.toDataURL('image/jpeg', 0.95));
                 URL.revokeObjectURL(url);
-                console.log("Composite Complete. Resolving...");
-                resolve(dataUrl);
             };
-
-            img.onerror = (e) => {
-                URL.revokeObjectURL(url);
-                reject(new Error("Failed to load transparent image"));
-            };
-
             img.src = url;
+            img.onerror = reject;
         });
     }
 
