@@ -89,10 +89,43 @@ async function handleFileUpload(e) {
         input = document.getElementById('fileInput');
     }
 
-    const file = input && input.files ? input.files[0] : null;
+    let file = input && input.files ? input.files[0] : null; // Changed const to let for reassignment
     console.log("File detected:", file);
 
     if (!file) return;
+
+    // HEIC Conversion Support
+    const isHeic = file.name.toLowerCase().endsWith('.heic') || file.type === 'image/heic';
+    if (isHeic) {
+        console.log("HEIC file detected. Starting conversion...");
+        // Show loading state if possible or just log
+        if (window.updateAILoading) window.updateAILoading("正在轉換 HEIC 照片...");
+        
+        try {
+            if (!window.heic2any) {
+                throw new Error("heic2any library not loaded");
+            }
+
+            const convertedBlob = await heic2any({
+                blob: file,
+                toType: "image/jpeg",
+                quality: 0.9
+            });
+
+            console.log("HEIC conversion successful.");
+            // heic2any can return a Blob or an array of Blobs. We take the first one if array.
+            const finalBlob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+            
+            // Create a new file object or just use the blob for FileReader
+            // We'll treat it as the "file" for the rest of the flow
+            file = finalBlob; 
+
+        } catch (err) {
+            console.error("HEIC Conversion Failed:", err);
+            alert("HEIC 照片轉換失敗，請改用 JPG/PNG 或稍後再試。");
+            return;
+        }
+    }
 
     // Optimization: Trigger AI Pre-load immediately
     if (typeof preloadLocalAI === 'function') {
