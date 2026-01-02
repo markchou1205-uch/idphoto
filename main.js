@@ -198,12 +198,20 @@ async function runAuditPhase() {
         UI.renderBasicAudit(state.auditResults, () => {
             console.log("Basic Audit Complete.");
 
-            // On Complete: Show "Generate" Button + Success Msg
+            const isProcessed = !!state.processedImage;
+
+            // On Complete: Show "Generate" or "Print" Button
             UI.showBasicPassState(() => {
-                console.log("User clicked Generate/Action.");
-                // Always restart production from original flow
-                runProductionPhase();
-            });
+                console.log("User clicked Action. Processed:", isProcessed);
+                if (isProcessed) {
+                    // Already processed? Show Result View
+                    UI.toggleAuditView(false);
+                    UI.showDownloadOptions(state.processedImage, DEFAULT_SPECS[state.spec]);
+                } else {
+                    // Start Production
+                    runProductionPhase();
+                }
+            }, isProcessed);
 
             // Show Visuals (Red Lines etc.)
             UI.showAuditSuccess(targetImage, detectRes, null);

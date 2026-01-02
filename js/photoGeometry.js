@@ -27,29 +27,35 @@ export const IMAGE_PRESETS = {
 // Deprecated: Legacy default (Passport)
 export const SPECS = getSpecDims(null);
 
-export function calculatePassportLayout(landmarks, topY_Resized, cropRect, currentImgH, spec = null) {
+export function calculatePassportLayout(landmarks, topY_Resized, cropRect, currentImgH, spec = null, scaleFactor = 1) {
     const config = getSpecDims(spec);
 
-    // A. Maximize Head Logic vs Fixed Head Logic
-    // If we have strict head requirement (Passport/Visa), use TARGET_HEAD_PX.
-    // If it's flexible (Resume), we might want to respect face_multiplier or just use Head Px.
-    // Our config has target_head_mm, so we trust it.
+    // 1. Coordinate Mapping (Original -> Resized)
+    // Landmarks are in Original Coordinates. topY_Resized is in Resized Coordinates.
+    // scaleFactor = ResizedWidth / OriginalWidth (approx).
 
-    // B. Calculate
-    const eyeMidY_Global = (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
-    const eyeMidY_In_Crop_Percent = (eyeMidY_Global - cropRect.y) / cropRect.h;
-    const topY_Percent = topY_Resized / currentImgH;
+    const eyeMidY_Original = (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
+    const eyeMidY_Resized = eyeMidY_Original * scaleFactor;
 
-    const eyeToTopDist_Percent = eyeMidY_In_Crop_Percent - topY_Percent;
-    const headHeight_In_Canvas_Percent = eyeToTopDist_Percent / config.HEAD_RATIO;
+    // 2. Head Geometry (in Resized Pixels)
+    // eyeToTop_Resized is the visual distance from Eye center to Hair Top in the resized image
+    const eyeToTop_Resized = eyeMidY_Resized - topY_Resized;
 
-    const finalScale = config.TARGET_HEAD_PX / (headHeight_In_Canvas_Percent * config.CANVAS_H);
+    // Total Head Height (in Resized Pixels) estimated from Head Ratio
+    // If specific Spec has HEAD_RATIO override, use it (Default 0.48)
+    const headHeight_Resized = eyeToTop_Resized / config.HEAD_RATIO;
 
-    const drawY = config.TOP_MARGIN_PX - (topY_Percent * config.CANVAS_H * finalScale);
+    // 3. Calculate Layout Scale (to match Target Head Px)
+    const finalScale = config.TARGET_HEAD_PX / headHeight_Resized;
 
-    const eyeMidX_Global = (landmarks.pupilLeft.x + landmarks.pupilRight.x) / 2;
-    const eyeMidX_In_Crop_Percent = (eyeMidX_Global - cropRect.x) / cropRect.w;
-    const drawX = (config.CANVAS_W / 2) - (eyeMidX_In_Crop_Percent * config.CANVAS_W * finalScale);
+    // 4. Calculate Draw Position (Canvas Coordinates)
+    // Vertical: Place Hair Top at TOP_MARGIN_PX
+    const drawY = config.TOP_MARGIN_PX - (topY_Resized * finalScale);
+
+    // Horizontal: Center Eyes at Canvas Center
+    const eyeMidX_Original = (landmarks.pupilLeft.x + landmarks.pupilRight.x) / 2;
+    const eyeMidX_Resized = eyeMidX_Original * scaleFactor;
+    const drawX = (config.CANVAS_W / 2) - (eyeMidX_Resized * finalScale);
 
     return {
         scale: finalScale,
@@ -57,6 +63,6 @@ export function calculatePassportLayout(landmarks, topY_Resized, cropRect, curre
         y: drawY,
         canvasW: config.CANVAS_W,
         canvasH: config.CANVAS_H,
-        config: config // Return config for use in Rulers
+        config: config
     };
 }

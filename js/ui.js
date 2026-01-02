@@ -401,19 +401,24 @@ export const UI = {
         renderNext();
     },
 
-    // Stage 1.5: Show Success Message + Generate Button
-    showBasicPassState(onGenerate) {
+    // Stage 1.5: Show Success Message + Generate/Print Button
+    showBasicPassState(onGenerate, isProcessed = false) {
         const area = document.getElementById('audit-action-area');
         if (area) {
+            const btnText = isProcessed ? '立即列印 / 下載' : '立即生成證件照';
+            const btnIcon = isProcessed ? 'bi-printer' : 'bi-arrow-right-short';
+            const btnClass = isProcessed ? 'btn-success' : 'btn-primary';
+            const infoText = isProcessed ? '您的證件照已製作完成且通過審查' : '待進一步處理後即可生成合格證件照片';
+
             area.innerHTML = `
                 <div class="alert alert-success bg-opacity-10 border-success mb-3 shadow-sm d-flex justify-content-between align-items-center">
                     <div>
                         <i class="bi bi-check-circle-fill text-success me-2"></i> 
-                        <span class="fw-bold text-success">基本審查通過</span>
-                        <div class="small text-muted ms-4">待進一步處理後即可生成合格證件照片</div>
+                        <span class="fw-bold text-success">審查通過</span>
+                        <div class="small text-muted ms-4">${infoText}</div>
                     </div>
-                    <button class="btn btn-primary shadow ms-3" id="btn-generate-photo" style="min-width: 160px;">
-                        立即生成證件照 <i class="bi bi-arrow-right-short"></i>
+                    <button class="btn ${btnClass} shadow ms-3" id="btn-generate-photo" style="min-width: 160px;">
+                        ${btnText} <i class="bi ${btnIcon}"></i>
                     </button>
                 </div>
             `;
@@ -518,7 +523,7 @@ export const UI = {
                 animateNext();
             }, baseDelay);
         }
-        animateNext();
+        requestAnimationFrame(() => animateNext());
     },
 
     // Final Stage: Download Options

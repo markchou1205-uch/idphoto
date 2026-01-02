@@ -331,6 +331,12 @@ export async function processPreview(base64, cropParams, faceData = null, specDa
 
     const cleanBase64 = ensureSinglePrefix(base64);
 
+    // 1. Get Original Dimensions (for Physics Scale)
+    const imgMeta = new Image();
+    imgMeta.src = cleanBase64;
+    await new Promise(r => imgMeta.onload = r);
+    const originalW = imgMeta.width;
+
     // Helper: Composite with Physics Normalization + Lighting Compensation
     async function compositeToWhiteBackground(transparentBlob, faceData, cropRect, specData, userAdjustments) {
         const topY_Resized = await getTopPixelY(transparentBlob);
@@ -343,12 +349,17 @@ export async function processPreview(base64, cropParams, faceData = null, specDa
                 let layout;
                 try {
                     if (faceData && faceData.faceLandmarks && cropRect) {
+                        // Calculate Scale Factor (Resized / Original)
+                        const scaleFactor = img.width / originalW;
+                        console.log(`[Physics] OriginalW: ${originalW}, ResizedW: ${img.width}, Scale: ${scaleFactor.toFixed(4)}`);
+
                         layout = calculatePassportLayout(
                             faceData.faceLandmarks,
                             topY_Resized,
                             cropRect,
                             img.height,
-                            specData
+                            specData,
+                            scaleFactor
                         );
                         console.log(`[Geometric Layout] Scale: ${layout.scale.toFixed(4)}, X: ${layout.x.toFixed(1)}, Y: ${layout.y.toFixed(1)}`);
                     } else {
@@ -520,7 +531,7 @@ export async function processPreview(base64, cropParams, faceData = null, specDa
     } catch (e) {
         console.error("Production Flow Failed:", e);
         throw e;
-        // Note: We removed the heavy Local AI fallback for speed. 
+        // Note: We removed the heavy Local AI fallback for speed.
         // If Vercel fails (500), we fail fast.
     }
 }
@@ -732,22 +743,66 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
             results.push({ category: 'compliance', status: 'pass', item: '頭髮/五官', value: '檢測通過', standard: '眉毛/眼睛需清晰' });
         }
 
-        // Exposure (Enhanced)
+        // Exposure: Azure + Pixel Heuristic
+        let lightingStatus = 'pass';
+        let lightingValue = '合格';
+        let lightingAction = false;
+
+        // 1. Azure Exposure Check
         if (attrs.exposure) {
             const { exposureLevel } = attrs.exposure;
             if (exposureLevel !== 'GoodExposure') {
-                results.push({
-                    category: 'quality',
-                    status: 'warn',
-                    item: '光影均勻度',
-                    value: exposureLevel === 'UnderExposure' ? '面部偏暗' : '面部過亮',
-                    standard: '需光線均勻，無強烈陰影',
-                    actionRequired: true
-                });
-            } else {
-                results.push({ category: 'quality', status: 'pass', item: '光影均勻度', value: '合格' });
+                lightingStatus = 'warn';
+                lightingValue = exposureLevel === 'UnderExposure' ? '面部偏暗' : '面部過亮';
+                lightingAction = true;
             }
         }
+
+        // 2. Pixel Heuristic (Check Uniformity)
+        // If Azure Passed, double check cheek symmetry
+        if (lightingStatus === 'pass' && landmarks) {
+            try {
+                const checkImg = new Image();
+                checkImg.src = cleanBase64;
+                await new Promise(r => checkImg.onload = r);
+                const lCtx = document.createElement('canvas').getContext('2d');
+                lCtx.canvas.width = checkImg.width;
+                lCtx.canvas.height = checkImg.height;
+                lCtx.drawImage(checkImg, 0, 0);
+
+                // Sample Left/Right Cheek (~below eyes)
+                const leftX = landmarks.pupilLeft.x;
+                const leftY = (landmarks.pupilLeft.y + landmarks.noseTip.y) / 2;
+                const rightX = landmarks.pupilRight.x;
+
+                const pL = lCtx.getImageData(leftX, leftY, 10, 10).data;
+                const pR = lCtx.getImageData(rightX, leftY, 10, 10).data;
+
+                const getLum = (d) => {
+                    let s = 0;
+                    for (let i = 0; i < d.length; i += 4) s += (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114);
+                    return s / (d.length / 4);
+                };
+
+                const diff = Math.abs(getLum(pL) - getLum(pR));
+                console.log(`[Lighting Check] L: ${getLum(pL).toFixed(1)}, R: ${getLum(pR).toFixed(1)}, Diff: ${diff.toFixed(1)}`);
+
+                if (diff > 50) { // Threshold for "Clearly Uneven"
+                    lightingStatus = 'warn';
+                    lightingValue = '左右臉亮度不均 (建議補光)';
+                    lightingAction = true;
+                }
+            } catch (e) { console.warn("Lighting Heuristic Error", e); }
+        }
+
+        results.push({
+            category: 'quality',
+            status: lightingStatus,
+            item: '光影均勻度',
+            value: lightingValue,
+            standard: '需光線均勻，無硬陰影',
+            actionRequired: lightingAction
+        });
 
         return { results };
 
