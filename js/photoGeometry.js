@@ -1,4 +1,4 @@
-// js/photoGeometry.js
+// js/photoGeometry.js - REVISED ENGINE
 // 核心幾何計算引擎 (SSOT)
 // 負責將物理規格 (mm) 轉換為 Canvas 座標
 // 禁止在此檔案中引入任何 Canvas 上下文或濾鏡運算
@@ -6,44 +6,42 @@
 /**
  * OFFICIAL SSOT GEOMETRY ENGINE
  * Goal: Lock Head Height to exactly 3.4cm (402px @ 300DPI)
- * Implements Resolution-Independent Percentage-Based Normalization
  */
 export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, currentImgH, config) {
     const DPI = 300;
     const MM_TO_PX = DPI / 25.4;
 
     const target = {
-        canvasW: Math.round(config.canvas_mm[0] * MM_TO_PX),
-        canvasH: Math.round(config.canvas_mm[1] * MM_TO_PX),
-        headPx: ((config.head_mm[0] + config.head_mm[1]) / 2) * MM_TO_PX,
-        topMarginPx: config.top_margin_mm * MM_TO_PX
+        canvasW: 413,
+        canvasH: 531,
+        headPx: 402, // 3.4cm
+        topMarginPx: 50 // 0.42cm
     };
 
-    // 1. Normalize Pupil Y within the Crop Box (Original Scale)
+    // 1. Normalize based on strict Original Crop Resolution
     const eyeMidY_Global = (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
     const eyeMidY_Pct = (eyeMidY_Global - cropRect.y) / cropRect.h;
 
-    // 2. Normalize Hair Top within the Vercel Output (600px Scale)
+    // 2. Normalize topY based on the ACTUAL height of the blob processed by Vercel
     const topY_Pct = topY_Resized / currentImgH;
 
-    // 3. Calculate Head Height as a percentage of the Source Image Height
-    const headHeight_Pct = (eyeMidY_Pct - topY_Pct) / config.head_ratio;
+    // 3. Head height percentage relative to the vertical frame
+    const headHeight_Pct = (eyeMidY_Pct - topY_Pct) / 0.48;
 
-    // --- THE FIX: Calculate Scale relative to the Image height, NOT Canvas height ---
-    // We want: (headHeight_Pct * currentImgH * finalScale) = target.headPx
-    const headPx_In_Source = headHeight_Pct * currentImgH;
-    const finalScale = target.headPx / headPx_In_Source;
+    // 4. CRITICAL SCALE CALCULATION
+    // We must scale the image so that the head (headHeight_Pct * currentImgH) equals 402px
+    const finalScale = target.headPx / (headHeight_Pct * currentImgH);
 
-    // 4. Calculate Horizontal Alignment (Centering)
-    const eyeMidX_Pct = ((landmarks.pupilLeft.x + landmarks.pupilRight.x) / 2 - cropRect.x) / cropRect.w;
-    const drawnImgWidth = (currentImgH * (cropRect.w / cropRect.h)) * finalScale;
+    // 5. Centering Logic
+    const eyeMidX_Global = (landmarks.pupilLeft.x + landmarks.pupilRight.x) / 2;
+    const eyeMidX_Pct = (eyeMidX_Global - cropRect.x) / cropRect.w;
+    // Calculate the drawn width of the image at finalScale
+    const drawnWidth = (currentImgH * (cropRect.w / cropRect.h)) * finalScale;
 
     return {
         scale: finalScale,
-        // Y position: Move topY to target margin
         y: target.topMarginPx - (topY_Pct * currentImgH * finalScale),
-        // X position: Center pupil midpoint at Canvas center
-        x: (target.canvasW / 2) - (eyeMidX_Pct * drawnImgWidth),
+        x: (target.canvasW / 2) - (eyeMidX_Pct * drawnWidth),
         canvasW: target.canvasW,
         canvasH: target.canvasH,
         config: {

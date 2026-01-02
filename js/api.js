@@ -353,6 +353,15 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
                             img.height,
                             config
                         );
+
+                        // Debug logging to verify image height and scale calculation
+                        const eyeMidY_Global = (faceData.faceLandmarks.pupilLeft.y + faceData.faceLandmarks.pupilRight.y) / 2;
+                        const eyeMidY_Pct = (eyeMidY_Global - cropRect.y) / cropRect.h;
+                        const topY_Pct = topY_Resized / img.height;
+                        const eyeToTop_Pct = eyeMidY_Pct - topY_Pct;
+                        const resultingHeadPx = (layout.scale * (eyeToTop_Pct / 0.48) * img.height);
+
+                        console.log(`DEBUG: Scaling Image Height ${img.height} with Scale ${layout.scale.toFixed(4)}, Resulting Head Px: ${resultingHeadPx.toFixed(1)}`);
                         console.log(`[Universal Layout] Scale: ${layout.scale.toFixed(4)}, X: ${layout.x.toFixed(1)}, Y: ${layout.y.toFixed(1)}`);
 
                         // Self-Verification Log
