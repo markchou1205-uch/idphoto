@@ -110,6 +110,7 @@ export const UI = {
 
             // Rebind
             const newBtn = btn.cloneNode(true);
+            newBtn.disabled = false; // Fix: Re-enable button
             btn.parentNode.replaceChild(newBtn, btn);
             newBtn.addEventListener('click', () => {
                 location.reload();

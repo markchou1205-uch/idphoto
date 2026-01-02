@@ -152,8 +152,8 @@ export async function detectFace(base64) {
                 // Face Core Height (Chin - Eyebrow)
                 const faceCoreH = chinY - eyebrowY;
 
-                // Hair Top Logic: 0.8x faceCoreH (Increased to cover high hair)
-                hairTopY = eyebrowY - (faceCoreH * 0.8);
+                // Hair Top Logic: 1.2x faceCoreH (Increased to better estimate big hair/heads)
+                hairTopY = eyebrowY - (faceCoreH * 1.2);
 
                 console.log(`[Crop Logic] Landmarks Logic -> EyebrowY: ${eyebrowY.toFixed(1)}, ChinY: ${chinY.toFixed(1)}, HairTopY: ${hairTopY.toFixed(1)}`);
             } else {
@@ -163,9 +163,9 @@ export async function detectFace(base64) {
             const fullHeadH = chinY - hairTopY;
 
             // 2. Target Ratio (Relaxed to 72% for better shoulder visibility)
-            // Formula: Target Photo Height = Full Head Height / 0.72
-            // Spec allows 70-80%. We target 72% (approaching 3.2cm min) to include more body.
-            let targetPhotoH = fullHeadH / 0.72;
+            // Formula: Target Photo Height = Full Head Height / 0.71
+            // Spec allows 70-80%. We target 71% (~3.2cm) to zoom out and include shoulders.
+            let targetPhotoH = fullHeadH / 0.71;
 
             // 3. Aspect Ratio (35:45)
             // W = H * (35/45)
