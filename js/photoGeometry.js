@@ -48,10 +48,15 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
         x: (target.canvasW / 2) - (eyeMidX_Pct * drawnWidth),
         canvasW: target.canvasW,
         canvasH: target.canvasH,
-        // Passing calculated metrics back for debug
         debug: {
             headPx: resultingHeadPx,
             eyeToTop_Pct: (eyeMidY_Pct - topY_Pct)
+        },
+        config: {
+            TOP_MARGIN_PX: target.topMarginPx,
+            TARGET_HEAD_PX: target.headPx,
+            CANVAS_W: target.canvasW,
+            CANVAS_H: target.canvasH
         }
     };
 }
