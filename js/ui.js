@@ -213,6 +213,17 @@ export const UI = {
                 .status-pass { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
                 .status-warn { background: #fff3e0; color: #ef6c00; border: 1px solid #ffe0b2; }
                 .status-fail { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
+                
+                .preview-overlay { 
+                    position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
+                    background: rgba(255,255,255,0.7); 
+                    backdrop-filter: blur(2px);
+                    display: flex; flex-direction: column; align-items: center; justify-content: center; 
+                    z-index: 50; 
+                    border-radius: 8px;
+                }
+                .p-bar-track { width: 70%; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden; margin-top: 10px; }
+                .p-bar-fill { height: 100%; background: #0d6efd; width: 0%; transition: width 0.5s ease; }
             `;
             document.head.appendChild(style);
         }
@@ -415,13 +426,51 @@ export const UI = {
 
     // Stage 2: Service Animation (Service Table)
     renderServiceAnimation(onComplete) {
-        // Correct Indices for 5 services using 100+ offset
-        const serviceIndices = [100, 101, 102, 103, 104];
+        // Correct Indices for 6 services (100 to 105)
+        // 100: Face Detect, 101: Crop, 102: Remove BG, 103: Lighting, 104: Format, 105: Resolution
+        const serviceIndices = [100, 101, 102, 103, 104, 105];
         let i = 0;
 
+        // 1. Setup Preview Overlay
+        const previewContainer = document.getElementById('preview-container');
+        if (previewContainer) {
+            previewContainer.style.position = 'relative';
+            const old = document.getElementById('ui-prog-overlay');
+            if (old) old.remove();
+
+            const overlay = document.createElement('div');
+            overlay.id = 'ui-prog-overlay';
+            overlay.className = 'preview-overlay';
+            overlay.innerHTML = `
+                <div class="spinner-border text-primary" role="status"></div>
+                <div class="mt-2 fw-bold text-muted">AI 製作中... <span id="ui-prog-text">0%</span></div>
+                <div class="p-bar-track"><div id="ui-prog-fill" class="p-bar-fill"></div></div>
+            `;
+            previewContainer.appendChild(overlay);
+        }
+
+        function updateProgress(pct) {
+            const fill = document.getElementById('ui-prog-fill');
+            const txt = document.getElementById('ui-prog-text');
+            if (fill) fill.style.width = `${pct}%`;
+            if (txt) txt.innerText = `${Math.round(pct)}%`;
+        }
+
         function animateNext() {
+            // Update Progress
+            const pct = (i / serviceIndices.length) * 100;
+            updateProgress(pct);
+
             if (i >= serviceIndices.length) {
-                if (onComplete) onComplete();
+                updateProgress(100);
+                // Completion Handling
+                setTimeout(() => {
+                    const old = document.getElementById('ui-prog-overlay');
+                    if (old) old.remove();
+
+                    alert("製作完成");
+                    if (onComplete) onComplete();
+                }, 500);
                 return;
             }
             const idx = serviceIndices[i];
@@ -436,6 +485,9 @@ export const UI = {
                 badge.innerText = '處理中...';
                 badge.className = 'status-badge status-warn';
             }
+
+            // Timing: 1st item (Face Detect) 5s, others 3s
+            const delay = (i === 0) ? 5000 : 3000;
 
             setTimeout(() => {
                 if (spinner) spinner.classList.add('d-none');
@@ -453,7 +505,7 @@ export const UI = {
 
                 i++;
                 animateNext();
-            }, 800);
+            }, delay);
         }
         animateNext();
     },

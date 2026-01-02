@@ -433,24 +433,23 @@ export async function processPreview(base64, cropParams, faceData = null) {
                     rCtx.lineWidth = 2;
                     rCtx.setLineDash([5, 5]);
 
-                    // Hair Top Line
+                    // Hair Top Line (Only on Right Ruler)
                     rCtx.beginPath();
-                    rCtx.moveTo(0, topY);
-                    rCtx.lineTo(ruledCanvas.width, topY);
+                    rCtx.moveTo(canvas.width, topY); // Start at right edge of photo
+                    rCtx.lineTo(ruledCanvas.width, topY); // End at right edge of canvas
                     rCtx.stroke();
 
-                    // Chin Line
+                    // Chin Line (Only on Right Ruler)
                     rCtx.beginPath();
-                    rCtx.moveTo(0, chinY);
+                    rCtx.moveTo(canvas.width, chinY);
                     rCtx.lineTo(ruledCanvas.width, chinY);
                     rCtx.stroke();
 
                     // Measurement Label
                     rCtx.fillStyle = 'red';
-                    rCtx.font = 'bold 16px Arial';
+                    rCtx.font = 'bold 12px Arial';
                     rCtx.setLineDash([]);
-                    // Draw arrow or text roughly in middle of right ruler area?
-                    rCtx.fillText("3.4 cm", rightBaseX + 10, topY + (headH_Px / 2));
+                    rCtx.fillText("3.4 cm", canvas.width + 5, topY + (headH_Px / 2));
                 }
 
                 resolve(ruledCanvas.toDataURL('image/jpeg', 0.95));
