@@ -425,9 +425,9 @@ export const UI = {
     },
 
     // Stage 2: Service Animation (Service Table)
-    renderServiceAnimation(onComplete) {
+    // Stage 2: Service Animation (Service Table)
+    renderServiceAnimation(onComplete, taskPromise) {
         // Correct Indices for 6 services (100 to 105)
-        // 100: Face Detect, 101: Crop, 102: Remove BG, 103: Lighting, 104: Format, 105: Resolution
         const serviceIndices = [100, 101, 102, 103, 104, 105];
         let i = 0;
 
@@ -470,7 +470,7 @@ export const UI = {
 
                     alert("製作完成");
                     if (onComplete) onComplete();
-                }, 500);
+                }, 100);
                 return;
             }
             const idx = serviceIndices[i];
@@ -487,9 +487,20 @@ export const UI = {
             }
 
             // Timing: 1st item (Face Detect) 5s, others 3s
-            const delay = (i === 0) ? 5000 : 3000;
+            const baseDelay = (i === 0) ? 5000 : 3000;
 
-            setTimeout(() => {
+            setTimeout(async () => {
+                // [SYNC POINT] If Last Step (Resolution Logic 105), Wait for Promise
+                if (idx === 105 && taskPromise) {
+                    try {
+                        console.log("Waiting for API Task to complete...");
+                        await taskPromise;
+                        console.log("API Task Completed. Finishing Animation.");
+                    } catch (e) {
+                        console.error("API Task Failed during animation wait", e);
+                    }
+                }
+
                 if (spinner) spinner.classList.add('d-none');
                 const icon = document.getElementById(`audit-icon-${idx}`);
                 if (icon) {
@@ -505,7 +516,7 @@ export const UI = {
 
                 i++;
                 animateNext();
-            }, delay);
+            }, baseDelay);
         }
         animateNext();
     },
@@ -516,86 +527,158 @@ export const UI = {
         const area = document.getElementById('service-action-area') || document.getElementById('audit-action-area');
         if (!area) return;
 
-        const make4x2PDF = async () => {
-            try {
-                const singleUrl = (singleBlob instanceof Blob) ? URL.createObjectURL(singleBlob) : singleBlob;
-                await UI.generate4x2PDF(singleUrl, specData); // Use PDF Generator
-                if (singleBlob instanceof Blob) URL.revokeObjectURL(singleUrl);
-            } catch (e) {
-                console.error(e);
-                alert('PDF 生成失敗');
-            }
-        };
+        // Clean previous listeners
+        const cleanArea = area.cloneNode(false);
+        area.parentNode.replaceChild(cleanArea, area);
+        const newArea = document.getElementById(cleanArea.id);
 
-        const dlSingle = async () => {
-            // Use spec data if available, otherwise default to Passport (35x45mm)
-            const widthMm = specData ? specData.width_mm : 35;
-            const heightMm = specData ? specData.height_mm : 45;
-            const filename = specData ? `idphoto_${specData.width_mm}x${specData.height_mm}mm.jpg` : 'idphoto_single.jpg';
-
+        // Define Actions
+        const dlSingleAction = async () => {
             const url = (singleBlob instanceof Blob) ? URL.createObjectURL(singleBlob) : singleBlob;
-            try {
-                // Determine target spec size (300 DPI)
-                const specWPx = Math.round(widthMm / 25.4 * 300);
-                const specHPx = Math.round(heightMm / 25.4 * 300);
-
-                // Smart Check: Load image to check for Rulers (Aspect Ratio mismatch)
-                const img = new Image();
-                img.src = url;
-                await new Promise(r => img.onload = r);
-
-                const imgRatio = img.width / img.height;
-                const specRatio = specWPx / specHPx; // e.g. 35/45 = 0.77
-
-                let finalW, finalH;
-                // If ratio deviates significantly (>5%), assume it's a Proof/Ruled image or custom crop
-                if (Math.abs(imgRatio - specRatio) > 0.05) {
-                    console.log(`[Download] Aspect ratio mismatch (${imgRatio.toFixed(2)} vs ${specRatio.toFixed(2)}). Keeping original dimensions.`);
-                    finalW = img.width;
-                    finalH = img.height;
-                } else {
-                    console.log(`[Download] Enforcing Spec 300 DPI: ${specWPx}x${specHPx}`);
-                    finalW = specWPx;
-                    finalH = specHPx;
-                }
-
-                const resizedUrl = await UI.resizeToSpec(url, finalW, finalH);
-                const a = document.createElement('a');
-                a.href = resizedUrl;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                if (singleBlob instanceof Blob) URL.revokeObjectURL(url);
-            } catch (e) {
-                console.error(e);
-                // Fallback
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-            }
+            await UI.handleSingleDownload(url, specData);
         };
 
-        // Use d-flex for Side-by-Side buttons
-        area.innerHTML = `
+        const preview4x2Action = async () => {
+            // Switch to 4x2 Preview Mode
+            const url = (singleBlob instanceof Blob) ? URL.createObjectURL(singleBlob) : singleBlob;
+            await UI.show4x2Preview(url, specData);
+        };
+
+        newArea.innerHTML = `
             <div class="d-flex gap-2 justify-content-center">
                 <button class="btn btn-outline-primary flex-fill" id="btn-dl-single">
                     <i class="bi bi-download"></i> 下載單張 (JPG)
                 </button>
                 <button class="btn btn-success flex-fill" id="btn-dl-4x2">
-                    <i class="bi bi-printer"></i> 下載 4x2 排版 (PDF)
+                    <i class="bi bi-grid-3x3"></i> 下載 4x2 排版
                 </button>
             </div>
             <div class="mt-2 text-center text-muted small">
-                <i class="bi bi-info-circle"></i> 單張為 JPG 電子檔 / 4x2 為 PDF 列印檔 (固定尺寸)
+                <i class="bi bi-info-circle"></i> 單張為 JPG 電子檔 / 4x2 為列印排版預覽
             </div>
         `;
 
-        document.getElementById('btn-dl-single').onclick = dlSingle;
-        document.getElementById('btn-dl-4x2').onclick = make4x2PDF;
+        const btnSingle = document.getElementById('btn-dl-single');
+        const btn4x2 = document.getElementById('btn-dl-4x2');
+
+        if (btnSingle) btnSingle.onclick = dlSingleAction;
+        if (btn4x2) btn4x2.onclick = preview4x2Action;
+    },
+
+    // NEW: Handle Single Download Cleanly
+    async handleSingleDownload(url, specData) {
+        const widthMm = specData ? specData.width_mm : 35;
+        const heightMm = specData ? specData.height_mm : 45;
+        const filename = specData ? `idphoto_${specData.width_mm}x${specData.height_mm}mm.jpg` : 'idphoto_single.jpg';
+
+        try {
+            // Spec Check Logic
+            const specWPx = Math.round(widthMm / 25.4 * 300);
+            const specHPx = Math.round(heightMm / 25.4 * 300);
+
+            const img = new Image();
+            img.src = url;
+            await new Promise(r => img.onload = r);
+
+            const imgRatio = img.width / img.height;
+            const specRatio = specWPx / specHPx;
+
+            let finalW, finalH;
+            if (Math.abs(imgRatio - specRatio) > 0.05) {
+                console.log("Ruled/Custom Proof detected. Using Original.");
+                finalW = img.width; finalH = img.height;
+            } else {
+                console.log("Standard Spec Detected. Resizing.");
+                finalW = specWPx; finalH = specHPx;
+            }
+
+            const resizedUrl = await UI.resizeToSpec(url, finalW, finalH);
+            const a = document.createElement('a');
+            a.href = resizedUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        } catch (e) { console.error(e); }
+    },
+
+    // NEW: Show 4x2 Preview & Actions
+    async show4x2Preview(imgUrl, specData) {
+        const container = document.getElementById('preview-container');
+        if (!container) return;
+
+        // 1. Generate 4x2 Canvas
+        try {
+            // Show Loading
+            container.innerHTML = `<div class="d-flex justify-content-center align-items-center h-100"><div class="spinner-border"></div></div>`;
+
+            const canvas = await UI.create4x2Canvas(imgUrl, specData);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+
+            // 2. Render Preview
+            container.innerHTML = '';
+            const previewImg = new Image();
+            previewImg.src = dataUrl;
+            previewImg.className = 'img-fluid shadow-sm border';
+            container.appendChild(previewImg);
+
+            // 3. Update Action Area
+            const area = document.getElementById('service-action-area') || document.getElementById('audit-action-area');
+            if (area) {
+                area.innerHTML = `
+                    <div class="row g-2">
+                         <div class="col-4">
+                            <button class="btn btn-secondary w-100 disabled" title="功能保留">
+                                <i class="bi bi-envelope"></i> 寄到信箱
+                            </button>
+                         </div>
+                         <div class="col-4">
+                            <button class="btn btn-primary w-100" id="btn-dl-4x2-direct">
+                                <i class="bi bi-download"></i> 直接下載
+                            </button>
+                         </div>
+                         <div class="col-4">
+                             <button class="btn btn-info text-white w-100 disabled" title="功能保留">
+                                <i class="bi bi-cloud-upload"></i> 存至雲端
+                            </button>
+                         </div>
+                    </div>
+                     <div class="mt-2 text-center text-muted small">
+                        <button class="btn btn-link btn-sm" id="btn-back-single">
+                            <i class="bi bi-arrow-left"></i> 返回單張預覽
+                        </button>
+                    </div>
+                `;
+
+                // Bind Direct Download
+                document.getElementById('btn-dl-4x2-direct').onclick = async () => {
+                    // PDF Logic
+                    try {
+                        await UI.generate4x2PDF(imgUrl, specData);
+                    } catch (e) { alert("下載失敗"); }
+                };
+
+                // Bind Back
+                document.getElementById('btn-back-single').onclick = () => {
+                    // Restore Single View (Simple: re-render result dashboard with single image logic)
+                    // We need to re-show the Single Image in container and restore buttons.
+                    // Shortcut: Just re-show download options?
+                    // We need to put the original image back into preview.
+                    container.innerHTML = '';
+                    const orig = new Image();
+                    orig.src = imgUrl; // Using the ruled/single image
+                    orig.className = 'img-fluid'; // Adjust style as needed
+                    // Actually usually we use applyResultGuides? Or just raw image.
+                    // Let's use simple image for now.
+                    container.appendChild(orig);
+                    UI.showDownloadOptions(imgUrl, specData);
+                };
+            }
+
+        } catch (e) {
+            console.error("4x2 Gen Failed", e);
+            alert("預覽生成失敗");
+        }
     },
 
     // Helper: Resize for Single Download (Generic 300 DPI)

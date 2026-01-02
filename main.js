@@ -285,52 +285,59 @@ async function runProductionPhase() {
             state.faceData = detectRes;
         }
 
-        // 2. Animate Services (simulated or real)
+        // 2. Start API Task (Parallel Execution)
+        const apiTask = API.processPreview(
+            state.originalImage,
+            state.faceData.suggestedCrop,
+            state.faceData
+        );
+
+        // 3. Render Animation (Syncs with API Task via Promise)
         UI.renderServiceAnimation(async () => {
+            try {
+                // 4. Retrieve Result (Instant if already done)
+                const processRes = await apiTask;
+                console.log("API.processPreview Result Retrieved");
 
-            // 4. Process Image (Real API/Crop)
-            const processRes = await API.processPreview(
-                state.originalImage,
-                state.faceData.suggestedCrop,
-                state.faceData
-            );
-            console.log("API.processPreview Returned", processRes ? "Success" : "Empty");
+                if (processRes && processRes.photos && processRes.photos.length > 0) {
+                    // Ensure proper Base64 prefix
+                    let b64 = processRes.photos[0];
+                    if (!b64.startsWith('data:image/')) {
+                        b64 = `data:image/jpeg;base64,${b64}`;
+                    }
+                    state.processedImage = b64;
+                    console.log("Processed Image State Updated. Length:", b64.length);
 
-            if (processRes && processRes.photos && processRes.photos.length > 0) {
-                // Ensure proper Base64 prefix
-                let b64 = processRes.photos[0];
-                if (!b64.startsWith('data:image/')) {
-                    b64 = `data:image/jpeg;base64,${b64}`;
+                    // Convert to Blob for download
+                    console.log("Converting to Blob...");
+                    const res = await fetch(state.processedImage);
+                    const blob = await res.blob();
+                    console.log("Blob Created. Size:", blob.size);
+
+                    // 5. Show Final Result & Download Options
+                    console.log("Updating UI (AuditSuccess)...");
+                    UI.showAuditSuccess(state.processedImage, state.faceData, null);
+
+                    // Show Buttons (Single + 4x2)
+                    console.log("Showing Download Options...");
+                    UI.showDownloadOptions(blob, DEFAULT_SPECS[state.spec]);
+
+                    // [FIX]: Update Button to "Re-upload"
+                    UI.updateToReuploadMode();
+
+                    // Set Audit Button to Red (Urgent)
+                    UI.setAuditButtonRed();
+
+                    console.log("UI Update Complete.");
+                } else {
+                    console.error("No photos returned from API");
+                    alert("生成失敗：無回傳影像");
                 }
-                state.processedImage = b64;
-                console.log("Processed Image State Updated. Length:", b64.length);
-
-                // Convert to Blob for download
-                console.log("Converting to Blob...");
-                const res = await fetch(state.processedImage);
-                const blob = await res.blob();
-                console.log("Blob Created. Size:", blob.size);
-
-                // 5. Show Final Result & Download Options
-                console.log("Updating UI (AuditSuccess)...");
-                UI.showAuditSuccess(state.processedImage, state.faceData, null);
-
-                // Show Buttons (Single + 4x2)
-                console.log("Showing Download Options...");
-                UI.showDownloadOptions(blob, DEFAULT_SPECS[state.spec]);
-
-                // [FIX]: Update Button to "Re-upload"
-                UI.updateToReuploadMode();
-
-                // Set Audit Button to Red (Urgent)
-                UI.setAuditButtonRed();
-
-                console.log("UI Update Complete.");
-            } else {
-                console.error("No photos returned from API");
-                alert("生成失敗：無回傳影像");
+            } catch (e) {
+                console.error("Async Production Error:", e);
+                alert("製作失敗，請稍後再試");
             }
-        });
+        }, apiTask);
 
     } catch (err) {
         console.error("Production Failed:", err);
