@@ -347,7 +347,7 @@ async function runProductionPhase() {
                 console.error("Async Production Error:", e);
                 alert("製作失敗，請稍後再試");
             }
-        }, apiTask);
+        });
 
     } catch (err) {
         console.error("Production Failed:", err);
