@@ -4,40 +4,43 @@
 // 禁止在此檔案中引入任何 Canvas 上下文或濾鏡運算
 
 /**
- * OFFICIAL SSOT GEOMETRY ENGINE - COORDINATE SYSTEM SYNCHRONIZED
- * Critical Fix: Both topY and eyeMid must be in the SAME coordinate system
+ * 證件照幾何計算 - 終極定錨版 (解決領口干擾)
+ * 核心策略：完全放棄 AI 下巴偵測，改用「瞳孔→頭頂」距離作為唯一縮放基準。
  */
-export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, currentImgH, config) {
-    const target = { canvasW: 413, canvasH: 531, headPx: 402, topMarginPx: 50 };
+export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, currentImgH, config, actualSourceWidth) {
+    // 規格鎖定：畫布 413x531，頭高目標 402px (3.4cm)，頂部留白 40px
+    const target = { canvasW: 413, canvasH: 531, headPx: 402, topMarginPx: 40 };
 
-    // --- PHYSICAL PIXEL LOCKING ---
-    // Goal: Force "Pupil to Hair Top" to be exactly 212px.
-    // This results in a visual head size of ~34.5mm, ignoring chin/collar issues.
-
-    // 1. Calculate positions in Source (Vercel) coordinates
+    // 1. 計算瞳孔中線位置 (映射至 Vercel 1000px 座標系)
     const eyeMidY_Global = (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
-    // Map eye to the Vercel 1000px coordinate system
-    // cropRect.h is the height of the crop box in the original image
     const eyeMidY_In_Source = (eyeMidY_Global - cropRect.y) * (currentImgH / cropRect.h);
     const topY_In_Source = topY_Resized;
 
-    // 2. Measure Source Segment
-    const eyeToTop_Px_In_Source = eyeMidY_In_Source - topY_In_Source;
+    // 2. 測量「頭頂到瞳孔」的實體像素距離
+    const topToEye_Px = eyeMidY_In_Source - topY_In_Source;
 
-    // 3. FORCE SCALE: This segment MUST be 212px on the final canvas.
-    const finalScale = 212 / eyeToTop_Px_In_Source;
+    // 3. 執行生理比例補償
+    // 將 EYE_TO_HEAD_RATIO 設為 0.50 (即眼睛在頭部正中央)
+    // 這會強迫系統放大影像，補足被領口遮擋而消失的下巴長度
+    const EYE_TO_HEAD_RATIO = 0.50;
+    const estimatedHeadHeight_Px = topToEye_Px / EYE_TO_HEAD_RATIO;
 
-    // 4. Absolute Canvas Centering
-    // Hard assumed aspect ratio 0.75 (750x1000) for width calculation
-    const drawnWidth = (750 * (currentImgH / 1000)) * finalScale;
+    // 4. 計算縮放比例 (以 402px 為目標)
+    const finalScale = target.headPx / estimatedHeadHeight_Px;
+
+    // 5. 計算繪製尺寸 (解決寬度計算錯誤導致的 X 軸偏移)
+    const sourceWidth = actualSourceWidth || (750 * (currentImgH / 1000));
+    const drawnWidth = sourceWidth * finalScale;
     const drawnHeight = currentImgH * finalScale;
 
-    // 5. Positioning
-    // Fix hair top at 45px (approx 3.8mm)
-    const calculatedY = 45 - (topY_In_Source * finalScale);
-    const calculatedX = (413 - drawnWidth) / 2; // Absolute center
+    // 6. 定位計算 (絕對置中與頂部對齊)
+    const calculatedY = target.topMarginPx - (topY_In_Source * finalScale);
+    const calculatedX = (target.canvasW - drawnWidth) / 2;
 
-    console.log(`[PIXEL LOCK] Scale: ${finalScale.toFixed(4)}, EyeToTop(212px), X: ${calculatedX.toFixed(1)}, Y: ${calculatedY.toFixed(1)}`);
+    // 7. Debug 輸出 (讓工程師確認 finalScale 是否有提升)
+    console.log(`[生理定錨法] finalScale: ${finalScale.toFixed(4)}, X: ${calculatedX.toFixed(1)}, Y: ${calculatedY.toFixed(1)}`);
+    console.log(`  - 瞳孔至頭頂距離: ${topToEye_Px.toFixed(1)}px`);
+    console.log(`  - 預期總頭高: ${(estimatedHeadHeight_Px * finalScale).toFixed(1)}px (應接近 402)`);
 
     return {
         scale: finalScale,
@@ -52,7 +55,9 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
             CANVAS_H: target.canvasH
         },
         debug: {
-            topY_Pct: topY_In_Source / currentImgH
+            method: 'physiological_anchor_0.50',
+            finalW: drawnWidth,
+            topToEye_Px
         }
     };
 }

@@ -351,7 +351,8 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
                             topY_Resized,
                             cropRect,
                             img.height,
-                            config
+                            config,
+                            img.width // actualSourceWidth
                         );
 
                         // DEBUG REQUESTED BY USER
