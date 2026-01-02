@@ -5,7 +5,7 @@ export const PHOTO_CONFIGS = {
         canvas_mm: [35, 45],
         head_mm: [32, 36],     // 修正: 系統標準 32-36mm
         top_margin_mm: 4.2,    // 4.2mm (約 4-6mm)
-        head_ratio: 0.48,      // 34/70? Approx.
+        head_ratio: 0.50,      // 34/70? Approx.
         // User manual Taiwan example: 35x45.
     },
     // 美國簽證/護照 (51x51mm)

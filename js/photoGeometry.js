@@ -45,7 +45,8 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
     return {
         scale: finalScale,
         y: target.topMarginPx - (topY_Pct * currentImgH * finalScale),
-        x: (target.canvasW / 2) - (eyeMidX_Pct * drawnWidth),
+        // Center image horizontally based on drawn width
+        x: (target.canvasW - drawnWidth) / 2,
         canvasW: target.canvasW,
         canvasH: target.canvasH,
         debug: {

@@ -384,7 +384,7 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
 
                         const resultingHeadPx = headPx_In_Source * layout.scale;
                         console.log("12. RESULTING HEAD SIZE:", resultingHeadPx.toFixed(1), "px (Target: 402px)");
-                        console.log("13. RESULTING HEAD SIZE IN CM:", (resultingHeadPx / (300 / 25.4)).toFixed(2), "cm (Target: 3.4cm)");
+                        console.log("13. RESULTING HEAD SIZE IN MM:", (resultingHeadPx / (300 / 25.4)).toFixed(2), "mm (Target: 34mm)");
                         console.log("=== GEOMETRY DEBUG END ===");
 
                         console.log(`[Universal Layout] Scale: ${layout.scale.toFixed(4)}, X: ${layout.x.toFixed(1)}, Y: ${layout.y.toFixed(1)}`);
