@@ -354,6 +354,9 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
                             config
                         );
 
+                        // DEBUG REQUESTED BY USER
+                        console.log("DEBUG: Scaling Image Height", img.height, "with Scale", layout.scale, "Resulting Head Px:", layout.debug ? layout.debug.headPx : "N/A");
+
                         // === COMPREHENSIVE DEBUG LOGGING ===
                         console.log("=== GEOMETRY DEBUG START ===");
                         console.log("1. Input Image Height (Vercel Output):", img.height, "px");

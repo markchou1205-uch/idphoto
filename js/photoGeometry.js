@@ -18,74 +18,40 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
         topMarginPx: 50 // 0.42cm
     };
 
-    // === CRITICAL FIX: Synchronize Coordinate Systems ===
-    // Problem: eyeMidY_Global is in ORIGINAL coords (3024x4032 scale)
-    //          topY_Resized is in VERCEL OUTPUT coords (750x1000 scale)
-    // Solution: Convert eyeMidY to the SAME scale as the Vercel output
-
-    // 1. Calculate the scale factor between original crop and Vercel output
-    // Vercel output height = currentImgH (1000px typically)
-    // Original crop height = cropRect.h (e.g., 3024px)
-    const scaleToVercel = currentImgH / cropRect.h;
-
-    // 2. Convert landmarks from original coords to Vercel output coords
+    // 1. Normalize based on strict Original Crop Resolution
     const eyeMidY_Global = (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
-    const eyeMidY_InVercelCoords = (eyeMidY_Global - cropRect.y) * scaleToVercel;
+    const eyeMidY_Pct = (eyeMidY_Global - cropRect.y) / cropRect.h;
 
-    // --- NEW SCALING LOGIC (Landmark Based) ---
-    // Previous logic relied on (Eye - HairTop), which fails if hair is voluminous (topY_Resized is too high).
-    // Fix: Use (Chin - Eye) to determine Head Height. This is physically robust.
+    // 2. Normalize topY based on the ACTUAL height of the blob processed by Vercel
+    const topY_Pct = topY_Resized / currentImgH;
 
-    // A. Estimate Chin Position (Original Coords)
-    let chinY_Global = 0;
-    if (landmarks.underLipBottom && landmarks.upperLipTop) {
-        const mouthH = landmarks.underLipBottom.y - landmarks.upperLipTop.y;
-        // Chin is approx constant relative to mouth height or nose-mouth distance.
-        // Using 1.6x mouth height below underLipBottom as safe chin estimate
-        chinY_Global = landmarks.underLipBottom.y + (mouthH * 1.6);
-    } else {
-        // Fallback if detailed landmarks missing (shouldnt happen with correct Azure call)
-        chinY_Global = eyeMidY_Global * 1.4; // Rough guess
-    }
+    // 3. Head height percentage relative to the vertical frame
+    const headHeight_Pct = (eyeMidY_Pct - topY_Pct) / 0.48;
 
-    const chinY_InVercelCoords = (chinY_Global - cropRect.y) * scaleToVercel;
+    // 4. CRITICAL SCALE CALCULATION
+    // We must scale the image so that the head (headHeight_Pct * currentImgH) equals 402px
+    const finalScale = target.headPx / (headHeight_Pct * currentImgH);
 
-    // B. Calculate Eye-to-Chin Distance
-    const eyeToChin_Px = chinY_InVercelCoords - eyeMidY_InVercelCoords;
-
-    // C. Derive Full Head Height
-    // If config.head_ratio = Eye-to-Top Ratio (e.g., 0.48)
-    // Then Eye-to-Chin Ratio = 1 - 0.48 = 0.52
-    // HeadHeight = EyeToChin / 0.52
-    const ratioEyeToChin = 1 - (config.head_ratio || 0.48);
-    const headHeight_Px = eyeToChin_Px / ratioEyeToChin;
-
-    // 5. Calculate scale to achieve target head size
-    const finalScale = target.headPx / headHeight_Px;
-
-    console.log(`[Geometry] Eye-to-Chin: ${eyeToChin_Px.toFixed(1)}px, Ratio: ${ratioEyeToChin.toFixed(2)}, Est HeadH: ${headHeight_Px.toFixed(1)}px`);
-
-    // 6. Calculate positions
+    // 5. Centering Logic
     const eyeMidX_Global = (landmarks.pupilLeft.x + landmarks.pupilRight.x) / 2;
-    const eyeMidX_InVercelCoords = (eyeMidX_Global - cropRect.x) * scaleToVercel;
+    const eyeMidX_Pct = (eyeMidX_Global - cropRect.x) / cropRect.w;
+    // Calculate the drawn width of the image at finalScale
+    const drawnWidth = (currentImgH * (cropRect.w / cropRect.h)) * finalScale;
+
+    // DEBUG: exposing internal calculation for logging if needed
+    const resultingHeadPx = headHeight_Pct * currentImgH * finalScale;
+    console.log(`[Geometry] finalScale: ${finalScale}, ResultHeadPx: ${resultingHeadPx} (Target: ${target.headPx})`);
 
     return {
         scale: finalScale,
-        // Position topY (Hair Top) at target margin? 
-        // OR Position Crown at target margin?
-        // Spec usually says "Top of Head (including hair)". 
-        // So keeping HairTop at TopMargin is safer for passing "Too close to border" checks.
-        y: target.topMarginPx - (topY_Resized * finalScale),
-
-        // Center pupil at canvas center
-        x: (target.canvasW / 2) - (eyeMidX_InVercelCoords * finalScale),
+        y: target.topMarginPx - (topY_Pct * currentImgH * finalScale),
+        x: (target.canvasW / 2) - (eyeMidX_Pct * drawnWidth),
         canvasW: target.canvasW,
         canvasH: target.canvasH,
-        config: {
-            TOP_MARGIN_PX: target.topMarginPx,
-            TARGET_HEAD_PX: target.headPx,
-            CANVAS_W: target.canvasW,
-            CANVAS_H: target.canvasH
+        // Passing calculated metrics back for debug
+        debug: {
+            headPx: resultingHeadPx,
+            eyeToTop_Pct: (eyeMidY_Pct - topY_Pct)
         }
     };
 }
