@@ -38,21 +38,20 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
     // 4. CRITICAL SCALE CALCULATION
     const finalScale = targetEyeToTopPx / (eyeToTop_Pct * currentImgH);
 
-    // 5. Centering Logic
-    // 5. Centering Logic (Safe Centering Revison)
+    // 5. Centering Logic (ABSOLUTE ALIGNMENT FIX)
     const drawnWidth = (currentImgH * (cropRect.w / cropRect.h)) * finalScale;
     const drawnHeight = currentImgH * finalScale;
 
-    // DEBUG: exposing internal calculation for logging if needed
-    const resultingEyeToTopPx = eyeToTop_Pct * currentImgH * finalScale;
-    console.log(`[Geometry] finalScale: ${finalScale}, EyeToTopPx: ${resultingEyeToTopPx} (Target: ${targetEyeToTopPx})`);
+    // DO NOT USE PERCENTAGE-BASED OFFSETS FOR X/Y. USE ABSOLUTE CENTERING.
+    const calculatedY = target.topMarginPx - (topY_Pct * drawnHeight);
+    const calculatedX = (target.canvasW - drawnWidth) / 2;
+
+    console.log(`[Final Output Check] Drawing at X: ${calculatedX.toFixed(1)}, Y: ${calculatedY.toFixed(1)}`);
 
     return {
         scale: finalScale,
-        // Fix Y: Use direct topMargin relative to the scaled image top
-        y: target.topMarginPx - (topY_Pct * drawnHeight),
-        // Fix X: Force Center the entire drawn image within the 413px canvas
-        x: (target.canvasW - drawnWidth) / 2,
+        x: calculatedX,
+        y: calculatedY,
         canvasW: target.canvasW,
         canvasH: target.canvasH,
         debug: {
