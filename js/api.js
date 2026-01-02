@@ -394,7 +394,7 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
                 // ------------------------------------
 
                 if (faceData && faceData.faceLandmarks && cropRect && layout.scale !== 1) {
-                    ctx.drawImage(img, layout.x, layout.y, layout.canvasW * layout.scale, (img.height / img.width) * layout.canvasW * layout.scale);
+                    ctx.drawImage(img, layout.x, layout.y, img.width * layout.scale, img.height * layout.scale);
                 } else {
                     console.warn("[Strict Perc] Missing landmarks/error, performing simple fit");
                     ctx.filter = `brightness(${finalBrightness}) contrast(${finalContrast}) saturate(${IMAGE_PRESETS.DEFAULT_SATURATION})`;

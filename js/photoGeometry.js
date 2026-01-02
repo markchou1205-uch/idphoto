@@ -13,37 +13,37 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
     const MM_TO_PX = DPI / 25.4;
 
     const target = {
-        canvasW: Math.round(config.canvas_mm[0] * MM_TO_PX), // e.g., 413px
-        canvasH: Math.round(config.canvas_mm[1] * MM_TO_PX), // e.g., 531px
-        headPx: ((config.head_mm[0] + config.head_mm[1]) / 2) * MM_TO_PX, // Target 402px
-        topMarginPx: config.top_margin_mm * MM_TO_PX // Target 50px
+        canvasW: Math.round(config.canvas_mm[0] * MM_TO_PX),
+        canvasH: Math.round(config.canvas_mm[1] * MM_TO_PX),
+        headPx: ((config.head_mm[0] + config.head_mm[1]) / 2) * MM_TO_PX,
+        topMarginPx: config.top_margin_mm * MM_TO_PX
     };
 
-    // --- STEP 1: PERCENTAGE NORMALIZATION (Crucial for Resizing) ---
-    // Map Global Pupil Y to Percentage of the Original Crop Box
+    // 1. Normalize Pupil Y within the Crop Box (Original Scale)
     const eyeMidY_Global = (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
     const eyeMidY_Pct = (eyeMidY_Global - cropRect.y) / cropRect.h;
 
-    // Map Detected Hair Top to Percentage of the current Vercel output
+    // 2. Normalize Hair Top within the Vercel Output (600px Scale)
     const topY_Pct = topY_Resized / currentImgH;
 
-    // --- STEP 2: ANATOMICAL SCALE DERIVATION ---
-    // (EyePct - TopPct) represents the top 48% of the head in the frame
-    const headHeight_In_Canvas_Pct = (eyeMidY_Pct - topY_Pct) / config.head_ratio;
+    // 3. Calculate Head Height as a percentage of the Source Image Height
+    const headHeight_Pct = (eyeMidY_Pct - topY_Pct) / config.head_ratio;
 
-    // --- STEP 3: FINAL SCALE & TRANSLATION ---
-    // Invariant Formula: TargetPx / (PhysicalPct * TotalCanvasH)
-    const finalScale = target.headPx / (headHeight_In_Canvas_Pct * target.canvasH);
+    // --- THE FIX: Calculate Scale relative to the Image height, NOT Canvas height ---
+    // We want: (headHeight_Pct * currentImgH * finalScale) = target.headPx
+    const headPx_In_Source = headHeight_Pct * currentImgH;
+    const finalScale = target.headPx / headPx_In_Source;
 
-    // Calculate pupil center X percentage
+    // 4. Calculate Horizontal Alignment (Centering)
     const eyeMidX_Pct = ((landmarks.pupilLeft.x + landmarks.pupilRight.x) / 2 - cropRect.x) / cropRect.w;
+    const drawnImgWidth = (currentImgH * (cropRect.w / cropRect.h)) * finalScale;
 
     return {
         scale: finalScale,
-        // Align detected hair top (topY_Pct) exactly to target margin
-        y: target.topMarginPx - (topY_Pct * target.canvasH * finalScale),
-        // Horizontal Centering based on Pupil Midpoint
-        x: (target.canvasW / 2) - (eyeMidX_Pct * target.canvasW * finalScale),
+        // Y position: Move topY to target margin
+        y: target.topMarginPx - (topY_Pct * currentImgH * finalScale),
+        // X position: Center pupil midpoint at Canvas center
+        x: (target.canvasW / 2) - (eyeMidX_Pct * drawnImgWidth),
         canvasW: target.canvasW,
         canvasH: target.canvasH,
         config: {
