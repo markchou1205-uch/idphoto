@@ -317,9 +317,9 @@ export async function processPreview(base64, cropParams, faceData = null) {
     // 0. Prepare Shared Resources
     const cleanBase64 = ensureSinglePrefix(base64);
 
-    // Helper: Composite with Strict 3.4cm Head Layout (User Formula)
-    async function compositeToWhiteBackground(transparentBlob, faceData, cropOffsets) {
-        // Calculate Top Y from Alpha Channel (This is local to the cropped image)
+    // Helper: Composite with Strict 3.4cm Head Layout (User Formula + Resize Compensation)
+    async function compositeToWhiteBackground(transparentBlob, faceData, cropRect) {
+        // Calculate Top Y from Alpha Channel (This is local to the cropped-resized image)
         const topY = await getTopPixelY(transparentBlob);
 
         return new Promise((resolve, reject) => {
@@ -344,20 +344,26 @@ export async function processPreview(base64, cropParams, faceData = null) {
                 let drawX = 0;
                 let drawY = 0;
 
-                if (faceData && faceData.faceLandmarks && cropOffsets) {
-                    console.log("[Strict Composition] Using User Formula");
+                if (faceData && faceData.faceLandmarks && cropRect) {
+                    // console.log("[Strict Composition] Using User Formula with Resize Compensation");
                     const l = faceData.faceLandmarks;
-
                     const targetHeadPx = 402; // 3.4cm @ 300 DPI
 
-                    // 1. Get Exact Eye Mid Y
-                    // Note: Landmarks are GLOBAL. Need to adjust by cropOffsets to get LOCAL.
-                    const eyeMidY_Global = (l.pupilLeft.y + l.pupilRight.y) / 2;
-                    const eyeMidY_Local = eyeMidY_Global - cropOffsets.y;
+                    // UNIT CORRECTION: The 'img' is RESIZED (e.g. 600px).
+                    // But 'cropRect' and 'landmarks' are in ORIGINAL coordinates (e.g. 2000px).
+                    // We must scale the landmarks down to the 'img' coordinate system.
+                    const resizeScale = img.width / cropRect.w;
 
-                    // 2. Measure Eye to Top Distance
-                    // topY is LOCAL (from getTopPixelY scan of the transparent blob)
-                    const eyeToTopDist = eyeMidY_Local - topY;
+                    // 1. Get Exact Eye Mid Y
+                    const eyeMidY_Global = (l.pupilLeft.y + l.pupilRight.y) / 2;
+                    // Map to Local Cropped Space (Original Resolution)
+                    const eyeMidY_Local_Orig = eyeMidY_Global - cropRect.y;
+                    // Map to Resized Image Space
+                    const eyeMidY_Local_Resized = eyeMidY_Local_Orig * resizeScale;
+
+                    // 2. Measure Eye to Top Distance (Both in Resized Pixels now)
+                    // topY is from getTopPixelY (Resized Space)
+                    const eyeToTopDist = eyeMidY_Local_Resized - topY;
 
                     if (eyeToTopDist <= 0) {
                         console.warn("Eye to Top Dist non-positive, fallback to fit.");
@@ -366,29 +372,29 @@ export async function processPreview(base64, cropParams, faceData = null) {
                         drawY = (531 - img.height * scale) / 2;
                     } else {
                         // 3. Estimate Total Head Height (Eye-to-Top is 48%)
-                        // This makes the head larger than 50% ratio.
+                        // User Formula: totalHeadHeight = eyeToTopDist / 0.48
                         const totalHeadHeightPx = eyeToTopDist / 0.48;
 
                         // 4. Calculate Final Scale
-                        // scale = Target / Actual
-                        scale = targetHeadPx / totalHeadHeightPx;
+                        // scale = Target / Actual (Resized Pixels)
+                        // This scale will be applied to the 'img' (Resized Pixels)
+                        const finalScale = targetHeadPx / totalHeadHeightPx;
 
                         // 5. Vertical Position (Lock Top Margin)
-                        // User specified: drawY = 50 - (topY * scale)
-                        // This puts the visual topY at exactly 50px from canvas top.
-                        drawY = 50 - (topY * scale);
+                        // drawY = 50 - (topY * finalScale)
+                        drawY = 50 - (topY * finalScale);
 
                         // 6. Horizontal Center
-                        // Center the face (Pupil Mid X)
                         const eyeMidX_Global = (l.pupilLeft.x + l.pupilRight.x) / 2;
-                        const eyeMidX_Local = eyeMidX_Global - cropOffsets.x;
+                        const eyeMidX_Local_Orig = eyeMidX_Global - cropRect.x;
+                        const eyeMidX_Local_Resized = eyeMidX_Local_Orig * resizeScale;
 
-                        // We want Local Eye X to be at Canvas Center (206.5)
-                        // drawX + (eyeMidX_Local * scale) = 206.5
-                        // drawX = 206.5 - (eyeMidX_Local * scale)
-                        drawX = (413 / 2) - (eyeMidX_Local * scale);
+                        // Center X
+                        drawX = (413 / 2) - (eyeMidX_Local_Resized * finalScale);
 
-                        console.log(`[Strict Logic] EyeMidY_Local: ${eyeMidY_Local.toFixed(1)}, TopY: ${topY}, Dist: ${eyeToTopDist.toFixed(1)}, HeadH: ${totalHeadHeightPx.toFixed(1)}, Scale: ${scale.toFixed(4)}, DrawY: ${drawY.toFixed(1)}`);
+                        scale = finalScale; // Assign for drawImage
+
+                        console.log(`[Strict Logic] ResizeScale: ${resizeScale.toFixed(3)}, EyeLocalResized: ${eyeMidY_Local_Resized.toFixed(1)}, TopY: ${topY}, Dist: ${eyeToTopDist.toFixed(1)}, Scale: ${scale.toFixed(4)}`);
                     }
 
                 } else {
@@ -454,11 +460,10 @@ export async function processPreview(base64, cropParams, faceData = null) {
         const transparentBlob = await (await fetch(`data:image/png;base64,${base64Data}`)).blob();
 
         // 4. Composite
-        // Pass faceData and cropOffsets (if cropped locally)
-        // If cropParams exists, offsets are cropParams.x, cropParams.y
-        const offsets = cropParams ? { x: cropParams.x, y: cropParams.y } : { x: 0, y: 0 };
+        // Pass cropParams (contains x, y, w, h) for Resize Compensation
+        const cropRect = cropParams || { x: 0, y: 0, w: cleanBase64.length, h: cleanBase64.length }; // Fallback
 
-        const finalB64 = await compositeToWhiteBackground(transparentBlob, faceData, offsets);
+        const finalB64 = await compositeToWhiteBackground(transparentBlob, faceData, cropRect);
         const cleanB64 = finalB64.split(',').pop();
         return { photos: [cleanB64, cleanB64] };
 
