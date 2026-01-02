@@ -8,8 +8,8 @@
  * 核心策略：完全放棄 AI 下巴偵測，改用「瞳孔→頭頂」距離作為唯一縮放基準。
  */
 export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, currentImgH, config, actualSourceWidth) {
-    // 規格鎖定：畫布 413x531，頭高目標 402px (3.4cm)，頂部留白 40px
-    const target = { canvasW: 413, canvasH: 531, headPx: 402, topMarginPx: 40 };
+    // 規格鎖定：畫布 413x531，頭高目標 402px (3.4cm)，頂部留白 30px (Force Large)
+    const target = { canvasW: 413, canvasH: 531, headPx: 402, topMarginPx: 30 };
 
     // 1. 計算瞳孔中線位置 (映射至 Vercel 1000px 座標系)
     const eyeMidY_Global = (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
@@ -20,9 +20,8 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
     const topToEye_Px = eyeMidY_In_Source - topY_In_Source;
 
     // 3. 執行生理比例補償
-    // 將 EYE_TO_HEAD_RATIO 設為 0.50 (即眼睛在頭部正中央)
-    // 這會強迫系統放大影像，補足被領口遮擋而消失的下巴長度
-    const EYE_TO_HEAD_RATIO = 0.50;
+    // 修正比例：從 0.50 降到 0.42 (這會讓人頭顯著放大)
+    const EYE_TO_HEAD_RATIO = 0.42;
     const estimatedHeadHeight_Px = topToEye_Px / EYE_TO_HEAD_RATIO;
 
     // 4. 計算縮放比例 (以 402px 為目標)
@@ -38,7 +37,7 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
     const calculatedX = (target.canvasW - drawnWidth) / 2;
 
     // 7. Debug 輸出 (讓工程師確認 finalScale 是否有提升)
-    console.log(`[生理定錨法] finalScale: ${finalScale.toFixed(4)}, X: ${calculatedX.toFixed(1)}, Y: ${calculatedY.toFixed(1)}`);
+    console.log(`[生理定錨法-ForceLarge] finalScale: ${finalScale.toFixed(4)}, X: ${calculatedX.toFixed(1)}, Y: ${calculatedY.toFixed(1)}`);
     console.log(`  - 瞳孔至頭頂距離: ${topToEye_Px.toFixed(1)}px`);
     console.log(`  - 預期總頭高: ${(estimatedHeadHeight_Px * finalScale).toFixed(1)}px (應接近 402)`);
 
@@ -55,7 +54,7 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
             CANVAS_H: target.canvasH
         },
         debug: {
-            method: 'physiological_anchor_0.50',
+            method: 'force_large_0.42',
             finalW: drawnWidth,
             topToEye_Px
         }
