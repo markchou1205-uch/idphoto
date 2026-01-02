@@ -1,5 +1,6 @@
 import { AZURE, CLOUDINARY } from './config.js';
 import { state } from './state.js';
+import { calculatePassportLayout } from './photoGeometry.js';
 
 /* --- Azure Helper --- */
 export function ensureSinglePrefix(str) {
@@ -335,116 +336,29 @@ export async function processPreview(base64, cropParams, faceData = null) {
                 ctx.fillStyle = '#FFFFFF';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                const targetHeadPx = 402; // 3.4cm 目標
-
                 if (faceData && faceData.faceLandmarks && cropRect) {
-                    const l = faceData.faceLandmarks;
+                    try {
+                        const layout = calculatePassportLayout(
+                            faceData.faceLandmarks,
+                            topY_Resized,
+                            cropRect,
+                            img.height
+                        );
 
-                    // --- 關鍵修正：歸一化座標系 ---
-                    // 將所有座標轉換回「裁切區塊」的百分比，徹底解決 Resize 導致的縮放錯誤
-                    const eyeMidY_Global = (l.pupilLeft.y + l.pupilRight.y) / 2;
-                    const eyeMidY_In_Crop_Percent = (eyeMidY_Global - cropRect.y) / cropRect.h;
+                        console.log(`[Geometric Layout] Scale: ${layout.scale.toFixed(4)}, X: ${layout.x.toFixed(1)}, Y: ${layout.y.toFixed(1)}`);
+                        ctx.drawImage(img, layout.x, layout.y, layout.canvasW * layout.scale, (img.height / img.width) * layout.canvasW * layout.scale);
 
-                    // topY 也要轉成百分比 (相對於 Vercel 回傳圖的高度)
-                    const topY_Percent = topY_Resized / img.height;
-
-                    // 眼睛到頭頂佔裁切區塊高度的比例
-                    const eyeToTopDist_Percent = eyeMidY_In_Crop_Percent - topY_Percent;
-
-                    if (eyeToTopDist_Percent <= 0) {
-                        console.warn("[Strict Perc] EyeToTop <= 0, fallback to fill");
-                        // Fallback: simple fit
-                        const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
-                        const dx = (canvas.width - img.width * scale) / 2;
-                        const dy = (canvas.height - img.height * scale) / 2;
-                        ctx.drawImage(img, dx, dy, img.width * scale, img.height * scale);
-                        resolve(canvas.toDataURL('image/jpeg', 0.95));
-                        URL.revokeObjectURL(url);
-                        return;
+                    } catch (err) {
+                        console.error("Geometry Calc Failed:", err);
+                        // Fallback
+                        fallbackFit();
                     }
-
-                    // 根據 0.48 比例，計算「整顆頭」佔裁切區塊高度的比例
-                    const headHeight_In_Crop_Percent = eyeToTopDist_Percent / 0.48;
-
-                    // 計算最終縮放倍率：讓「整顆頭的百分比」乘上 Scale 後等於 402 像素
-                    // 公式：(headHeight_In_Crop_Percent * canvas.height) * Scale = 402 ?? NO
-                    // Wait, img.height corresponds to cropRect.h (conceptually).
-                    // Image Height (Pixels) * Percent = Head Height (Pixels) in current image.
-                    const headHeight_In_Current_Img = headHeight_In_Crop_Percent * img.height; // Error in User Logic? No, Percent is valid.
-
-                    // User Formula: finalScale = targetHeadPx / (headHeight_In_Crop_Percent * canvas.height) -- WAIT
-                    // Canvas Height has nothing to do with current image height.
-                    // The User code says:
-                    // const finalScale = targetHeadPx / (headHeight_In_Crop_Percent * canvas.height);
-                    // BUT wait, we are drawing 'img', so we scale 'img'.
-                    // If we treat 'canvas.height' as 'img.height' it would be wrong.
-                    // Re-reading User Request Cautiously:
-                    // "ctx.drawImage(img, drawX, drawY, canvas.width * finalScale, (img.height/img.width) * canvas.width * finalScale);"
-                    // This `drawImage` signature is: (image, dx, dy, dWidth, dHeight).
-                    // User provided: canvas.width * finalScale ?? 
-                    // That implies finalScale is relative to Canvas Width? 
-
-                    // Let's look at the User's provided code block Logic again LINE BY LINE.
-                    /*
-                      const finalScale = targetHeadPx / (headHeight_In_Crop_Percent * canvas.height); // This looks suspicious if applying to IMG
-                      
-                      // The user wrote:
-                      ctx.drawImage(img, drawX, drawY, canvas.width * finalScale, ...);
-                    */
-
-                    // CRITICAL CORRECTION ON USER CODE (Logic Check):
-                    // We want to scale the IMAGE so that the HEAD inside it becomes 402px.
-                    // Current Head Height in Image = `headHeight_In_Crop_Percent * img.height`.
-                    // Required Scale Factor for Image = `targetHeadPx / (headHeight_In_Crop_Percent * img.height)`.
-
-                    // BUT User Code says:
-                    // `const finalScale = targetHeadPx / (headHeight_In_Crop_Percent * canvas.height);`
-                    // And then draws with `canvas.width * finalScale`. 
-                    // This forces the image width to be coupled to finalScale * CanvasWidth. 
-
-                    // DECISION: I will implement the Logic as "Calculate actual head pixel height in current IMG, then scale".
-                    // This is the "Physics" way.
-                    // Head_Px = headHeight_In_Crop_Percent * img.height;
-                    // Real_Scale = targetHeadPx / Head_Px;
-
-                    // Let's look at user's code again. They might have copied from a context where "canvas" meant "crop".
-                    // "drawImage(img, drawX, drawY, canvas.width * finalScale, ...)" 
-                    // This forces the image width to be coupled to finalScale * CanvasWidth. 
-
-                    // I will use MY derived "Safe Physics" logic which respects the User's "Percentage" core idea.
-                    // Because "canvas.width * finalScale" is definitely weird if finalScale comes from height.
-
-                    // UPDATED PLAN for this chunk:
-                    // 1. Calculate Percentages (User Code).
-                    // 2. Head_Px_Current = headHeight_In_Crop_Percent * img.height.
-                    // 3. Scale_Factor = targetHeadPx / Head_Px_Current.
-                    // 4. DrawW = img.width * Scale_Factor.
-                    // 5. DrawH = img.height * Scale_Factor.
-                    // 6. DrawY = 50 - (topY_Percent * img.height * Scale_Factor).
-                    // 7. DrawX = (413 - DrawW) / 2.
-
-                    // This is mathematically strictly equivalent to "Making the head 402px".
-
-                    const headHeight_Pixel_Current = headHeight_In_Crop_Percent * img.height;
-                    const finalScaleFactor = targetHeadPx / headHeight_Pixel_Current;
-
-                    // 垂直定位：讓頭頂固定在畫布上方 50 像素
-                    // topY_Pixel_Current = topY_Percent * img.height.
-                    // topY_Pixel_Scaled = topY_Pixel_Current * finalScaleFactor.
-                    // drawY = 50 - topY_Pixel_Scaled.
-                    const drawY = 50 - (topY_Percent * img.height * finalScaleFactor);
-
-                    const drawW = img.width * finalScaleFactor;
-                    const drawH = img.height * finalScaleFactor;
-                    const drawX = (canvas.width - drawW) / 2;
-
-                    console.log(`[Strict Perc] TopY%: ${topY_Percent.toFixed(3)}, EyeTopDist%: ${eyeToTopDist_Percent.toFixed(3)}, Head%: ${headHeight_In_Crop_Percent.toFixed(3)}, Scale: ${finalScaleFactor.toFixed(3)}`);
-
-                    // 繪製
-                    ctx.drawImage(img, drawX, drawY, drawW, drawH);
-
                 } else {
-                    console.warn("[Strict Perc] Missing landmarks, performing simple fit");
+                    fallbackFit();
+                }
+
+                function fallbackFit() {
+                    console.warn("[Strict Perc] Missing landmarks/error, performing simple fit");
                     const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
                     const dx = (canvas.width - img.width * scale) / 2;
                     const dy = (canvas.height - img.height * scale) / 2;
