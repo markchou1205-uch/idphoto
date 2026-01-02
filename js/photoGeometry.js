@@ -11,31 +11,31 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
     const target = { canvasW: 413, canvasH: 531, headPx: 402, topMarginPx: 50 };
 
     // --- HARD FIX FOR ASPECT RATIO MISMATCH ---
-    // If Vercel output is 750x1000, the ratio is 0.75. 
-    // Do NOT rely on cropRect.w / cropRect.h if it yields 624px.
+    // If Vercel output is 750x1000, the ratio is 0.75.
     const currentImgW = (750 / 1000) * currentImgH;
 
+    // 1. Calculate Eye-to-Top Ratio
     const eyeMidY_Global = (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
     const eyeMidY_Pct = (eyeMidY_Global - cropRect.y) / cropRect.h;
     const topY_Pct = topY_Resized / currentImgH;
+    const eyeToTop_Pct = eyeMidY_Pct - topY_Pct; // Relative to current image
 
-    // Head Scale Logic (Goal: 34mm head height)
-    const eyeToTop_Pct = eyeMidY_Pct - topY_Pct;
-    const finalScale = (target.headPx * 0.5) / (eyeToTop_Pct * currentImgH);
+    // 2. FORCE SCALE: We want (eyeToTop_Pct * currentImgH * scale) = 201px (half of 3.4cm)
+    // This anchors ONLY on the eyes and hair-top, completely ignoring the collar/chin.
+    const finalScale = 201 / (eyeToTop_Pct * currentImgH);
 
-    const finalW = currentImgW * finalScale; // This will now result in ~601.6px
-    const finalH = currentImgH * finalScale;
+    // 3. Centering & Positioning
+    // Adjust the Return Values: Use a smaller top margin to "lift" the head up.
+    // User requested lifting from 50 to 35.
+    const calculatedY = 35 - (topY_Pct * currentImgH * finalScale);
+    const calculatedX = (413 - (currentImgW * finalScale)) / 2;
 
-    // Centering calculation
-    const calculatedX = (target.canvasW - finalW) / 2; // Should result in ~ -94.3
-    const calculatedY = target.topMarginPx - (topY_Pct * finalH);
-
-    console.log(`[FORCE CHECK] finalW: ${finalW.toFixed(1)}, X: ${calculatedX.toFixed(1)}`);
+    console.log(`[ANCHOR FIX] finalScale: ${finalScale.toFixed(4)}, X: ${calculatedX.toFixed(1)}, Y: ${calculatedY.toFixed(1)}`);
 
     return {
         scale: finalScale,
-        x: calculatedX,
         y: calculatedY,
+        x: calculatedX,
         canvasW: target.canvasW,
         canvasH: target.canvasH,
         config: {
