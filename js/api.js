@@ -317,9 +317,9 @@ export async function processPreview(base64, cropParams, faceData = null) {
     // 0. Prepare Shared Resources
     const cleanBase64 = ensureSinglePrefix(base64);
 
-    // Helper: Composite with Strict 3.4cm Head Layout (0.48 Ratio)
-    async function compositeToWhiteBackground(transparentBlob) {
-        // Calculate Top Y from Alpha Channel
+    // Helper: Composite with Strict 3.4cm Head Layout (User Formula)
+    async function compositeToWhiteBackground(transparentBlob, faceData, cropOffsets) {
+        // Calculate Top Y from Alpha Channel (This is local to the cropped image)
         const topY = await getTopPixelY(transparentBlob);
 
         return new Promise((resolve, reject) => {
@@ -339,31 +339,61 @@ export async function processPreview(base64, cropParams, faceData = null) {
                 ctx.fillStyle = '#FFFFFF';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                // 2. Strict Position Logic
+                // 2. Strict Position Logic (User Provided Formula)
                 let scale = 1;
                 let drawX = 0;
                 let drawY = 0;
 
-                if (faceData && faceData.faceLandmarks) {
-                    // BEST EFFORT: 
-                    // Use the 413/531 canvas.
-                    // Draw image centered.
-                    // Scale = 413 / img.width (Fit Width).
+                if (faceData && faceData.faceLandmarks && cropOffsets) {
+                    console.log("[Strict Composition] Using User Formula");
+                    const l = faceData.faceLandmarks;
 
-                    scale = 413 / img.width;
-                    // If img is 413 wide, scale=1.
-                    drawX = 0;
-                    drawY = 0;
+                    const targetHeadPx = 402; // 3.4cm @ 300 DPI
 
-                    // Check Top Margin
-                    // Target Top Margin for 3.4cm head (~402px) in 4.5cm (~531px)
-                    // (531 - 402) / 2 = 64.5px (Centered Head)
-                    // Current Top = topY * scale.
-                    // shift = 64.5 - CurrentTop.
-                    drawY += (64.5 - (topY * scale));
+                    // 1. Get Exact Eye Mid Y
+                    // Note: Landmarks are GLOBAL. Need to adjust by cropOffsets to get LOCAL.
+                    const eyeMidY_Global = (l.pupilLeft.y + l.pupilRight.y) / 2;
+                    const eyeMidY_Local = eyeMidY_Global - cropOffsets.y;
 
-                    console.log(`[Strict Composition] Scale: ${scale}, ShiftY: ${drawY}`);
+                    // 2. Measure Eye to Top Distance
+                    // topY is LOCAL (from getTopPixelY scan of the transparent blob)
+                    const eyeToTopDist = eyeMidY_Local - topY;
+
+                    if (eyeToTopDist <= 0) {
+                        console.warn("Eye to Top Dist non-positive, fallback to fit.");
+                        scale = 413 / img.width;
+                        drawX = 0;
+                        drawY = (531 - img.height * scale) / 2;
+                    } else {
+                        // 3. Estimate Total Head Height (Eye-to-Top is 48%)
+                        // This makes the head larger than 50% ratio.
+                        const totalHeadHeightPx = eyeToTopDist / 0.48;
+
+                        // 4. Calculate Final Scale
+                        // scale = Target / Actual
+                        scale = targetHeadPx / totalHeadHeightPx;
+
+                        // 5. Vertical Position (Lock Top Margin)
+                        // User specified: drawY = 50 - (topY * scale)
+                        // This puts the visual topY at exactly 50px from canvas top.
+                        drawY = 50 - (topY * scale);
+
+                        // 6. Horizontal Center
+                        // Center the face (Pupil Mid X)
+                        const eyeMidX_Global = (l.pupilLeft.x + l.pupilRight.x) / 2;
+                        const eyeMidX_Local = eyeMidX_Global - cropOffsets.x;
+
+                        // We want Local Eye X to be at Canvas Center (206.5)
+                        // drawX + (eyeMidX_Local * scale) = 206.5
+                        // drawX = 206.5 - (eyeMidX_Local * scale)
+                        drawX = (413 / 2) - (eyeMidX_Local * scale);
+
+                        console.log(`[Strict Logic] EyeMidY_Local: ${eyeMidY_Local.toFixed(1)}, TopY: ${topY}, Dist: ${eyeToTopDist.toFixed(1)}, HeadH: ${totalHeadHeightPx.toFixed(1)}, Scale: ${scale.toFixed(4)}, DrawY: ${drawY.toFixed(1)}`);
+                    }
+
                 } else {
+                    // Fallback
+                    console.warn("[Strict Composition] Missing landmarks/offsets, using simple fit.");
                     scale = Math.min(413 / img.width, 531 / img.height);
                     drawX = (413 - (img.width * scale)) / 2;
                     drawY = (531 - (img.height * scale)) / 2;
@@ -424,7 +454,11 @@ export async function processPreview(base64, cropParams, faceData = null) {
         const transparentBlob = await (await fetch(`data:image/png;base64,${base64Data}`)).blob();
 
         // 4. Composite
-        const finalB64 = await compositeToWhiteBackground(transparentBlob);
+        // Pass faceData and cropOffsets (if cropped locally)
+        // If cropParams exists, offsets are cropParams.x, cropParams.y
+        const offsets = cropParams ? { x: cropParams.x, y: cropParams.y } : { x: 0, y: 0 };
+
+        const finalB64 = await compositeToWhiteBackground(transparentBlob, faceData, offsets);
         const cleanB64 = finalB64.split(',').pop();
         return { photos: [cleanB64, cleanB64] };
 
