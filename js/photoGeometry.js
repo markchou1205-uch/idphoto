@@ -56,6 +56,41 @@ export function calculateUniversalLayout(
 
     const best = candidates[0];
 
+    // === HARD REJECTION CHECKS ===
+    // 1. Chin/Collar Rejection (Critical)
+    // Prevent accepting a "fake chin" (collar) that is too high.
+    // We check where the detected chin WOULD land on the final canvas.
+    if (landmarks.chin) {
+        const chinY_Global = landmarks.chin.y;
+        const chinY_In_Source = (chinY_Global - cropRect.y) * (currentImgH / cropRect.h);
+
+        // Distance from Hair Top to Chin in Source Pixels
+        const chinDist_Src = chinY_In_Source - topY_In_Source;
+
+        // Scaled Distance on Final Canvas
+        const chinPx_Scaled = chinDist_Src * best.scale;
+
+        // Spec: Head Height ~402px. 
+        // If Chin is < 360px -> Too short (Collar detected as Chin).
+        // If Chin is > 440px -> Too long.
+        if (chinPx_Scaled < 360 || chinPx_Scaled > 440) {
+            console.warn(`[GEOMETRY REJECT] Chin consistency failure. Scaled Chin Dist: ${chinPx_Scaled.toFixed(1)}px`);
+            throw new Error("Invalid head geometry: chin polluted (likely collar interference)");
+        }
+    }
+
+    // 2. Mouth-Eye Check (Sanity)
+    // Prevent inverted faces or extreme parsing errors.
+    const mouthY = landmarks.underLipBottom ? landmarks.underLipBottom.y : (landmarks.mouthBottom ? landmarks.mouthBottom.y : null);
+    if (mouthY) {
+        const mouthY_In_Source = (mouthY - cropRect.y) * (currentImgH / cropRect.h);
+        // Comparing Y in Source (Y increases downwards)
+        if (mouthY_In_Source <= eyeMidY_In_Source) {
+            throw new Error("Invalid facial geometry: mouth above eyes");
+        }
+    }
+    // =============================
+
     // 3. Rendering geometry (margin applied HERE)
     const sourceWidth =
         actualSourceWidth || (750 * (currentImgH / 1000));
