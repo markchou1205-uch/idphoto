@@ -10,37 +10,34 @@
 export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, currentImgH, config) {
     const target = { canvasW: 413, canvasH: 531, headPx: 402, topMarginPx: 50 };
 
-    // --- ABSOLUTE DISTANCE ANCHORING ---
-    // Goal: Force the "Pupil to Hair Top" distance to be exactly 215px on the canvas.
-    // This forces the head to be approx 3.5cm, ignoring chin detection failure.
+    // --- PHYSICAL PIXEL LOCKING ---
+    // Goal: Force "Pupil to Hair Top" to be exactly 212px.
+    // This results in a visual head size of ~34.5mm, ignoring chin/collar issues.
 
-    // 1. Calculate positions in the "Source" (Vercel Processed Image) coordinate system
+    // 1. Calculate positions in Source (Vercel) coordinates
     const eyeMidY_Global = (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
-    // Map from Crop relative to Source relative
-    // Note: currentImgH is the height of the image returned by Vercel (e.g. 1000px)
+    // Map eye to the Vercel 1000px coordinate system
     // cropRect.h is the height of the crop box in the original image
     const eyeMidY_In_Source = (eyeMidY_Global - cropRect.y) * (currentImgH / cropRect.h);
-
-    // topY_Resized is already in Source (Vercel) coordinates
     const topY_In_Source = topY_Resized;
 
-    // 2. Calculate the Source Distance (Pixels in the Vercel image)
+    // 2. Measure Source Segment
     const eyeToTop_Px_In_Source = eyeMidY_In_Source - topY_In_Source;
 
-    // 3. TARGET SCALE: We want this segment (Eye to Top) to be 215px on the canvas.
-    const finalScale = 215 / eyeToTop_Px_In_Source;
+    // 3. FORCE SCALE: This segment MUST be 212px on the final canvas.
+    const finalScale = 212 / eyeToTop_Px_In_Source;
 
-    // 4. Calculate Dimensions for Centering
-    // Hard assumed aspect ratio 0.75 (750x1000) for width calculation to avoid cropRect noise
-    // If currentImgH is 1000, currentImgW is 750.
-    const constrainedImgW = 750 * (currentImgH / 1000);
+    // 4. Absolute Canvas Centering
+    // Hard assumed aspect ratio 0.75 (750x1000) for width calculation
+    const drawnWidth = (750 * (currentImgH / 1000)) * finalScale;
+    const drawnHeight = currentImgH * finalScale;
 
     // 5. Positioning
-    // Fix top margin at 40px as requested (Lift Head)
-    const calculatedY = 40 - (topY_In_Source * finalScale);
-    const calculatedX = (413 - (constrainedImgW * finalScale)) / 2;
+    // Fix hair top at 45px (approx 3.8mm)
+    const calculatedY = 45 - (topY_In_Source * finalScale);
+    const calculatedX = (413 - drawnWidth) / 2; // Absolute center
 
-    console.log(`[ABS ANCHOR] Scale: ${finalScale.toFixed(4)}, EyeToTop(Src): ${eyeToTop_Px_In_Source.toFixed(1)}px, X: ${calculatedX.toFixed(1)}, Y: ${calculatedY.toFixed(1)}`);
+    console.log(`[PIXEL LOCK] Scale: ${finalScale.toFixed(4)}, EyeToTop(212px), X: ${calculatedX.toFixed(1)}, Y: ${calculatedY.toFixed(1)}`);
 
     return {
         scale: finalScale,
@@ -55,7 +52,7 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
             CANVAS_H: target.canvasH
         },
         debug: {
-            topY_Pct: topY_In_Source / currentImgH // Backwards compatible for api.js debug drawing
+            topY_Pct: topY_In_Source / currentImgH
         }
     };
 }
