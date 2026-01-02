@@ -18,6 +18,7 @@ export const DEFAULT_SPECS = {
         "desc": "2吋 (35x45mm) - 頭部 3.2~3.6cm",
         "width_mm": 35, "height_mm": 45,
         "ratio": 35 / 45,
+        "target_head_mm": 34,
         "face_multiplier": 1.85, "top_margin": 0.09
     },
     "resume": {
@@ -25,6 +26,7 @@ export const DEFAULT_SPECS = {
         "desc": "2吋 (42x47mm) - 半身照",
         "width_mm": 42, "height_mm": 47,
         "ratio": 42 / 47,
+        "target_head_mm": 28, // Smaller head for half-body
         "face_multiplier": 2.5, "top_margin": 0.15
     },
     "inch1": {
@@ -32,6 +34,7 @@ export const DEFAULT_SPECS = {
         "desc": "1吋 (2.8x3.5cm) - 光面背景/五官清晰",
         "width_mm": 28, "height_mm": 35,
         "ratio": 28 / 35,
+        "target_head_mm": 22,
         "face_multiplier": 2.0, "top_margin": 0.12
     },
     "visa_us": {
@@ -39,6 +42,7 @@ export const DEFAULT_SPECS = {
         "desc": "5x5cm (51x51mm)",
         "width_mm": 51, "height_mm": 51,
         "ratio": 1.0,
+        "target_head_mm": 31, // 25-35mm range
         "face_multiplier": 2.2, "top_margin": 0.15
     }
 };

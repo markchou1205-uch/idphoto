@@ -8,7 +8,8 @@ let state = {
     processedImage: null,
     faceData: null,
     auditResults: null, // Store validation results
-    spec: 'passport'
+    spec: 'passport',
+    adjustments: { brightness: 1, contrast: 1 } // User lighting adjustments
 };
 
 // Optimization: Pre-load AI Model to save time later
@@ -160,55 +161,52 @@ async function runAuditPhase() {
     try {
         console.log("Starting Audit Phase...");
 
+        // Determine Source Image (Original or Processed)
+        const targetImage = state.processedImage || state.originalImage;
+        const isProcessed = !!state.processedImage;
+
         // Init UI for Audit (Report Only)
         UI.initAuditTable('#audit-report-container');
         UI.toggleAuditView(true); // Switch view to Audit Report
 
-        console.log("Calling API.detectFace...");
-        const detectRes = await API.detectFace(state.originalImage);
+        console.log("Calling API.detectFace on target...");
+        const detectRes = await API.detectFace(targetImage);
 
         if (!detectRes || !detectRes.found) {
             alert('未偵測到人臉，請更換照片');
-            // location.reload(); // Don't reload, just reset UI?
             return;
         }
-        state.faceData = detectRes;
+
+        // Only update global state if this is the original image
+        // (Production always relies on Original + Original-Face-Data)
+        if (!isProcessed) {
+            state.faceData = detectRes;
+        }
 
         console.log("Calling runCheckApi...");
-        const checkRes = await API.runCheckApi(state.originalImage, state.spec);
+        const checkRes = await API.runCheckApi(targetImage, state.spec);
         console.log("runCheckApi Result:", checkRes);
 
         if (!checkRes || !checkRes.results) {
             throw new Error("Invalid check result from API");
         }
-        state.auditResults = checkRes.results; // Save for final report
-
-        // [NEW FLOW]: Animate Results in Sidebar Table
-        console.log("Animating Audit Results...");
-
-        // We add "Future Steps" to the results for the animation effect if needed, 
-        // OR we just show the "Check" phase first.
-        // User asked for "Progressive Tick".
-        // Let's pass the check results.
+        state.auditResults = checkRes.results;
 
         // [NEW FLOW]: Animate Basic Results
         console.log("Animating Basic Audit Results...");
 
         UI.renderBasicAudit(state.auditResults, () => {
-            console.log("Basic Audit Complete. Showing Pass State.");
+            console.log("Basic Audit Complete.");
+
             // On Complete: Show "Generate" Button + Success Msg
             UI.showBasicPassState(() => {
-                console.log("User clicked Generate. Starting Production...");
+                console.log("User clicked Generate/Action.");
+                // Always restart production from original flow
                 runProductionPhase();
             });
 
-            // Still show the image with lines (Audit Success Visuals) immediately?
-            // Yes, showAuditSuccess was for the visual.
-            // But wait, renderBasicAudit just ticks boxes.
-            // We should Show the image *after* basic audit? Or *during*?
-            // "Show Audit Success" function name is confusing, it actually draws the preview.
-            // Let's call it to show the visual result.
-            UI.showAuditSuccess(state.originalImage, state.faceData, null);
+            // Show Visuals (Red Lines etc.)
+            UI.showAuditSuccess(targetImage, detectRes, null);
         });
 
     } catch (err) {
@@ -269,6 +267,9 @@ async function runProductionPhase() {
         btn.textContent = '製作中... (Processing)';
     }
 
+    // [New] Ensure Audit View is Hidden (Show Service Table)
+    UI.toggleAuditView(false);
+
     try {
 
         // [Safety Check]: Ensure Face Data exists (Critical for Direct Production Flow)
@@ -289,7 +290,9 @@ async function runProductionPhase() {
         const apiTask = API.processPreview(
             state.originalImage,
             state.faceData.suggestedCrop,
-            state.faceData
+            state.faceData,
+            DEFAULT_SPECS[state.spec],
+            state.adjustments
         );
 
         // 3. Render Animation (Syncs with API Task via Promise)

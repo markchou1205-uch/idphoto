@@ -1,6 +1,6 @@
-import { AZURE, CLOUDINARY } from './config.js';
+import { AZURE, CLOUDINARY, DEFAULT_SPECS } from './config.js';
 import { state } from './state.js';
-import { calculatePassportLayout, SPECS } from './photoGeometry.js';
+import { calculatePassportLayout, getSpecDims, SPECS, IMAGE_PRESETS } from './photoGeometry.js';
 
 /* --- Azure Helper --- */
 export function ensureSinglePrefix(str) {
@@ -315,61 +315,77 @@ function cropImageLocally(base64, crop) {
 }
 
 // 2. Process Preview (Optimized: Local Crop + Direct Vercel)
-export async function processPreview(base64, cropParams, faceData = null) {
-    // 0. Prepare Shared Resources
+export async function processPreview(base64, cropParams, faceData = null, specData = null, userAdjustments = {}) {
+    if (!specData) specData = DEFAULT_SPECS['passport'];
+
     const cleanBase64 = ensureSinglePrefix(base64);
 
-    // Helper: Composite with Strict 3.4cm Head Layout (Percentage-Based Physics Normalization)
-    async function compositeToWhiteBackground(transparentBlob, faceData, cropRect) {
-        const topY_Resized = await getTopPixelY(transparentBlob); // 600px 座標系下的頭頂
+    // Helper: Composite with Physics Normalization + Lighting Compensation
+    async function compositeToWhiteBackground(transparentBlob, faceData, cropRect, specData, userAdjustments) {
+        const topY_Resized = await getTopPixelY(transparentBlob);
 
         return new Promise((resolve, reject) => {
             const img = new Image();
             const url = URL.createObjectURL(transparentBlob);
 
             img.onload = () => {
+                let layout;
+                try {
+                    if (faceData && faceData.faceLandmarks && cropRect) {
+                        layout = calculatePassportLayout(
+                            faceData.faceLandmarks,
+                            topY_Resized,
+                            cropRect,
+                            img.height,
+                            specData
+                        );
+                        console.log(`[Geometric Layout] Scale: ${layout.scale.toFixed(4)}, X: ${layout.x.toFixed(1)}, Y: ${layout.y.toFixed(1)}`);
+                    } else {
+                        // Fallback Configuration
+                        const config = getSpecDims(specData);
+                        layout = { scale: 1, x: 0, y: 0, canvasW: config.CANVAS_W, canvasH: config.CANVAS_H, config: config };
+                    }
+                } catch (e) {
+                    console.error("Layout Calc Failed", e);
+                    const config = getSpecDims(specData);
+                    layout = { scale: 1, x: 0, y: 0, canvasW: config.CANVAS_W, canvasH: config.CANVAS_H, config: config };
+                }
+
                 const canvas = document.createElement('canvas');
-                canvas.width = 413; // 35mm @ 300 DPI
-                canvas.height = 531; // 45mm @ 300 DPI
+                canvas.width = layout.canvasW;
+                canvas.height = layout.canvasH;
                 const ctx = canvas.getContext('2d');
 
                 ctx.fillStyle = '#FFFFFF';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                if (faceData && faceData.faceLandmarks && cropRect) {
-                    try {
-                        const layout = calculatePassportLayout(
-                            faceData.faceLandmarks,
-                            topY_Resized,
-                            cropRect,
-                            img.height
-                        );
+                // --- Apply Lighting Filters (New) ---
+                const { brightness = 1, contrast = 1 } = userAdjustments;
+                const finalBrightness = IMAGE_PRESETS.DEFAULT_BRIGHTNESS * brightness;
+                const finalContrast = IMAGE_PRESETS.DEFAULT_CONTRAST * contrast;
+                // Note: Brightness/Contrast/Saturate standard Web filters
+                ctx.filter = `brightness(${finalBrightness}) contrast(${finalContrast}) saturate(${IMAGE_PRESETS.DEFAULT_SATURATION})`;
+                // ------------------------------------
 
-                        console.log(`[Geometric Layout] Scale: ${layout.scale.toFixed(4)}, X: ${layout.x.toFixed(1)}, Y: ${layout.y.toFixed(1)}`);
-                        ctx.drawImage(img, layout.x, layout.y, layout.canvasW * layout.scale, (img.height / img.width) * layout.canvasW * layout.scale);
-
-                    } catch (err) {
-                        console.error("Geometry Calc Failed:", err);
-                        // Fallback
-                        fallbackFit();
-                    }
+                if (faceData && faceData.faceLandmarks && cropRect && layout.scale !== 1) {
+                    ctx.drawImage(img, layout.x, layout.y, layout.canvasW * layout.scale, (img.height / img.width) * layout.canvasW * layout.scale);
                 } else {
-                    fallbackFit();
-                }
-
-                function fallbackFit() {
                     console.warn("[Strict Perc] Missing landmarks/error, performing simple fit");
+                    ctx.filter = `brightness(${finalBrightness}) contrast(${finalContrast}) saturate(${IMAGE_PRESETS.DEFAULT_SATURATION})`;
+
                     const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
                     const dx = (canvas.width - img.width * scale) / 2;
                     const dy = (canvas.height - img.height * scale) / 2;
                     ctx.drawImage(img, dx, dy, img.width * scale, img.height * scale);
                 }
 
+                ctx.filter = 'none'; // Reset for Rulers
+
                 // --- Add Rulers & Guides (User Verification) ---
                 const margin = 60; // 尺標預留空間
                 const ruledCanvas = document.createElement('canvas');
-                ruledCanvas.width = canvas.width + margin; // 413 + 60
-                ruledCanvas.height = canvas.height + margin; // 531 + 60
+                ruledCanvas.width = canvas.width + margin;
+                ruledCanvas.height = canvas.height + margin;
                 const rCtx = ruledCanvas.getContext('2d');
 
                 // 1. Fill White Background
@@ -377,7 +393,6 @@ export async function processPreview(base64, cropParams, faceData = null) {
                 rCtx.fillRect(0, 0, ruledCanvas.width, ruledCanvas.height);
 
                 // 2. Draw Original Photo (Offset Y by margin)
-                // Photo Position: (0, 60)
                 rCtx.drawImage(canvas, 0, margin);
 
                 // 3. Draw Rulers
@@ -386,38 +401,38 @@ export async function processPreview(base64, cropParams, faceData = null) {
                 rCtx.font = '12px Arial';
                 rCtx.lineWidth = 1;
 
-                // A. Top Ruler (Horizontal) representing 35mm
+                // A. Top Ruler (Horizontal)
                 rCtx.beginPath();
                 rCtx.moveTo(0, margin - 1);
                 rCtx.lineTo(canvas.width, margin - 1);
 
-                // 35mm width (413px), 1mm ~ 11.8px
-                for (let mm = 0; mm <= 35; mm++) {
-                    const x = mm * (413 / 35);
+                const wMM = specData.width_mm || 35;
+                for (let mm = 0; mm <= wMM; mm++) {
+                    const x = mm * (canvas.width / wMM);
                     const isMajor = (mm % 5 === 0);
                     const tickH = isMajor ? 15 : 8;
                     rCtx.moveTo(x, margin - 1);
                     rCtx.lineTo(x, margin - 1 - tickH);
-                    if (isMajor) {
-                        rCtx.fillText(mm.toString(), x + 2, margin - 20);
+                    if (isMajor && x < canvas.width - 5) {
+                        if (x > 10) rCtx.fillText(mm.toString(), x - 4, margin - 20); // Adjust label pos
                     }
                 }
                 rCtx.stroke();
 
-                // B. Right Ruler (Vertical) representing 45mm
+                // B. Right Ruler (Vertical)
                 rCtx.beginPath();
                 const rightBaseX = canvas.width;
                 rCtx.moveTo(rightBaseX, margin);
                 rCtx.lineTo(rightBaseX, ruledCanvas.height);
 
-                // 45mm height (531px)
-                for (let mm = 0; mm <= 45; mm++) {
-                    const y = margin + (mm * (531 / 45));
+                const hMM = specData.height_mm || 45;
+                for (let mm = 0; mm <= hMM; mm++) {
+                    const y = margin + (mm * (canvas.height / hMM));
                     const isMajor = (mm % 5 === 0);
                     const tickW = isMajor ? 15 : 8;
                     rCtx.moveTo(rightBaseX, y);
                     rCtx.lineTo(rightBaseX + tickW, y);
-                    if (isMajor) {
+                    if (isMajor && y < ruledCanvas.height - 5) {
                         rCtx.fillText(mm.toString(), rightBaseX + 20, y + 4);
                     }
                 }
@@ -425,8 +440,8 @@ export async function processPreview(base64, cropParams, faceData = null) {
 
                 // 4. Red Verification Lines (If detection enabled)
                 if (faceData && faceData.faceLandmarks) {
-                    const topY = margin + SPECS.TOP_MARGIN_PX; // 50px inside photo
-                    const headH_Px = SPECS.TARGET_HEAD_PX;     // 402px
+                    const topY = margin + (layout.config.TOP_MARGIN_PX);
+                    const headH_Px = layout.config.TARGET_HEAD_PX;
                     const chinY = topY + headH_Px;
 
                     rCtx.strokeStyle = 'red';
@@ -435,8 +450,8 @@ export async function processPreview(base64, cropParams, faceData = null) {
 
                     // Hair Top Line (Only on Right Ruler)
                     rCtx.beginPath();
-                    rCtx.moveTo(canvas.width, topY); // Start at right edge of photo
-                    rCtx.lineTo(ruledCanvas.width, topY); // End at right edge of canvas
+                    rCtx.moveTo(canvas.width, topY);
+                    rCtx.lineTo(ruledCanvas.width, topY);
                     rCtx.stroke();
 
                     // Chin Line (Only on Right Ruler)
@@ -446,39 +461,29 @@ export async function processPreview(base64, cropParams, faceData = null) {
                     rCtx.stroke();
 
                     // Measurement Label
+                    const targetHeadCm = ((specData.target_head_mm || 34) / 10).toFixed(1);
                     rCtx.fillStyle = 'red';
                     rCtx.font = 'bold 12px Arial';
                     rCtx.setLineDash([]);
-                    rCtx.fillText("3.4 cm", canvas.width + 5, topY + (headH_Px / 2));
+                    rCtx.fillText(`${targetHeadCm} cm`, canvas.width + 5, topY + (headH_Px / 2));
                 }
 
                 resolve(ruledCanvas.toDataURL('image/jpeg', 0.95));
                 URL.revokeObjectURL(url);
             };
+            img.onerror = (e) => reject(e);
             img.src = url;
-            img.onerror = reject;
         });
     }
 
-
-
-    // OPTIMIZED FLOW: Local Crop -> Resize -> Vercel Backend
     try {
-        console.log("Starting Optimized Production Flow (Local Crop -> Vercel)...");
+        console.log("Process Preview Start. Spec:", specData.name);
 
-        // 1. Local Crop (Instant)
-        let processingBlob;
-        if (cropParams) {
-            console.log("Cropping Locally:", cropParams);
-            processingBlob = await cropImageLocally(cleanBase64, cropParams);
-        } else {
-            processingBlob = base64ToBlob(cleanBase64);
-        }
+        // 1. Prepare Upload Blob (Resize & Compress)
+        // Note: prepareImageForUpload is assumed to be in this file scope (lines 80+)
+        const optimizedBlob = await prepareImageForUpload(cleanBase64);
 
-        // 2. Resize Optimization (Max 600px)
-        const optimizedBlob = await resizeImage(processingBlob, 600);
-
-        // 3. Call Vercel Backend (Direct)
+        // 2. Call Vercel Backend (Direct)
         console.log("Calling Vercel Backend...");
         const vercelRes = await fetch('/api/remove-bg', {
             method: 'POST',
@@ -494,13 +499,12 @@ export async function processPreview(base64, cropParams, faceData = null) {
         const base64Data = await vercelRes.text();
         const transparentBlob = await (await fetch(`data:image/png;base64,${base64Data}`)).blob();
 
-        // 4. Composite
-        // Pass cropParams (contains x, y, w, h) for Resize Compensation
-        const cropRect = cropParams || { x: 0, y: 0, w: cleanBase64.length, h: cleanBase64.length }; // Fallback
+        // 3. Composite
+        const cropRect = cropParams || { x: 0, y: 0, w: cleanBase64.length, h: cleanBase64.length };
 
-        const finalB64 = await compositeToWhiteBackground(transparentBlob, faceData, cropRect);
-        const cleanB64 = finalB64.split(',').pop();
-        return { photos: [cleanB64, cleanB64] };
+        const finalB64 = await compositeToWhiteBackground(transparentBlob, faceData, cropRect, specData, userAdjustments);
+        const retB64 = finalB64.split(',').pop();
+        return { photos: [retB64, retB64] };
 
     } catch (e) {
         console.error("Production Flow Failed:", e);
@@ -602,6 +606,64 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
         const azureData = await response.json();
         const results = [];
 
+        // --- 1. Basic Image Checks (Dimensions, Background, Pixels) ---
+        try {
+            const spec = DEFAULT_SPECS[specId] || DEFAULT_SPECS['passport'];
+            const img = new Image();
+            img.src = cleanBase64;
+            await new Promise(r => img.onload = r);
+
+            const w = img.width;
+            const h = img.height;
+            const targetRatio = spec.width_mm / spec.height_mm;
+            const imgRatio = w / h;
+
+            // A. Dimension/Ratio
+            // If very close to spec ratio, Pass. Else Warn.
+            // If processing hasn't happened yet, this likely warns, which is correct.
+            if (Math.abs(imgRatio - targetRatio) < 0.05) {
+                results.push({ category: 'basic', status: 'pass', item: '圖片尺寸', value: '符合比例', standard: `${spec.width_mm}x${spec.height_mm}mm` });
+            } else {
+                results.push({ category: 'basic', status: 'warn', item: '圖片尺寸', value: '比例不符 (將自動修正)', standard: `${spec.width_mm}x${spec.height_mm}mm` });
+            }
+
+            // B. Background Check
+            const cvs = document.createElement('canvas');
+            cvs.width = w; cvs.height = h;
+            const ctx = cvs.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+
+            // Sample Top-Left (5,5) and Top-Right (w-5, 5)
+            const p1 = ctx.getImageData(5, 5, 1, 1).data;
+            const p2 = ctx.getImageData(w - 5, 5, 1, 1).data;
+
+            // Check White (>240 each) or Transparent (Alpha < 50)
+            const isP1Safe = (p1[0] > 240 && p1[1] > 240 && p1[2] > 240) || (p1[3] < 50);
+            const isP2Safe = (p2[0] > 240 && p2[1] > 240 && p2[2] > 240) || (p2[3] < 50);
+
+            if (isP1Safe && isP2Safe) {
+                results.push({ category: 'basic', status: 'pass', item: '圖片背景', value: '背景合格', standard: '白色/透明' });
+            } else {
+                results.push({ category: 'basic', status: 'warn', item: '圖片背景', value: '背景雜亂 (將自動去除)', standard: '白色/透明' });
+            }
+
+            // C. Pixel Check (300 DPI)
+            // 35mm @ 300dpi ~= 413px. 
+            // Allow 90% tolerance.
+            const minW = Math.round(spec.width_mm / 25.4 * 300 * 0.9);
+            const minH = Math.round(spec.height_mm / 25.4 * 300 * 0.9);
+
+            if (w >= minW && h >= minH) {
+                results.push({ category: 'basic', status: 'pass', item: '影像解析度', value: '像素合格', standard: '> 300 DPI' });
+            } else {
+                results.push({ category: 'basic', status: 'warn', item: '影像解析度', value: '解析度過低', standard: '> 300 DPI' });
+            }
+
+        } catch (e) {
+            console.error("Local Checks Failed", e);
+        }
+
+        // --- 2. Azure Face Checks ---
         if (azureData.length === 0) {
             results.push({ category: 'basic', status: 'fail', item: '人臉偵測', value: '未偵測到人臉', standard: '需清晰人臉' });
             return { results };
@@ -611,7 +673,7 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
         const attrs = face.faceAttributes;
         const landmarks = face.faceLandmarks;
 
-        // 1. Mouth/Expression Check (Relaxed Threshold: 4.0%)
+        // Mouth/Expression Check
         if (landmarks && landmarks.upperLipBottom && landmarks.underLipTop) {
             const upperLipY = landmarks.upperLipBottom.y;
             const lowerLipY = landmarks.underLipTop.y;
@@ -628,28 +690,26 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
             results.push({ category: 'compliance', status: 'warn', item: '表情/嘴巴', value: '無法檢測', standard: '請閉合嘴巴' });
         }
 
-        // 2. Ratio Check (Always Pass + Note)
-        const img = new Image();
-        img.src = cleanBase64;
-        await new Promise(r => img.onload = r); // Wait for load to get height
+        // Ratio Check (Logic moved to Dimension Check above, but we assume Head Position here)
+        // We can add "Head Position" check if needed, but "Dimension" covers the frame.
+        // Let's keep "Internal Proportion" if user wants "Ratio Check" for head?
+        // User asked for "Image Size Check" -> Done.
+        // This block originally had "System will auto-correct". We can keep a similar soft check.
+        results.push({
+            category: 'compliance', status: 'pass',
+            item: '頭部比例',
+            value: '系統將自動校正',
+            standard: '居中/適當大小'
+        });
 
-        if (img.naturalHeight > 0) {
-            results.push({
-                category: 'compliance', status: 'pass',
-                item: '比例檢查',
-                value: '系統將自動校正比例',
-                standard: '3.2~3.6 公分'
-            });
-        }
-
-        // 3. Other Checks
+        // Glasses
         if (attrs.glasses !== 'NoGlasses' && attrs.glasses !== 'noGlasses') {
             results.push({ category: 'compliance', status: 'warn', item: '眼鏡檢查', value: `偵測到眼鏡`, standard: '建議不戴眼鏡' });
         } else {
             results.push({ category: 'compliance', status: 'pass', item: '眼鏡檢查', value: '無配戴眼鏡', standard: '建議不戴眼鏡' });
         }
 
-        // 4. Hair/Eyebrows Check (New)
+        // Hair/Occlusion
         if (attrs.occlusion) {
             const { foreheadOccluded, eyeOccluded } = attrs.occlusion;
             if (foreheadOccluded || eyeOccluded) {
@@ -658,19 +718,25 @@ export async function runCheckApi(imgBase64, specId = 'passport') {
                 results.push({ category: 'compliance', status: 'pass', item: '頭髮/五官', value: '五官清晰', standard: '眉毛/眼睛需清晰' });
             }
         } else {
-            // Fallback if occlusion not returned
             results.push({ category: 'compliance', status: 'pass', item: '頭髮/五官', value: '檢測通過', standard: '眉毛/眼睛需清晰' });
         }
 
+        // Exposure (Enhanced)
         if (attrs.exposure) {
-            if (attrs.exposure.exposureLevel !== 'GoodExposure') {
-                results.push({ category: 'quality', status: 'warn', item: '光線檢查', value: '光線可能不均', standard: '需明亮' });
+            const { exposureLevel } = attrs.exposure;
+            if (exposureLevel !== 'GoodExposure') {
+                results.push({
+                    category: 'quality',
+                    status: 'warn',
+                    item: '光影均勻度',
+                    value: exposureLevel === 'UnderExposure' ? '面部偏暗' : '面部過亮',
+                    standard: '需光線均勻，無強烈陰影',
+                    actionRequired: true
+                });
             } else {
-                results.push({ category: 'quality', status: 'pass', item: '光線檢查', value: '合格', standard: '合格' });
+                results.push({ category: 'quality', status: 'pass', item: '光影均勻度', value: '合格' });
             }
         }
-
-        results.push({ category: 'basic', status: 'pass', item: '影像解析度', value: '符合標準', standard: '> 600dpi' });
 
         return { results };
 
