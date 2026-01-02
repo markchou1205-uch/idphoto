@@ -72,7 +72,8 @@ export async function detectFace(base64) {
             cvs.getContext('2d').drawImage(originalImg, 0, 0, w, h);
             resizedBlob = await new Promise(r => cvs.toBlob(r, 'image/jpeg', 0.95));
         } else {
-            resizedBlob = originalBlob;
+            // Fix: Create Blob from base64 if not resizing
+            resizedBlob = base64ToBlob(cleanBase64);
         }
 
         const endpoint = AZURE.ENDPOINT.endsWith('/') ? AZURE.ENDPOINT.slice(0, -1) : AZURE.ENDPOINT;
@@ -213,6 +214,7 @@ export async function detectFace(base64) {
         }
     } catch (e) {
         console.error("Detect Failed:", e);
+        console.error("Error Details:", e.message, e.stack);
     }
     return { found: false };
 }

@@ -6,6 +6,11 @@
   - 下載並整合 `silueta.onnx` (44MB) 至 `api/` 目錄。
   - **目的**：解決 Vercel 部署失敗 (LFS Error) 並顯著降低 Cold Start 時間。
 
+## 2. 前端修復 (Bug Fix)
+- **問題**：`api.js` 在處理小圖（無需縮放）時拋出 `ReferenceError: originalBlob is not defined`，導致「未偵測到人臉」錯誤。
+- **解決**：修正邏輯，當無需縮放時正確使用 `base64ToBlob` 產生物件。
+- **優化**：增強 `detectFace` 的錯誤日誌輸出，明確顯示錯誤堆疊。
+
 ## 2. API 修正 (api/index.py)
 - **模型路徑**：更新為 `api/silueta.onnx`。
 - **預處理邏輯**：
