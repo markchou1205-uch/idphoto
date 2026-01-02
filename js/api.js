@@ -429,6 +429,13 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
 
                 if (faceData && faceData.faceLandmarks && cropRect && layout.scale !== 1) {
                     ctx.drawImage(img, layout.x, layout.y, img.width * layout.scale, img.height * layout.scale);
+
+                    // Add this temporarily in api.js AFTER ctx.drawImage as requested
+                    const topY_Pct = topY_Resized / img.height;
+                    ctx.strokeStyle = 'red';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([5, 5]);
+                    ctx.strokeRect(layout.x, layout.y + (topY_Pct * img.height * layout.scale), layout.canvasW, 402 * layout.scale); // 這應該剛好框住頭部
                 } else {
                     console.warn("[Strict Perc] Missing landmarks/error, performing simple fit");
                     ctx.filter = `brightness(${finalBrightness}) contrast(${finalContrast}) saturate(${IMAGE_PRESETS.DEFAULT_SATURATION})`;
