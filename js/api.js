@@ -431,11 +431,22 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
                 if (faceData && faceData.faceLandmarks && cropRect && layout.scale !== 1) {
                     ctx.drawImage(img, layout.x, layout.y, img.width * layout.scale, img.height * layout.scale);
 
-                    // Add this temporarily in api.js AFTER ctx.drawImage as requested
-                    // 驗證紅線：應剛好切齊頭頂 50px 處與標示 3.4cm 範圍
+                    // [Must-Do Debugging] Step 2: Visual Anchor
                     ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-                    ctx.setLineDash([5, 5]);
-                    ctx.strokeRect(layout.x, 50, (img.height * (cropRect.w / cropRect.h)) * layout.scale, 402);
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([]);
+
+                    // Line 1: Top Anchor at Y=40 (Target margin)
+                    ctx.beginPath();
+                    ctx.moveTo(0, 40);
+                    ctx.lineTo(layout.canvasW, 40);
+                    ctx.stroke();
+
+                    // Line 2: Chin Anchor at Y=442 (Target 40 + 402px Head Height)
+                    ctx.beginPath();
+                    ctx.moveTo(0, 442);
+                    ctx.lineTo(layout.canvasW, 442);
+                    ctx.stroke();
                 } else {
                     console.warn("[Strict Perc] Missing landmarks/error, performing simple fit");
                     ctx.filter = `brightness(${finalBrightness}) contrast(${finalContrast}) saturate(${IMAGE_PRESETS.DEFAULT_SATURATION})`;
