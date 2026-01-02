@@ -33,111 +33,21 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
     const headHeight_In_Canvas_Pct = eyeToTop_Pct / config.head_ratio;
 
     // 3. 計算最終縮放倍率 (Scale)
-    // Scale = 目標頭高像素 / (頭高百分比 * 目標畫布高度) ? <= 這是 Step 715 的邏輯
-    // Wait. My manual says: const finalScale = target.headPx / (headHeight_In_Canvas_Pct * target.canvasH);
-    // Is this correct?
-    // HeadHeight_Pixels_On_Canvas_If_Scale_1 = (headHeight_In_Canvas_Pct * ImageH)?
-    // No. `headHeight_In_Canvas_Pct` is % of `cropRect.h` (or `currentImgH` assuming crop covers img).
-    // If we draw Image onto Canvas with Scale S.
-    // DrawnHeadHeight = HeadHeight_Pct * ImgH * S.
-    // We want DrawnHeadHeight = target.headPx.
-    // So S = target.headPx / (HeadHeight_Pct * ImgH).
-    // BUT the manual formula uses `target.canvasH`.
-    // Why? `headHeight_In_Canvas_Pct` suggests it's % of Canvas?
-    // No, `eyeToTop_Pct` is % of Input Image.
-    // So `headHeight_In_Canvas_Pct` is % of Input Image.
-    // So formula should use `currentImgH`?
-    // Or maybe the Manual assumes normalization to Canvas H?
-    // Let's look at Manual carefully: 
-    // "const finalScale = target.headPx / (headHeight_In_Canvas_Pct * target.canvasH);"
-    // This implies `headHeight_In_Canvas_Pct` means "If image fit specific way..."?
-    // OR it assumes `currentImgH` is irrelevant because we map % direct to output?
-    // If we use `target.canvasH`, we are saying "The Head Height % of the Input Image" is mapped to "% of Canvas Height".
-    // This scales the Input Image such that the Head % becomes (TargetHead / CanvasH) %.
-    // Scale = (TargetHead/CanvasH) / HeadPct.
-    // Scale = target.headPx / (headHeight_In_Canvas_Pct * target.canvasH).
-    // YES. This makes sense regardless of input resolution.
-    // It says: "InputHead% * Scale = TargetHead% (of Canvas)".
-    // So Scale * (HeadPct) = (TargetHeadPx / CanvasH).
-    // So Scale = (TargetHeadPx / CanvasH) / HeadPct.
-    // Scale = target.headPx / (target.canvasH * HeadPct).
-    // Correct.
-
     const finalScale = target.headPx / (headHeight_In_Canvas_Pct * target.canvasH);
 
     // 4. 計算繪製座標 (Draw X/Y)
-    // Y: 頂部留白
-    // DrawY = TargetTopMargin - (TopY_Pct * CanvasH * Scale)?
-    // No. TopY_Pct is % of Input.
-    // DrawY = TargetTopMargin - (TopY_Pct * ?? * Scale)? 
-    // We need TopY in drawn pixels.
-    // DrawnTopY = TopY_Pct * (Scale * CanvasH)? NO.
-    // DrawnTopY = TopY_Pct * (Scale * InputH)? NO.
-    // DrawnTopY = TopY_Pct * (Scaled Image H).
-    // Scaled Image H = CanvasH * Scale? NO.
-    // Scale is a multiplier on dimensions.
-    // What is the Base Dimension?
-    // If Scale is derived relative to CanvasH (as per formula above).
-    // Then effective Height = CanvasH * Scale? No.
-    // S = (TargetHead / CanvasH) / HeadPct.
-    // HeadPct * S * CanvasH = TargetHead.
-    // So (HeadPct * CanvasH) is the "Base Size"?
-    // This implies we treat the Input Image as having Height = CanvasH initially?
-    // Yes, essentially normalizing Input H to Canvas H.
-    // So: DrawnY = TargetTopMargin - (TopY_Pct * target.canvasH * finalScale).
-
-    // X: 水平居中
-    // DrawX = Center - (EyeX_Pct * ScaledWidth).
-    // ScaledWidth = ScaledHeight * Aspect?
-    // ScaledHeight = target.canvasH * finalScale.
-    // Aspect = cropRect.w / cropRect.h.
-    // So ScaledWidth = (target.canvasH * finalScale) * Aspect.
-    // DrawX = (CanvasW/2) - (EyeX_Pct * ScaledWidth).
-
-    const aspect = cropRect.w / cropRect.h;
-
-    // Note: User manual implementation for X:
-    // x: (target.canvasW / 2) - (((landmarks.pupilLeft.x + landmarks.pupilRight.x) / 2 - cropRect.x) / cropRect.w * target.canvasW * finalScale)
-    // Wait. It uses `target.canvasW` as base for Width?
-    // Only if Input Aspect == Output Aspect?
-    // Or if `finalScale` normalizes W to CanvasW?
-    // Scale formula normalized H to CanvasH.
-    // If standard passport aspect (35:45) matches crop aspect?
-    // Input crop might be square. Output is 35:45.
-    // If I use `target.canvasW` in X calc, I assume `finalScale` applies to Width RELATIVE TO CANVAS WIDTH.
-    // But Scale was derived from Height.
-    // Unless scaling is Anisotropic (stretch)? No.
-    // Is Scale X same as Scale Y? Yes.
-    // So `finalScale` derived from H applies to W.
-    // W_drawn = H_drawn * Aspect.
-    // H_drawn = CanvasH * finalScale (as derived).
-    // So W_drawn = (CanvasH * finalScale) * Aspect.
-    // The manual code uses `target.canvasW`.
-    // If `canvasW/canvasH` != `cropW/cropH`, this is wrong?
-    // Let's check: 35/45 = 0.77. Crop often is 0.77?
-    // If not, using `target.canvasW` implies something else.
-    // Let's stick to logic: W_drawn = H_drawn * Aspect_Input.
-    // = (target.canvasH * finalScale) * (cropRect.w / cropRect.h).
-
-    // Logic from Manual Code:
-    // x: (target.canvasW / 2) - (...Pct * target.canvasW * finalScale)
-    // This implies `Scale` acts on CanvasW.
-    // But `Scale` acts on CanvasH in Y formula.
-    // If CanvasW/CanvasH != CropW/CropH, then `Scale * CanvasH` != `Scale * CanvasW * (CropH/CropW)`.
-    // I should use `target.canvasH * finalScale * aspect` for Width dimension to be safe?
-    // OR simply `target.canvasH * aspect * finalScale`.
-    // Yes.
-
-    // I will use my robust logic:
     const scaledImgH = target.canvasH * finalScale;
-    const scaledImgW = scaledImgH * aspect;
+    const scaledImgW = scaledImgH * (cropRect.w / cropRect.h);
 
     const eyeMidX_Pct = ((landmarks.pupilLeft.x + landmarks.pupilRight.x) / 2 - cropRect.x) / cropRect.w;
 
+    const drawY = target.topMarginPx - (topY_Pct * scaledImgH);
+    const drawX = (target.canvasW / 2) - (eyeMidX_Pct * scaledImgW);
+
     return {
         scale: finalScale,
-        y: target.topMarginPx - (topY_Pct * scaledImgH),
-        x: (target.canvasW / 2) - (eyeMidX_Pct * scaledImgW),
+        y: drawY,
+        x: drawX,
         canvasW: target.canvasW,
         canvasH: target.canvasH,
         // Helper specifically for debug/validation
@@ -145,9 +55,12 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
     };
 }
 
-// Legacy Wrapper for older generic calls (optional, but requested by system to keep file simple)
-export function getSpecDims(spec) {
-    // Basic shim if needed, or consumers should update.
-    return {};
-}
-// Note: api.js will need to be updated to NOT use getSpecDims or use this new function directly.
+// 2. 影像濾鏡預設值 (標準化輸出)
+export const IMAGE_PRESETS = {
+    DEFAULT_BRIGHTNESS: 1.05, // 預設提亮 5%
+    DEFAULT_CONTRAST: 0.92,   // 預設調降對比 8% 以淡化陰影
+    DEFAULT_SATURATION: 1.05  // 微增飽和度讓氣色較好
+};
+
+// Legacy shim if requested, though api.js should be updated.
+export function getSpecDims(spec) { return {}; }
