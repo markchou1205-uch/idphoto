@@ -25,12 +25,18 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
     // 2. Normalize topY based on the ACTUAL height of the blob processed by Vercel
     const topY_Pct = topY_Resized / currentImgH;
 
-    // 3. Head height percentage relative to the vertical frame
-    const headHeight_Pct = (eyeMidY_Pct - topY_Pct) / 0.48;
+    // 3. NEW ANCHOR: Eye-to-Top (Robust Scaling)
+    // Goal: Ensure 3.4cm (402px) head size by ignoring the collar/chin line.
+    // We define that (Eye to Top) is exactly 50% (0.50) of the target 3.4cm.
+    // This forces the head to be large enough regardless of what the collar looks like.
+    const eyeToTop_Pct = eyeMidY_Pct - topY_Pct;
+
+    // We want 1.7cm (50% of 3.4cm) from eyes to top
+    // Target Head Px = 402. Target Eye-to-Top = 201.
+    const targetEyeToTopPx = target.headPx * 0.50;
 
     // 4. CRITICAL SCALE CALCULATION
-    // We must scale the image so that the head (headHeight_Pct * currentImgH) equals 402px
-    const finalScale = target.headPx / (headHeight_Pct * currentImgH);
+    const finalScale = targetEyeToTopPx / (eyeToTop_Pct * currentImgH);
 
     // 5. Centering Logic
     // 5. Centering Logic (Safe Centering Revison)
@@ -38,8 +44,8 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
     const drawnHeight = currentImgH * finalScale;
 
     // DEBUG: exposing internal calculation for logging if needed
-    const resultingHeadPx = headHeight_Pct * currentImgH * finalScale;
-    console.log(`[Geometry] finalScale: ${finalScale}, ResultHeadPx: ${resultingHeadPx} (Target: ${target.headPx})`);
+    const resultingEyeToTopPx = eyeToTop_Pct * currentImgH * finalScale;
+    console.log(`[Geometry] finalScale: ${finalScale}, EyeToTopPx: ${resultingEyeToTopPx} (Target: ${targetEyeToTopPx})`);
 
     return {
         scale: finalScale,
@@ -50,8 +56,8 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
         canvasW: target.canvasW,
         canvasH: target.canvasH,
         debug: {
-            headPx: resultingHeadPx,
-            eyeToTop_Pct: (eyeMidY_Pct - topY_Pct)
+            eyeToTopPx: resultingEyeToTopPx,
+            eyeToTop_Pct: eyeToTop_Pct
         },
         config: {
             TOP_MARGIN_PX: target.topMarginPx,
