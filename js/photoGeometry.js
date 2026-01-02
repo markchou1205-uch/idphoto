@@ -10,23 +10,23 @@
 export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, currentImgH, config) {
     const target = { canvasW: 413, canvasH: 531, headPx: 402, topMarginPx: 50 };
 
-    // 1. Calculate the real aspect ratio of the crop box
-    const sourceAspectRatio = cropRect.w / cropRect.h;
+    // 1. 強制計算正確的圖片比例
+    const imgScaleFromVercel = currentImgH / cropRect.h;
+    const currentImgW = cropRect.w * imgScaleFromVercel; // 這才是 750px
 
-    // 2. Normalize positions
     const eyeMidY_Global = (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
     const eyeMidY_Pct = (eyeMidY_Global - cropRect.y) / cropRect.h;
     const topY_Pct = topY_Resized / currentImgH;
 
-    // 3. Anchor Scale: Target 201px from Eyes to HairTop (50% of 3.4cm)
+    // 2. 比例鎖定
     const eyeToTop_Pct = eyeMidY_Pct - topY_Pct;
     const finalScale = (target.headPx * 0.5) / (eyeToTop_Pct * currentImgH);
 
-    // 4. Calculate final dimensions
-    const finalW = (currentImgH * sourceAspectRatio) * finalScale;
+    // 3. 最終繪製尺寸
+    const finalW = currentImgW * finalScale; // 預期約 601px
     const finalH = currentImgH * finalScale;
 
-    // 5. ABSOLUTE CENTERING
+    // 4. 絕對置中 (解決 X: -105 的鬼打牆)
     const calculatedX = (target.canvasW - finalW) / 2;
     const calculatedY = target.topMarginPx - (topY_Pct * finalH);
 
