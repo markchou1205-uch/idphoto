@@ -50,8 +50,12 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
         x: drawX,
         canvasW: target.canvasW,
         canvasH: target.canvasH,
-        // Helper specifically for debug/validation
-        debug: { targetHeadPx: target.headPx, headHeightPct: headHeight_In_Canvas_Pct }
+        config: {
+            TOP_MARGIN_PX: target.topMarginPx,
+            TARGET_HEAD_PX: target.headPx,
+            CANVAS_W: target.canvasW,
+            CANVAS_H: target.canvasH
+        }
     };
 }
 

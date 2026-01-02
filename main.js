@@ -294,20 +294,19 @@ async function runProductionPhase() {
             state.faceData = detectRes;
         }
 
-        // 2. Start API Task (Parallel Execution)
-        const apiTask = API.processPreview(
-            state.originalImage,
-            state.faceData.suggestedCrop,
-            state.faceData,
-            state.spec, // Pass Key (String) for api.js lookup
-            state.adjustments
-        );
-
-        // 3. Render Animation (Syncs with API Task via Promise)
+        // 2. Start Animation FIRST (Immediate Feedback)
+        // This shows the overlay and progress indicators immediately
         UI.renderServiceAnimation(async () => {
             try {
-                // 4. Retrieve Result (Instant if already done)
-                const processRes = await apiTask;
+                // 3. Start API Task (Inside Animation Callback)
+                const processRes = await API.processPreview(
+                    state.originalImage,
+                    state.faceData.suggestedCrop,
+                    state.faceData,
+                    state.spec,
+                    state.adjustments
+                );
+
                 console.log("API.processPreview Result Retrieved");
 
                 if (processRes && processRes.photos && processRes.photos.length > 0) {
