@@ -3,51 +3,47 @@
 // 負責將物理規格 (mm) 轉換為 Canvas 座標
 // 禁止在此檔案中引入任何 Canvas 上下文或濾鏡運算
 
+/**
+ * OFFICIAL SSOT GEOMETRY ENGINE
+ * Goal: Lock Head Height to exactly 3.4cm (402px @ 300DPI)
+ * Implements Resolution-Independent Percentage-Based Normalization
+ */
 export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, currentImgH, config) {
     const DPI = 300;
-    const MM_TO_PX = DPI / 25.4; // 1mm = 11.81px
+    const MM_TO_PX = DPI / 25.4;
 
     const target = {
-        canvasW: Math.round(config.canvas_mm[0] * MM_TO_PX),
-        canvasH: Math.round(config.canvas_mm[1] * MM_TO_PX),
-        // Target Head Px: Average of min and max allowed head size * MM_TO_PX
-        headPx: ((config.head_mm[0] + config.head_mm[1]) / 2) * MM_TO_PX,
-        topMarginPx: config.top_margin_mm * MM_TO_PX
+        canvasW: Math.round(config.canvas_mm[0] * MM_TO_PX), // e.g., 413px
+        canvasH: Math.round(config.canvas_mm[1] * MM_TO_PX), // e.g., 531px
+        headPx: ((config.head_mm[0] + config.head_mm[1]) / 2) * MM_TO_PX, // Target 402px
+        topMarginPx: config.top_margin_mm * MM_TO_PX // Target 50px
     };
 
-    // 1. 計算百分比座標 (不受像素解析度影響)
-    // 這裡我們將座標正規化為相對於「剪裁區域」或「原始圖像」的百分比
-
-    // 瞳孔中心 Y (相對於 CropRect)
+    // --- STEP 1: PERCENTAGE NORMALIZATION (Crucial for Resizing) ---
+    // Map Global Pupil Y to Percentage of the Original Crop Box
     const eyeMidY_Global = (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
     const eyeMidY_Pct = (eyeMidY_Global - cropRect.y) / cropRect.h;
 
-    // 頭頂 Y (已由外部提供 Resized Image 中的 Y) -> 轉為百分比
+    // Map Detected Hair Top to Percentage of the current Vercel output
     const topY_Pct = topY_Resized / currentImgH;
 
-    // 2. 物理比例推算
-    // 眼睛到頭頂的距離 (佔畫面高度百分比)
-    const eyeToTop_Pct = eyeMidY_Pct - topY_Pct;
+    // --- STEP 2: ANATOMICAL SCALE DERIVATION ---
+    // (EyePct - TopPct) represents the top 48% of the head in the frame
+    const headHeight_In_Canvas_Pct = (eyeMidY_Pct - topY_Pct) / config.head_ratio;
 
-    // 根據人臉比例 (head_ratio) 推算「整顆頭」在畫面中的高度百分比
-    const headHeight_In_Canvas_Pct = eyeToTop_Pct / config.head_ratio;
-
-    // 3. 計算最終縮放倍率 (Scale)
+    // --- STEP 3: FINAL SCALE & TRANSLATION ---
+    // Invariant Formula: TargetPx / (PhysicalPct * TotalCanvasH)
     const finalScale = target.headPx / (headHeight_In_Canvas_Pct * target.canvasH);
 
-    // 4. 計算繪製座標 (Draw X/Y)
-    const scaledImgH = target.canvasH * finalScale;
-    const scaledImgW = scaledImgH * (cropRect.w / cropRect.h);
-
+    // Calculate pupil center X percentage
     const eyeMidX_Pct = ((landmarks.pupilLeft.x + landmarks.pupilRight.x) / 2 - cropRect.x) / cropRect.w;
-
-    const drawY = target.topMarginPx - (topY_Pct * scaledImgH);
-    const drawX = (target.canvasW / 2) - (eyeMidX_Pct * scaledImgW);
 
     return {
         scale: finalScale,
-        y: drawY,
-        x: drawX,
+        // Align detected hair top (topY_Pct) exactly to target margin
+        y: target.topMarginPx - (topY_Pct * target.canvasH * finalScale),
+        // Horizontal Centering based on Pupil Midpoint
+        x: (target.canvasW / 2) - (eyeMidX_Pct * target.canvasW * finalScale),
         canvasW: target.canvasW,
         canvasH: target.canvasH,
         config: {
