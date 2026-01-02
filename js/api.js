@@ -1,6 +1,7 @@
-import { AZURE, CLOUDINARY, DEFAULT_SPECS } from './config.js';
+import { AZURE, CLOUDINARY } from './config.js';
+import { PHOTO_CONFIGS } from './photoSpecs.js';
 import { state } from './state.js';
-import { calculatePassportLayout, getSpecDims, SPECS, IMAGE_PRESETS } from './photoGeometry.js';
+import { calculateUniversalLayout, IMAGE_PRESETS } from './photoGeometry.js';
 
 /* --- Azure Helper --- */
 export function ensureSinglePrefix(str) {
@@ -326,13 +327,14 @@ async function prepareImageForUpload(base64) {
 }
 
 // 2. Process Preview (Optimized: Local Crop + Direct Vercel)
-export async function processPreview(base64, cropParams, faceData = null, specData = null, userAdjustments = {}) {
-    if (!specData) specData = DEFAULT_SPECS['passport'];
+export async function processPreview(base64, cropParams, faceData = null, specKey = 'taiwan_passport', userAdjustments = {}) {
+    // 1. Resolve Spec Config
+    const config = PHOTO_CONFIGS[specKey] || PHOTO_CONFIGS['taiwan_passport'];
 
     const cleanBase64 = ensureSinglePrefix(base64);
 
     // Helper: Composite with Physics Normalization + Lighting Compensation
-    async function compositeToWhiteBackground(transparentBlob, faceData, cropRect, specData, userAdjustments) {
+    async function compositeToWhiteBackground(transparentBlob, faceData, cropRect, config, userAdjustments) {
         const topY_Resized = await getTopPixelY(transparentBlob);
 
         return new Promise((resolve, reject) => {
@@ -343,23 +345,36 @@ export async function processPreview(base64, cropParams, faceData = null, specDa
                 let layout;
                 try {
                     if (faceData && faceData.faceLandmarks && cropRect) {
-                        layout = calculatePassportLayout(
+                        // SSOT: Calculate Universal Layout
+                        layout = calculateUniversalLayout(
                             faceData.faceLandmarks,
                             topY_Resized,
                             cropRect,
                             img.height,
-                            specData
+                            config
                         );
-                        console.log(`[Geometric Layout] Scale: ${layout.scale.toFixed(4)}, X: ${layout.x.toFixed(1)}, Y: ${layout.y.toFixed(1)}`);
+                        console.log(`[Universal Layout] Scale: ${layout.scale.toFixed(4)}, X: ${layout.x.toFixed(1)}, Y: ${layout.y.toFixed(1)}`);
+
+                        // Self-Verification Log
+                        const mmToPx = 300 / 25.4;
+                        const targetedHeadPx = ((config.head_mm[0] + config.head_mm[1]) / 2) * mmToPx;
+                        console.log(`[驗證] Target Head Px: ${targetedHeadPx.toFixed(1)}`);
                     } else {
                         // Fallback Configuration
-                        const config = getSpecDims(specData);
-                        layout = { scale: 1, x: 0, y: 0, canvasW: config.CANVAS_W, canvasH: config.CANVAS_H, config: config };
+                        const DPI = 300;
+                        const MM_TO_PX = DPI / 25.4;
+                        const tW = Math.round(config.canvas_mm[0] * MM_TO_PX);
+                        const tH = Math.round(config.canvas_mm[1] * MM_TO_PX);
+                        layout = { scale: 1, x: 0, y: 0, canvasW: tW, canvasH: tH };
                     }
                 } catch (e) {
                     console.error("Layout Calc Failed", e);
-                    const config = getSpecDims(specData);
-                    layout = { scale: 1, x: 0, y: 0, canvasW: config.CANVAS_W, canvasH: config.CANVAS_H, config: config };
+                    // Legacy SpecData Fallback
+                    const DPI = 300;
+                    const MM_TO_PX = DPI / 25.4;
+                    const tW = Math.round(config.canvas_mm[0] * MM_TO_PX);
+                    const tH = Math.round(config.canvas_mm[1] * MM_TO_PX);
+                    layout = { scale: 1, x: 0, y: 0, canvasW: tW, canvasH: tH };
                 }
 
                 const canvas = document.createElement('canvas');

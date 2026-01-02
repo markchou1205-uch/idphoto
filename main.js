@@ -299,7 +299,7 @@ async function runProductionPhase() {
             state.originalImage,
             state.faceData.suggestedCrop,
             state.faceData,
-            DEFAULT_SPECS[state.spec],
+            state.spec, // Pass Key (String) for api.js lookup
             state.adjustments
         );
 
