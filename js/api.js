@@ -314,6 +314,17 @@ function cropImageLocally(base64, crop) {
     });
 }
 
+// Helper: Prepare for Upload (Resize)
+async function prepareImageForUpload(base64) {
+    try {
+        const blob = await (await fetch(base64)).blob();
+        return await resizeImage(blob, 1000); // 1000px Limit for Vercel
+    } catch (e) {
+        console.error("Prepare Upload Failed:", e);
+        throw e;
+    }
+}
+
 // 2. Process Preview (Optimized: Local Crop + Direct Vercel)
 export async function processPreview(base64, cropParams, faceData = null, specData = null, userAdjustments = {}) {
     if (!specData) specData = DEFAULT_SPECS['passport'];
