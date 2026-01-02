@@ -1,6 +1,6 @@
 import { AZURE, CLOUDINARY } from './config.js';
 import { state } from './state.js';
-import { calculatePassportLayout } from './photoGeometry.js';
+import { calculatePassportLayout, SPECS } from './photoGeometry.js';
 
 /* --- Azure Helper --- */
 export function ensureSinglePrefix(str) {
@@ -365,7 +365,95 @@ export async function processPreview(base64, cropParams, faceData = null) {
                     ctx.drawImage(img, dx, dy, img.width * scale, img.height * scale);
                 }
 
-                resolve(canvas.toDataURL('image/jpeg', 0.95));
+                // --- Add Rulers & Guides (User Verification) ---
+                const margin = 60; // 尺標預留空間
+                const ruledCanvas = document.createElement('canvas');
+                ruledCanvas.width = canvas.width + margin; // 413 + 60
+                ruledCanvas.height = canvas.height + margin; // 531 + 60
+                const rCtx = ruledCanvas.getContext('2d');
+
+                // 1. Fill White Background
+                rCtx.fillStyle = '#FFFFFF';
+                rCtx.fillRect(0, 0, ruledCanvas.width, ruledCanvas.height);
+
+                // 2. Draw Original Photo (Offset Y by margin)
+                // Photo Position: (0, 60)
+                rCtx.drawImage(canvas, 0, margin);
+
+                // 3. Draw Rulers
+                rCtx.strokeStyle = '#000000';
+                rCtx.fillStyle = '#000000';
+                rCtx.font = '12px Arial';
+                rCtx.lineWidth = 1;
+
+                // A. Top Ruler (Horizontal) representing 35mm
+                rCtx.beginPath();
+                rCtx.moveTo(0, margin - 1);
+                rCtx.lineTo(canvas.width, margin - 1);
+
+                // 35mm width (413px), 1mm ~ 11.8px
+                for (let mm = 0; mm <= 35; mm++) {
+                    const x = mm * (413 / 35);
+                    const isMajor = (mm % 5 === 0);
+                    const tickH = isMajor ? 15 : 8;
+                    rCtx.moveTo(x, margin - 1);
+                    rCtx.lineTo(x, margin - 1 - tickH);
+                    if (isMajor) {
+                        rCtx.fillText(mm.toString(), x + 2, margin - 20);
+                    }
+                }
+                rCtx.stroke();
+
+                // B. Right Ruler (Vertical) representing 45mm
+                rCtx.beginPath();
+                const rightBaseX = canvas.width;
+                rCtx.moveTo(rightBaseX, margin);
+                rCtx.lineTo(rightBaseX, ruledCanvas.height);
+
+                // 45mm height (531px)
+                for (let mm = 0; mm <= 45; mm++) {
+                    const y = margin + (mm * (531 / 45));
+                    const isMajor = (mm % 5 === 0);
+                    const tickW = isMajor ? 15 : 8;
+                    rCtx.moveTo(rightBaseX, y);
+                    rCtx.lineTo(rightBaseX + tickW, y);
+                    if (isMajor) {
+                        rCtx.fillText(mm.toString(), rightBaseX + 20, y + 4);
+                    }
+                }
+                rCtx.stroke();
+
+                // 4. Red Verification Lines (If detection enabled)
+                if (faceData && faceData.faceLandmarks) {
+                    const topY = margin + SPECS.TOP_MARGIN_PX; // 50px inside photo
+                    const headH_Px = SPECS.TARGET_HEAD_PX;     // 402px
+                    const chinY = topY + headH_Px;
+
+                    rCtx.strokeStyle = 'red';
+                    rCtx.lineWidth = 2;
+                    rCtx.setLineDash([5, 5]);
+
+                    // Hair Top Line
+                    rCtx.beginPath();
+                    rCtx.moveTo(0, topY);
+                    rCtx.lineTo(ruledCanvas.width, topY);
+                    rCtx.stroke();
+
+                    // Chin Line
+                    rCtx.beginPath();
+                    rCtx.moveTo(0, chinY);
+                    rCtx.lineTo(ruledCanvas.width, chinY);
+                    rCtx.stroke();
+
+                    // Measurement Label
+                    rCtx.fillStyle = 'red';
+                    rCtx.font = 'bold 16px Arial';
+                    rCtx.setLineDash([]);
+                    // Draw arrow or text roughly in middle of right ruler area?
+                    rCtx.fillText("3.4 cm", rightBaseX + 10, topY + (headH_Px / 2));
+                }
+
+                resolve(ruledCanvas.toDataURL('image/jpeg', 0.95));
                 URL.revokeObjectURL(url);
             };
             img.src = url;

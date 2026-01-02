@@ -483,15 +483,31 @@ export const UI = {
 
             const url = (singleBlob instanceof Blob) ? URL.createObjectURL(singleBlob) : singleBlob;
             try {
-                // Determine pixel size at 300 DPI
-                // 1 inch = 25.4 mm, 300 px/inch
-                // pixels = mm / 25.4 * 300
-                const wPx = Math.round(widthMm / 25.4 * 300);
-                const hPx = Math.round(heightMm / 25.4 * 300);
+                // Determine target spec size (300 DPI)
+                const specWPx = Math.round(widthMm / 25.4 * 300);
+                const specHPx = Math.round(heightMm / 25.4 * 300);
 
-                console.log(`Downloading Single: ${widthMm}x${heightMm}mm => ${wPx}x${hPx}px`);
+                // Smart Check: Load image to check for Rulers (Aspect Ratio mismatch)
+                const img = new Image();
+                img.src = url;
+                await new Promise(r => img.onload = r);
 
-                const resizedUrl = await UI.resizeToSpec(url, wPx, hPx);
+                const imgRatio = img.width / img.height;
+                const specRatio = specWPx / specHPx; // e.g. 35/45 = 0.77
+
+                let finalW, finalH;
+                // If ratio deviates significantly (>5%), assume it's a Proof/Ruled image or custom crop
+                if (Math.abs(imgRatio - specRatio) > 0.05) {
+                    console.log(`[Download] Aspect ratio mismatch (${imgRatio.toFixed(2)} vs ${specRatio.toFixed(2)}). Keeping original dimensions.`);
+                    finalW = img.width;
+                    finalH = img.height;
+                } else {
+                    console.log(`[Download] Enforcing Spec 300 DPI: ${specWPx}x${specHPx}`);
+                    finalW = specWPx;
+                    finalH = specHPx;
+                }
+
+                const resizedUrl = await UI.resizeToSpec(url, finalW, finalH);
                 const a = document.createElement('a');
                 a.href = resizedUrl;
                 a.download = filename;
