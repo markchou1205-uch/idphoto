@@ -10,27 +10,37 @@
 export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, currentImgH, config) {
     const target = { canvasW: 413, canvasH: 531, headPx: 402, topMarginPx: 50 };
 
-    // --- HARD FIX FOR ASPECT RATIO MISMATCH ---
-    // If Vercel output is 750x1000, the ratio is 0.75.
-    const currentImgW = (750 / 1000) * currentImgH;
+    // --- ABSOLUTE DISTANCE ANCHORING ---
+    // Goal: Force the "Pupil to Hair Top" distance to be exactly 215px on the canvas.
+    // This forces the head to be approx 3.5cm, ignoring chin detection failure.
 
-    // 1. Calculate Eye-to-Top Ratio
+    // 1. Calculate positions in the "Source" (Vercel Processed Image) coordinate system
     const eyeMidY_Global = (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
-    const eyeMidY_Pct = (eyeMidY_Global - cropRect.y) / cropRect.h;
-    const topY_Pct = topY_Resized / currentImgH;
-    const eyeToTop_Pct = eyeMidY_Pct - topY_Pct; // Relative to current image
+    // Map from Crop relative to Source relative
+    // Note: currentImgH is the height of the image returned by Vercel (e.g. 1000px)
+    // cropRect.h is the height of the crop box in the original image
+    const eyeMidY_In_Source = (eyeMidY_Global - cropRect.y) * (currentImgH / cropRect.h);
 
-    // 2. FORCE SCALE: We want (eyeToTop_Pct * currentImgH * scale) = 201px (half of 3.4cm)
-    // This anchors ONLY on the eyes and hair-top, completely ignoring the collar/chin.
-    const finalScale = 201 / (eyeToTop_Pct * currentImgH);
+    // topY_Resized is already in Source (Vercel) coordinates
+    const topY_In_Source = topY_Resized;
 
-    // 3. Centering & Positioning
-    // Adjust the Return Values: Use a smaller top margin to "lift" the head up.
-    // User requested lifting from 50 to 35.
-    const calculatedY = 35 - (topY_Pct * currentImgH * finalScale);
-    const calculatedX = (413 - (currentImgW * finalScale)) / 2;
+    // 2. Calculate the Source Distance (Pixels in the Vercel image)
+    const eyeToTop_Px_In_Source = eyeMidY_In_Source - topY_In_Source;
 
-    console.log(`[ANCHOR FIX] finalScale: ${finalScale.toFixed(4)}, X: ${calculatedX.toFixed(1)}, Y: ${calculatedY.toFixed(1)}`);
+    // 3. TARGET SCALE: We want this segment (Eye to Top) to be 215px on the canvas.
+    const finalScale = 215 / eyeToTop_Px_In_Source;
+
+    // 4. Calculate Dimensions for Centering
+    // Hard assumed aspect ratio 0.75 (750x1000) for width calculation to avoid cropRect noise
+    // If currentImgH is 1000, currentImgW is 750.
+    const constrainedImgW = 750 * (currentImgH / 1000);
+
+    // 5. Positioning
+    // Fix top margin at 40px as requested (Lift Head)
+    const calculatedY = 40 - (topY_In_Source * finalScale);
+    const calculatedX = (413 - (constrainedImgW * finalScale)) / 2;
+
+    console.log(`[ABS ANCHOR] Scale: ${finalScale.toFixed(4)}, EyeToTop(Src): ${eyeToTop_Px_In_Source.toFixed(1)}px, X: ${calculatedX.toFixed(1)}, Y: ${calculatedY.toFixed(1)}`);
 
     return {
         scale: finalScale,
@@ -45,7 +55,7 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
             CANVAS_H: target.canvasH
         },
         debug: {
-            topY_Pct: topY_Pct
+            topY_Pct: topY_In_Source / currentImgH // Backwards compatible for api.js debug drawing
         }
     };
 }
