@@ -331,12 +331,6 @@ export async function processPreview(base64, cropParams, faceData = null, specDa
 
     const cleanBase64 = ensureSinglePrefix(base64);
 
-    // 1. Get Original Dimensions (for Physics Scale)
-    const imgMeta = new Image();
-    imgMeta.src = cleanBase64;
-    await new Promise(r => imgMeta.onload = r);
-    const originalW = imgMeta.width;
-
     // Helper: Composite with Physics Normalization + Lighting Compensation
     async function compositeToWhiteBackground(transparentBlob, faceData, cropRect, specData, userAdjustments) {
         const topY_Resized = await getTopPixelY(transparentBlob);
@@ -349,17 +343,12 @@ export async function processPreview(base64, cropParams, faceData = null, specDa
                 let layout;
                 try {
                     if (faceData && faceData.faceLandmarks && cropRect) {
-                        // Calculate Scale Factor (Resized / Original)
-                        const scaleFactor = img.width / originalW;
-                        console.log(`[Physics] OriginalW: ${originalW}, ResizedW: ${img.width}, Scale: ${scaleFactor.toFixed(4)}`);
-
                         layout = calculatePassportLayout(
                             faceData.faceLandmarks,
                             topY_Resized,
                             cropRect,
                             img.height,
-                            specData,
-                            scaleFactor
+                            specData
                         );
                         console.log(`[Geometric Layout] Scale: ${layout.scale.toFixed(4)}, X: ${layout.x.toFixed(1)}, Y: ${layout.y.toFixed(1)}`);
                     } else {
@@ -544,14 +533,14 @@ function cropImageLocally(base64, crop) {
             console.error("Local Crop: No base64 input");
             return resolve(null); // Fail gracefully
         }
-
+ 
         const img = new Image();
         img.onload = () => {
             const canvas = document.createElement('canvas');
             canvas.width = 350;
             canvas.height = 450;
             const ctx = canvas.getContext('2d');
-
+ 
             // Default crop if missing
             let x = 0, y = 0, w = img.width, h = img.height;
             if (crop) {
@@ -572,10 +561,10 @@ function cropImageLocally(base64, crop) {
                     y = (img.height - h) / 2;
                 }
             }
-
+ 
             // Draw cropped portion
             ctx.drawImage(img, x, y, w, h, 0, 0, 350, 450);
-
+ 
             // Export to Base64
             const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
             const b64 = dataUrl.split(',')[1];
