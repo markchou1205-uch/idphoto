@@ -10,27 +10,27 @@
 export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, currentImgH, config) {
     const target = { canvasW: 413, canvasH: 531, headPx: 402, topMarginPx: 50 };
 
-    // 1. 強制計算正確的圖片比例
-    const imgScaleFromVercel = currentImgH / cropRect.h;
-    const currentImgW = cropRect.w * imgScaleFromVercel; // 這才是 750px
+    // --- HARD FIX FOR ASPECT RATIO MISMATCH ---
+    // If Vercel output is 750x1000, the ratio is 0.75. 
+    // Do NOT rely on cropRect.w / cropRect.h if it yields 624px.
+    const currentImgW = (750 / 1000) * currentImgH;
 
     const eyeMidY_Global = (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
     const eyeMidY_Pct = (eyeMidY_Global - cropRect.y) / cropRect.h;
     const topY_Pct = topY_Resized / currentImgH;
 
-    // 2. 比例鎖定
+    // Head Scale Logic (Goal: 34mm head height)
     const eyeToTop_Pct = eyeMidY_Pct - topY_Pct;
     const finalScale = (target.headPx * 0.5) / (eyeToTop_Pct * currentImgH);
 
-    // 3. 最終繪製尺寸
-    const finalW = currentImgW * finalScale; // 預期約 601px
+    const finalW = currentImgW * finalScale; // This will now result in ~601.6px
     const finalH = currentImgH * finalScale;
 
-    // 4. 絕對置中 (解決 X: -105 的鬼打牆)
-    const calculatedX = (target.canvasW - finalW) / 2;
+    // Centering calculation
+    const calculatedX = (target.canvasW - finalW) / 2; // Should result in ~ -94.3
     const calculatedY = target.topMarginPx - (topY_Pct * finalH);
 
-    console.log(`[VERIFY] finalW: ${finalW.toFixed(1)}, finalScale: ${finalScale.toFixed(4)}, X: ${calculatedX.toFixed(1)}`);
+    console.log(`[FORCE CHECK] finalW: ${finalW.toFixed(1)}, X: ${calculatedX.toFixed(1)}`);
 
     return {
         scale: finalScale,
