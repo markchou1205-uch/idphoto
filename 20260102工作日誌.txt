@@ -24,6 +24,13 @@
         - `Scale = 402 / HeadHeight_Pixel`
         - `DrawY = 50 - (TopY_Percent * ImgHeight * Scale)`
 
+## 6. 錯誤修復 (Bug Fixes)
+- **問題**：`compositeToWhiteBackground` 發生 `Cannot read properties of undefined (reading 'pupilLeft')`。
+- **原因**：`detectFace` 雖然計算了裁切，但物件返回時漏傳 `faceLandmarks`，導致後續合成函式無法取得五官座標。
+- **修正**：
+  - 在 `detectFace` 返回物件中補上 `faceLandmarks`。
+  - 在 `compositeToWhiteBackground` 加入安全檢查 (`if (faceData && faceData.faceLandmarks)`)，若無特徵點則執行降級處理 (Simple Fit)。
+
 ## 4. 裁切比例微調 (Fine-tuning)
 - **問題**：前次調整雖然解決肩膀問題，但導致頭部佔比過小 (Zoom out too much)。
 - **修正**：
