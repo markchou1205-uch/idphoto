@@ -48,6 +48,9 @@ export function calculateUniversalLayout(landmarks, topY_Resized, cropRect, curr
 
     console.log(`[Final Output Check] Drawing at X: ${calculatedX.toFixed(1)}, Y: ${calculatedY.toFixed(1)}`);
 
+    // DEBUG: exposing internal calculation for logging if needed
+    const resultingEyeToTopPx = eyeToTop_Pct * currentImgH * finalScale;
+
     return {
         scale: finalScale,
         x: calculatedX,
