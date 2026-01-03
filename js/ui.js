@@ -617,8 +617,8 @@ export const UI = {
             // Show Loading
             container.innerHTML = `<div class="d-flex justify-content-center align-items-center h-100"><div class="spinner-border"></div></div>`;
 
-            const canvas = await UI.create4x2Canvas(imgUrl, specData);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+            const dataUrl = await UI.create4x2Canvas(imgUrl, specData);
+            // const dataUrl = canvas.toDataURL('image/jpeg', 0.95); // Fixed: create4x2Canvas returns string
 
             // 2. Render Preview
             container.innerHTML = '';

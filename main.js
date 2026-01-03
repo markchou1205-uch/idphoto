@@ -167,106 +167,10 @@ async function handleFileUpload(e) {
                 UI.renderActionPanel(runProductionPhase, runAuditPhase);
 
                 // [NEW] Advanced Adjustment UI (Overlay on Preview)
-                const imageWrapper = document.getElementById('image-wrapper');
-                // Remove existing overlays if any
+                // MOVED: Logic moved to injectAdvancedControls() to show ONLY after production.
                 const existingOverlay = document.getElementById('control-overlay');
                 if (existingOverlay) existingOverlay.remove();
 
-                if (imageWrapper) {
-                    const overlay = document.createElement('div');
-                    overlay.id = 'control-overlay';
-                    overlay.style.position = 'absolute';
-                    overlay.style.top = '0';
-                    overlay.style.left = '0';
-                    overlay.style.width = '100%';
-                    overlay.style.height = '100%';
-                    overlay.style.pointerEvents = 'none'; // Allow clicks to pass through only where needed? No, sliders need events.
-                    // Actually, we append siblings to the image, not a full cover overlay, to avoid z-index issues.
-                    // But 'imageWrapper' is strictly the size of the image (d-inline-flex).
-                    // So we can put absolute elements relative to it.
-
-                    // 1. Vertical Slider (Right)
-                    const vSliderHtml = `
-                        <div class="position-absolute d-flex flex-column align-items-center" 
-                             style="right: -60px; top: 50%; transform: translateY(-50%); height: 80%; width: 40px; pointer-events: auto;">
-                            <button class="btn btn-sm btn-light border shadow-sm mb-2 p-0" id="btn-zoom-in" title="放大" style="width:24px;height:24px;">+</button>
-                            <input type="range" class="form-range" id="head-scale-input" min="1.0" max="1.4" step="0.01" value="1.2" 
-                                   style="writing-mode: vertical-lr; direction: rtl; flex-grow: 1; margin: 0;">
-                            <button class="btn btn-sm btn-light border shadow-sm mt-2 p-0" id="btn-zoom-out" title="縮小" style="width:24px;height:24px;">-</button>
-                            <div class="mt-2 badge bg-dark opacity-75" id="head-scale-val">1.2x</div>
-                        </div>
-                    `;
-
-                    // 2. Horizontal Slider (Bottom)
-                    const hSliderHtml = `
-                        <div class="position-absolute d-flex align-items-center justify-content-center w-100" 
-                             style="bottom: -50px; left: 0; pointer-events: auto;">
-                            <span class="badge bg-light text-dark border me-2">L</span>
-                            <input type="range" class="form-range flex-grow-1 shadow-sm" id="x-shift-input" min="-50" max="50" step="1" value="0" style="max-width: 60%;">
-                            <span class="badge bg-light text-dark border ms-2">R</span>
-                            <div class="ms-2 badge bg-dark opacity-75" id="x-shift-val">0px</div>
-                        </div>
-                    `;
-
-                    // 3. Toggle Guide (Top Right or Top Center)
-                    const toggleHtml = `
-                        <button class="btn btn-sm btn-outline-primary bg-white shadow-sm position-absolute" 
-                                id="toggle-guides-btn" 
-                                style="top: -50px; right: 0; pointer-events: auto; z-index: 10;">
-                            <i class="bi bi-eye"></i> 顯示/隱藏規格標線
-                        </button>
-                    `;
-
-                    // We need a container to hold these that allows pointer events
-                    // Since specific elements have pointer-events: auto, we can set wrapper to none if needed, 
-                    // or just append them directly to imageWrapper.
-
-                    const controlsDiv = document.createElement('div');
-                    controlsDiv.innerHTML = vSliderHtml + hSliderHtml + toggleHtml;
-
-                    // Append children to wrapper
-                    while (controlsDiv.firstChild) {
-                        imageWrapper.appendChild(controlsDiv.firstChild);
-                    }
-
-                    // --- Bind Events ---
-
-                    // 1. Guide Toggle
-                    const toggleBtn = document.getElementById('toggle-guides-btn');
-                    state.adjustments.showGuides = true; // Default
-                    if (toggleBtn) {
-                        toggleBtn.onclick = () => {
-                            state.adjustments.showGuides = !state.adjustments.showGuides;
-                            toggleBtn.className = state.adjustments.showGuides ? 'btn btn-sm btn-outline-primary bg-white shadow-sm position-absolute' : 'btn btn-sm btn-outline-secondary bg-white shadow-sm position-absolute';
-                            handleClientSideUpdate();
-                        };
-                    }
-
-                    // 2. Vertical Scale Slider
-                    const scaleInput = document.getElementById('head-scale-input');
-                    const scaleVal = document.getElementById('head-scale-val');
-                    if (scaleInput) {
-                        scaleInput.oninput = (e) => {
-                            const val = parseFloat(e.target.value);
-                            if (scaleVal) scaleVal.innerText = val.toFixed(2) + 'x';
-                            state.adjustments.headScale = val;
-                        };
-                        scaleInput.onchange = handleClientSideUpdate;
-                    }
-
-                    // 3. Horizontal Shift Slider
-                    const xShiftInput = document.getElementById('x-shift-input');
-                    const xShiftVal = document.getElementById('x-shift-val');
-                    state.adjustments.xShift = 0; // Default
-                    if (xShiftInput) {
-                        xShiftInput.oninput = (e) => {
-                            const val = parseInt(e.target.value);
-                            if (xShiftVal) xShiftVal.innerText = (val > 0 ? '+' : '') + val + 'px';
-                            state.adjustments.xShift = val;
-                        };
-                        xShiftInput.onchange = handleClientSideUpdate;
-                    }
-                }
 
                 // 3. Show Original Image Preview
                 const previewImg = document.getElementById('main-preview-img');
@@ -474,6 +378,125 @@ async function runProductionPhase() {
     }
 }
 
+// [NEW] Helper: Inject Advanced Controls into Preview Overlay
+function injectAdvancedControls() {
+    const imageWrapper = document.getElementById('image-wrapper');
+    // Remove existing if any to avoid duplicates
+    const existingOverlay = document.getElementById('control-overlay');
+    if (existingOverlay) existingOverlay.remove();
+
+    if (imageWrapper) {
+        const overlay = document.createElement('div');
+        overlay.id = 'control-overlay';
+        overlay.style.position = 'absolute';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.pointerEvents = 'none';
+
+        // 1. Vertical Slider (Right)
+        const vSliderHtml = `
+            <div class="position-absolute d-flex flex-column align-items-center" 
+                    style="right: -60px; top: 50%; transform: translateY(-50%); height: 80%; width: 40px; pointer-events: auto;">
+                <button class="btn btn-sm btn-light border shadow-sm mb-2 p-0" id="btn-zoom-in" title="放大" style="width:24px;height:24px;">+</button>
+                <input type="range" class="form-range" id="head-scale-input" min="1.0" max="1.4" step="0.01" value="${state.adjustments.headScale || 1.2}" 
+                        style="writing-mode: vertical-lr; direction: rtl; flex-grow: 1; margin: 0;">
+                <button class="btn btn-sm btn-light border shadow-sm mt-2 p-0" id="btn-zoom-out" title="縮小" style="width:24px;height:24px;">-</button>
+                <div class="mt-2 badge bg-dark opacity-75" id="head-scale-val">${(state.adjustments.headScale || 1.2).toFixed(2)}x</div>
+            </div>
+        `;
+
+        // 2. Horizontal Slider (Bottom)
+        const hSliderHtml = `
+            <div class="position-absolute d-flex align-items-center justify-content-center w-100" 
+                    style="bottom: -50px; left: 0; pointer-events: auto;">
+                <span class="badge bg-light text-dark border me-2">L</span>
+                <input type="range" class="form-range flex-grow-1 shadow-sm" id="x-shift-input" min="-50" max="50" step="1" value="${state.adjustments.xShift || 0}" style="max-width: 60%;">
+                <span class="badge bg-light text-dark border ms-2">R</span>
+                <div class="ms-2 badge bg-dark opacity-75" id="x-shift-val">${(state.adjustments.xShift > 0 ? '+' : '') + (state.adjustments.xShift || 0)}px</div>
+            </div>
+        `;
+
+        // 3. Toggle Guide (Top Right)
+        const isGuidesOn = state.adjustments.showGuides === undefined ? true : state.adjustments.showGuides;
+        const toggleClass = isGuidesOn ? 'btn-outline-primary shadow-sm' : 'btn-outline-secondary shadow-sm';
+        const toggleHtml = `
+            <button class="btn btn-sm ${toggleClass} bg-white position-absolute" 
+                    id="toggle-guides-btn" 
+                    style="top: -50px; right: 0; pointer-events: auto; z-index: 10;">
+                <i class="bi bi-eye"></i> 顯示/隱藏規格標線
+            </button>
+        `;
+
+        const controlsDiv = document.createElement('div');
+        controlsDiv.innerHTML = vSliderHtml + hSliderHtml + toggleHtml;
+
+        while (controlsDiv.firstChild) {
+            imageWrapper.appendChild(controlsDiv.firstChild);
+        }
+
+        // --- Bind Events ---
+
+        // 1. Guide Toggle
+        const toggleBtn = document.getElementById('toggle-guides-btn');
+        if (toggleBtn) {
+            toggleBtn.onclick = () => {
+                state.adjustments.showGuides = !state.adjustments.showGuides;
+                const isOn = state.adjustments.showGuides;
+                toggleBtn.className = isOn ? 'btn btn-sm btn-outline-primary bg-white shadow-sm position-absolute' : 'btn btn-sm btn-outline-secondary bg-white shadow-sm position-absolute';
+                handleClientSideUpdate();
+            };
+        }
+
+        // 2. Vertical Scale Slider
+        const scaleInput = document.getElementById('head-scale-input');
+        const scaleVal = document.getElementById('head-scale-val');
+        if (scaleInput) {
+            scaleInput.oninput = (e) => {
+                const val = parseFloat(e.target.value);
+                if (scaleVal) scaleVal.innerText = val.toFixed(2) + 'x';
+                state.adjustments.headScale = val;
+            };
+            scaleInput.onchange = handleClientSideUpdate;
+        }
+
+        // 3. Horizontal Shift Slider
+        const xShiftInput = document.getElementById('x-shift-input');
+        const xShiftVal = document.getElementById('x-shift-val');
+        if (xShiftInput) {
+            xShiftInput.oninput = (e) => {
+                const val = parseInt(e.target.value);
+                if (xShiftVal) xShiftVal.innerText = (val > 0 ? '+' : '') + val + 'px';
+                state.adjustments.xShift = val;
+            };
+            xShiftInput.onchange = handleClientSideUpdate;
+        }
+
+        // Zoom Buttons
+        const zIn = document.getElementById('btn-zoom-in');
+        const zOut = document.getElementById('btn-zoom-out');
+        if (zIn && scaleInput) {
+            zIn.onclick = () => {
+                let v = parseFloat(scaleInput.value) + 0.01;
+                if (v > 1.4) v = 1.4;
+                scaleInput.value = v;
+                scaleInput.dispatchEvent(new Event('input'));
+                scaleInput.dispatchEvent(new Event('change'));
+            };
+        }
+        if (zOut && scaleInput) {
+            zOut.onclick = () => {
+                let v = parseFloat(scaleInput.value) - 0.01;
+                if (v < 1.0) v = 1.0;
+                scaleInput.value = v;
+                scaleInput.dispatchEvent(new Event('input'));
+                scaleInput.dispatchEvent(new Event('change'));
+            };
+        }
+    }
+}
+
 // Extracted UI Update Logic
 async function updateResultUI(b64) {
     if (!b64.startsWith('data:image/')) {
@@ -481,7 +504,17 @@ async function updateResultUI(b64) {
     }
     state.processedImage = b64;
 
-    // Convert to Blob for download
+    // Update Main Preview
+    const previewImg = document.getElementById('main-preview-img');
+    if (previewImg) {
+        previewImg.src = b64;
+        previewImg.classList.remove('d-none');
+    }
+
+    // Inject Controls HERE relative to the preview
+    injectAdvancedControls();
+
+    // Convert to Blob for download (if needed for UI.showDownloadOptions)
     const res = await fetch(state.processedImage);
     const blob = await res.blob();
 
