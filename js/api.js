@@ -356,13 +356,13 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
                         );
 
                         // DEBUG REQUESTED BY USER
-                        console.log("DEBUG: Scaling Image Height", img.height, "with Scale", layout.scale, "Resulting Head Px:", layout.debug ? layout.debug.headPx : "N/A");
+                        console.log("DEBUG: Scaling Image Height", img.height, "with Scale", layout.scale, "Resulting Head Px:", layout.debug ? layout.debug.estimatedHeadHSrc : "N/A");
 
                         // === COMPREHENSIVE DEBUG LOGGING ===
                         // === GEOMETRY DEBUG (Clean) ===
                         console.log(`[Universal Layout] Scale: ${layout.scale.toFixed(4)}, X: ${layout.x.toFixed(1)}, Y: ${layout.y.toFixed(1)}`);
                         if (layout.debug) {
-                            console.log(`[Solver Debug] Alpha: ${layout.debug.alpha}, HeadPx(Src): ${layout.debug.headPx_Src.toFixed(1)}`);
+                            console.log(`[Solver Debug] N: ${layout.debug.N?.toFixed(1)}, EstHead(Src): ${layout.debug.estimatedHeadHSrc?.toFixed(1)}`);
                         }
 
 
@@ -386,7 +386,10 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
                     const MM_TO_PX = DPI / 25.4;
                     const tW = Math.round(config.canvas_mm[0] * MM_TO_PX);
                     const tH = Math.round(config.canvas_mm[1] * MM_TO_PX);
-                    layout = { scale: 1, x: 0, y: 0, canvasW: tW, canvasH: tH };
+                    layout = {
+                        scale: 1, x: 0, y: 0, canvasW: tW, canvasH: tH,
+                        config: { TOP_MARGIN_PX: 0, TARGET_HEAD_PX: 0 }
+                    };
                 }
 
                 const canvas = document.createElement('canvas');
@@ -494,8 +497,8 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
                 rCtx.stroke();
 
                 // 4. Red Verification Lines (If detection enabled)
-                if (faceData && faceData.faceLandmarks) {
-                    const topY = margin + (layout.config.TOP_MARGIN_PX);
+                if (faceData && faceData.faceLandmarks && layout.config) {
+                    const topY = margin + (layout.config.TOP_MARGIN_PX || 40);
                     const headH_Px = layout.config.TARGET_HEAD_PX;
                     const chinY = topY + headH_Px;
 
