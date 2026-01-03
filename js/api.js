@@ -413,7 +413,7 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
                 ctx.filter = `brightness(${finalBrightness}) contrast(${finalContrast}) saturate(${IMAGE_PRESETS.DEFAULT_SATURATION})`;
                 // ------------------------------------
 
-                if (faceData && faceData.faceLandmarks && cropRect && layout.scale !== 1) {
+                if (faceData && faceData.faceLandmarks && fullRect && layout.scale !== 1) {
                     ctx.drawImage(img, layout.x, layout.y, img.width * layout.scale, img.height * layout.scale);
 
                     // [Must-Do Debugging] Step 2: Visual Anchor
