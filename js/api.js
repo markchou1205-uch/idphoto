@@ -526,18 +526,18 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
                 const chinRangeTopY = topY + rangeTopPx;
                 const chinRangeBottomY = topY + rangeBottomPx;
 
-                // Draw Range Band
-                rCtx.fillStyle = 'rgba(255, 0, 0, 0.15)'; // Semi-transparent Red
-                rCtx.fillRect(0, chinRangeTopY, ruledCanvas.width, chinRangeBottomY - chinRangeTopY);
+                // Draw Range Band - REMOVED per user request
+                // rCtx.fillStyle = 'rgba(255, 0, 0, 0.15)'; 
+                // rCtx.fillRect(0, chinRangeTopY, ruledCanvas.width, chinRangeBottomY - chinRangeTopY);
 
-                // Draw Limit Lines (Subtle)
-                rCtx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
-                rCtx.beginPath();
-                rCtx.moveTo(0, chinRangeTopY);
-                rCtx.lineTo(ruledCanvas.width, chinRangeTopY);
-                rCtx.moveTo(0, chinRangeBottomY);
-                rCtx.lineTo(ruledCanvas.width, chinRangeBottomY);
-                rCtx.stroke();
+                // Draw Limit Lines (Subtle) - REMOVED per user request
+                // rCtx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
+                // rCtx.beginPath();
+                // rCtx.moveTo(0, chinRangeTopY);
+                // rCtx.lineTo(ruledCanvas.width, chinRangeTopY);
+                // rCtx.moveTo(0, chinRangeBottomY);
+                // rCtx.lineTo(ruledCanvas.width, chinRangeBottomY);
+                // rCtx.stroke();
 
                 // Draw Target Center (Stronger Red) - REMOVED per user request
                 // rCtx.strokeStyle = '#FF0000';
