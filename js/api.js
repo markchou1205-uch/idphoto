@@ -518,7 +518,8 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
                 rCtx.stroke();
                 rCtx.fillText("Head Top", 5, topY - 5);
 
-                // 2. Chin Range Band (Semi-transparent Red)
+                // 2. Chin Range Band (REMOVED)
+                /*
                 const rangeTopMm = 32;
                 const rangeBottomMm = 36;
                 const targetMm = 34;
@@ -534,6 +535,7 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
                 rCtx.fillStyle = '#FF0000';
                 rCtx.fillText("3.2cm", 5, chinRangeTopY - 5);
                 rCtx.fillText("3.6cm", 5, chinRangeBottomY + 15);
+                */
 
                 // 3. Eye Line (Blue)
                 if (layout.debug && layout.debug.N) {

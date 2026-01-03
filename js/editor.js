@@ -79,25 +79,7 @@ export class ManualEditor {
     }
 
     initGuides() {
-        // Red dashed lines
-        // Top: 0.45cm -> ~10%
-        // Bottom: 0.45cm -> ~10% from bottom (or Chin Max 80%)
-
-        const createLine = (topPercent, color) => {
-            const l = document.createElement('div');
-            l.style.position = 'absolute';
-            l.style.left = '0';
-            l.style.width = '100%';
-            l.style.top = `${topPercent}%`;
-            l.style.borderTop = `1px dashed ${color}`;
-            return l;
-        };
-
-        // Hair Top (10%)
-        this.guides.appendChild(createLine(10, 'red'));
-
-        // Chin Bottom (90%) - ensure head leaves some space
-        this.guides.appendChild(createLine(90, 'red'));
+        // Red dashed lines REMOVED
 
         // Center V-Line
         const v = document.createElement('div');
