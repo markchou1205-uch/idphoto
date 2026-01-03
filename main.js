@@ -504,23 +504,53 @@ async function updateResultUI(b64) {
     }
     state.processedImage = b64;
 
-    // Update Main Preview
-    const previewImg = document.getElementById('main-preview-img');
-    if (previewImg) {
-        previewImg.src = b64;
-        previewImg.classList.remove('d-none');
+    // 1. Ensure Container
+    const container = document.getElementById('preview-container');
+    if (!container) return;
+
+    // 2. Check/Recreate Wrapper & Image (Robustness against UI wipes)
+    let wrapper = document.getElementById('image-wrapper');
+    let img = document.getElementById('main-preview-img');
+
+    if (!wrapper) {
+        console.warn("Image Wrapper missing, recreating...");
+        // Rebuild structure that supports overlay
+        container.innerHTML = ''; // Start fresh
+
+        wrapper = document.createElement('div');
+        wrapper.id = 'image-wrapper';
+        wrapper.className = 'position-relative d-inline-flex justify-content-center align-items-center';
+        wrapper.style.maxHeight = '80%';
+        wrapper.style.maxWidth = '100%';
+
+        img = document.createElement('img');
+        img.id = 'main-preview-img';
+        img.className = 'img-fluid shadow-sm rounded border';
+        img.style.maxHeight = '100%';
+        img.style.maxWidth = '100%';
+        img.style.objectFit = 'contain';
+        img.style.background = 'white';
+
+        wrapper.appendChild(img);
+        container.appendChild(wrapper);
+    } else {
+        // Ensure img reference is valid
+        if (!img) img = document.getElementById('main-preview-img');
     }
 
-    // Inject Controls HERE relative to the preview
+    // 3. Update Image
+    if (img) {
+        img.src = b64;
+        img.classList.remove('d-none');
+    }
+
+    // 4. Inject Controls (Now guaranteed to have wrapper)
     injectAdvancedControls();
 
-    // Convert to Blob for download (if needed for UI.showDownloadOptions)
-    const res = await fetch(state.processedImage);
-    const blob = await res.blob();
-
-    // 5. Show Final Result & Download Options
+    // 5. Show Download Options
+    const specData = DEFAULT_SPECS[state.spec];
     UI.showAuditSuccess(state.processedImage, state.faceData, null);
-    UI.showDownloadOptions(blob, DEFAULT_SPECS[state.spec]);
+    UI.showDownloadOptions(b64, specData);
     UI.updateToReuploadMode();
     UI.setAuditButtonRed();
 }
