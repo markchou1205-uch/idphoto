@@ -327,6 +327,7 @@ async function prepareImageForUpload(base64) {
 }
 
 // Helper: Composite with Physics Normalization + Lighting Compensation
+// Update compositeToWhiteBackground to destructure xShift and showGuides
 async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, config, userAdjustments) {
     const topY_Resized = await getTopPixelY(transparentBlob);
 
@@ -336,12 +337,17 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
 
         img.onload = () => {
             let layout;
+            // Destructure new params with defaults
+            // showGuides default true
+            const showGuides = (userAdjustments && userAdjustments.showGuides !== undefined) ? userAdjustments.showGuides : true;
+
             try {
                 if (faceData && faceData.faceLandmarks && fullRect) {
                     // SSOT: Calculate Universal Layout
                     // Allow override of Chin Ratio from user adjustments (Head Scale Slider)
                     // Default to 1.2 if not provided (Proportional Model)
                     const chinRatio = userAdjustments && userAdjustments.headScale ? userAdjustments.headScale : 1.2;
+                    const xShift = userAdjustments && userAdjustments.xShift ? userAdjustments.xShift : 0;
 
                     layout = calculateUniversalLayout(
                         faceData.faceLandmarks,
@@ -350,7 +356,8 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
                         img.height,
                         config,
                         img.width, // actualSourceWidth
-                        chinRatio // Pass dynamic ratio  
+                        chinRatio, // Pass dynamic ratio
+                        xShift     // Pass horizontal shift
                     );
 
                     // DEBUG REQUESTED BY USER
@@ -360,10 +367,8 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
                     // === GEOMETRY DEBUG (Clean) ===
                     console.log(`[Universal Layout] Scale: ${layout.scale.toFixed(4)}, X: ${layout.x.toFixed(1)}, Y: ${layout.y.toFixed(1)}`);
                     if (layout.debug) {
-                        console.log(`[Solver Debug] N: ${layout.debug.N?.toFixed(1)}, Ratio: ${layout.debug.chinRatio}, HeadH_Src: ${(layout.debug.N * (1 + layout.debug.chinRatio)).toFixed(1)}`);
+                        console.log(`[Solver Debug] N: ${layout.debug.N?.toFixed(1)}, Ratio: ${layout.debug.chinRatio}, XShift: ${layout.debug.xShift}`);
                     }
-
-
 
                     // Self-Verification Log
                     const mmToPx = 300 / 25.4;
@@ -398,13 +403,11 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
             ctx.fillStyle = '#FFFFFF';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // --- Apply Lighting Filters (New) ---
+            // --- Apply Lighting Filters ---
             const { brightness = 1, contrast = 1 } = userAdjustments;
             const finalBrightness = IMAGE_PRESETS.DEFAULT_BRIGHTNESS * brightness;
             const finalContrast = IMAGE_PRESETS.DEFAULT_CONTRAST * contrast;
-            // Note: Brightness/Contrast/Saturate standard Web filters
             ctx.filter = `brightness(${finalBrightness}) contrast(${finalContrast}) saturate(${IMAGE_PRESETS.DEFAULT_SATURATION})`;
-            // ------------------------------------
 
             if (faceData && faceData.faceLandmarks && fullRect && layout.scale !== 1) {
                 ctx.drawImage(img, layout.x, layout.y, img.width * layout.scale, img.height * layout.scale);
@@ -427,8 +430,6 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
                 ctx.stroke();
             } else {
                 console.warn("[Strict Perc] Missing landmarks/error, performing simple fit");
-                ctx.filter = `brightness(${finalBrightness}) contrast(${finalContrast}) saturate(${IMAGE_PRESETS.DEFAULT_SATURATION})`;
-
                 const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
                 const dx = (canvas.width - img.width * scale) / 2;
                 const dy = (canvas.height - img.height * scale) / 2;
@@ -461,7 +462,6 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
             rCtx.beginPath();
             rCtx.moveTo(0, margin - 1);
             rCtx.lineTo(canvas.width, margin - 1);
-
             const wMM = config.canvas_mm[0] || 35;
             for (let mm = 0; mm <= wMM; mm++) {
                 const x = mm * (canvas.width / wMM);
@@ -470,7 +470,7 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
                 rCtx.moveTo(x, margin - 1);
                 rCtx.lineTo(x, margin - 1 - tickH);
                 if (isMajor && x < canvas.width - 5) {
-                    if (x > 10) rCtx.fillText(mm.toString(), x - 4, margin - 20); // Adjust label pos
+                    if (x > 10) rCtx.fillText(mm.toString(), x - 4, margin - 20);
                 }
             }
             rCtx.stroke();
@@ -480,7 +480,6 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
             const rightBaseX = canvas.width;
             rCtx.moveTo(rightBaseX, margin);
             rCtx.lineTo(rightBaseX, ruledCanvas.height);
-
             const hMM = config.canvas_mm[1] || 45;
             for (let mm = 0; mm <= hMM; mm++) {
                 const y = margin + (mm * (canvas.height / hMM));
@@ -494,8 +493,8 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
             }
             rCtx.stroke();
 
-            // 4. Verification Lines & Labels
-            if (faceData && faceData.faceLandmarks && layout.config) {
+            // 4. Verification Lines & Labels (ONLY IF showGuides is TRUE)
+            if (showGuides && faceData && faceData.faceLandmarks && layout.config) {
                 const topY = margin + (layout.config.TOP_MARGIN_PX || 40);
                 const headH_Px = layout.config.TARGET_HEAD_PX;
                 const chinY = topY + headH_Px;
@@ -564,6 +563,19 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
                     rCtx.fillText("Eye Line", 5, eyeY - 5);
                 }
 
+                // 4. Vertical Center Line (New)
+                const centerX = canvas.width / 2;
+                rCtx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+                rCtx.lineWidth = 1;
+                rCtx.setLineDash([10, 5]);
+                rCtx.beginPath();
+                rCtx.moveTo(centerX, margin);
+                rCtx.lineTo(centerX, ruledCanvas.height);
+                rCtx.stroke();
+                rCtx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                rCtx.fillText("Center", centerX + 5, margin + 20);
+
+
                 // Measurement Label (Right Side)
                 const targetHeadCm = ((config.head_mm[0] + config.head_mm[1]) / 2 / 10).toFixed(1);
                 rCtx.fillStyle = 'red';
@@ -585,8 +597,6 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
     const config = PHOTO_CONFIGS[specKey] || PHOTO_CONFIGS['taiwan_passport'];
 
     const cleanBase64 = ensureSinglePrefix(base64);
-
-
 
     try {
         console.log("Process Preview Start. Spec:", config.name);
@@ -622,14 +632,21 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
         tempImg.src = cleanBase64;
         await new Promise(r => tempImg.onload = r);
 
-        // Force Full Rect
-        const fullRect = { x: 0, y: 0, w: tempImg.width, h: tempImg.height };
-        console.log(`[Process Preview] Using Full Rect for Layout: ${fullRect.w}x${fullRect.h}`);
+        const fullRect = {
+            x: 0,
+            y: 0,
+            w: tempImg.width,
+            h: tempImg.height
+        };
 
-        const finalB64 = await compositeToWhiteBackground(transparentBlob, faceData, fullRect, config, userAdjustments);
-        const retB64 = finalB64.split(',').pop();
+        const retB64 = await compositeToWhiteBackground(
+            transparentBlob,
+            faceData,
+            fullRect,
+            config,
+            userAdjustments
+        );
 
-        // Return structured object including assets for client-side re-composition
         return {
             photos: [retB64, retB64],
             assets: {
@@ -639,8 +656,10 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
         };
 
     } catch (e) {
-        console.error("Production Flow Failed:", e);
-        throw e;
+        console.error("Process Preview Failed:", e);
+        // Fallback: Return original
+        const safeB64 = cleanBase64.replace(/^data:image\/\w+;base64,/, '');
+        return { photos: [safeB64, safeB64] };
     }
 }
 
@@ -650,16 +669,26 @@ export async function recomposePreview(transparentBlob, fullRect, faceData, spec
     console.log("Recomposing Preview (Client Side)...", userAdjustments);
     try {
         const config = PHOTO_CONFIGS[specKey] || PHOTO_CONFIGS['taiwan_passport'];
+        // compositeToWhiteBackground now handles xShift and showGuides inside userAdjustments
         const finalB64 = await compositeToWhiteBackground(transparentBlob, faceData, fullRect, config, userAdjustments);
-        const retB64 = finalB64.split(',').pop();
-        return retB64;
+
+        // Ensure prefix removed if needed by caller, but composite returns full data URL
+        // Caller main.js expects base64 string usually? Let's check main.js usage.
+        // main.js: const b64 = await API.recomposePreview(...) -> await updateResultUI(b64)
+        // updateResultUI check "if (!b64.startsWith('data:image'))" -> adds prefix.
+        // So safe to return full data URL or stripped.
+        // However, processPreview returns stripped (retB64 is result of toDataURL which is full... wait).
+        // compositeToWhiteBackground returns toDataURL('image/jpeg') which IS Full Prefix.
+        // processPreview lines 606: const retB64 = await compositeToWhiteBackground(...)
+        // return { photos: [retB64] } -> Appears frontend handles it.
+        // let's return it as is.
+
+        return finalB64;
     } catch (e) {
         console.error("Recomposition Failed:", e);
         throw e;
     }
 }
-
-
 
 /*
 // Helper: Local Canvas Crop

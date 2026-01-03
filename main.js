@@ -166,29 +166,71 @@ async function handleFileUpload(e) {
                 // 2. Render Action Panel (Production vs Audit)
                 UI.renderActionPanel(runProductionPhase, runAuditPhase);
 
-                // [NEW] Head Scale Slider
+                // [NEW] Advanced Adjustment UI (User Request)
                 const actionPanel = document.getElementById('action-panel');
                 if (actionPanel) {
-                    const sliderContainer = document.createElement('div');
-                    sliderContainer.className = 'mt-3 p-3 bg-white border rounded shadow-sm';
-                    sliderContainer.innerHTML = `
-                        <label class="form-label fw-bold d-flex justify-content-between">
-                            <span>下巴距離倍數 (Multiplier)</span>
-                            <span id="head-scale-val" class="text-primary">1.2x</span>
-                        </label>
-                        <input type="range" class="form-range" id="head-scale-input" min="1.0" max="1.4" step="0.01" value="1.2">
-                        <div class="d-flex justify-content-between small text-muted">
-                            <span>1.0 (短臉/大頭)</span>
-                            <span>1.4 (長臉/小頭)</span>
+                    // 1. Create Control Container (Grid Layout)
+                    const adjustmentContainer = document.createElement('div');
+                    adjustmentContainer.className = 'mt-3 p-3 bg-white border rounded shadow-sm';
+
+                    // HTML Structure for Advanced Controls
+                    adjustmentContainer.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="m-0 fw-bold"><i class="bi bi-sliders"></i> 微調控制</h6>
+                            <button class="btn btn-sm btn-outline-secondary" id="toggle-guides-btn">
+                                <i class="bi bi-eye"></i> 顯示/隱藏規格標線
+                            </button>
+                        </div>
+
+                        <div class="row g-3">
+                            <!-- Vertical Slider (Scale) -->
+                            <div class="col-8 d-flex flex-column justify-content-center align-items-center" style="min-height: 200px; position: relative;">
+                                <!-- Image Preview Placeholder or Reference? -->
+                                <!-- The actual sliders are separate. Let's make a compact layout. -->
+                                <div class="text-center w-100">
+                                    <label class="form-label d-block fw-bold mb-2">水平調整 (X-Shift)</label>
+                                    <input type="range" class="form-range" id="x-shift-input" min="-50" max="50" step="1" value="0">
+                                    <div class="d-flex justify-content-between small text-muted">
+                                        <span>Left</span>
+                                        <span id="x-shift-val">0px</span>
+                                        <span>Right</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-4 d-flex flex-column align-items-center border-start">
+                                <label class="form-label fw-bold mb-2">縮放調整</label>
+                                <div style="height: 150px; display: flex; align-items: center;">
+                                    <!-- Vertical Slider Hack using CSS writing-mode -->
+                                    <input type="range" class="form-range" id="head-scale-input" min="1.0" max="1.4" step="0.01" value="1.2" 
+                                           style="writing-mode: vertical-lr; direction: rtl; vertical-align: bottom; width: 40px;">
+                                </div>
+                                <div class="mt-2 text-primary fw-bold" id="head-scale-val">1.2x</div>
+                                <small class="text-muted text-center" style="font-size: 0.75rem;">(小頭 - 大頭)</small>
+                            </div>
                         </div>
                      `;
+
                     // Insert after the primary button
                     const startBtn = document.getElementById('btn-start-production');
                     if (startBtn && startBtn.parentNode) {
-                        startBtn.parentNode.insertBefore(sliderContainer, startBtn.nextSibling);
+                        startBtn.parentNode.insertBefore(adjustmentContainer, startBtn.nextSibling);
                     }
 
-                    // Bind Event
+                    // --- Bind Events ---
+
+                    // 1. Guide Toggle
+                    const toggleBtn = document.getElementById('toggle-guides-btn');
+                    state.adjustments.showGuides = true; // Default
+                    if (toggleBtn) {
+                        toggleBtn.onclick = () => {
+                            state.adjustments.showGuides = !state.adjustments.showGuides;
+                            toggleBtn.className = state.adjustments.showGuides ? 'btn btn-sm btn-outline-primary' : 'btn btn-sm btn-outline-secondary';
+                            handleClientSideUpdate();
+                        };
+                    }
+
+                    // 2. Vertical Scale Slider
                     const scaleInput = document.getElementById('head-scale-input');
                     const scaleVal = document.getElementById('head-scale-val');
                     if (scaleInput) {
@@ -197,11 +239,20 @@ async function handleFileUpload(e) {
                             if (scaleVal) scaleVal.innerText = val.toFixed(2) + 'x';
                             state.adjustments.headScale = val;
                         };
-                        // Debounce / Trigger on change
-                        scaleInput.onchange = () => {
-                            console.log("Slider Change -> Client-Side Re-composition:", state.adjustments.headScale);
-                            handleClientSideUpdate();
+                        scaleInput.onchange = handleClientSideUpdate;
+                    }
+
+                    // 3. Horizontal Shift Slider
+                    const xShiftInput = document.getElementById('x-shift-input');
+                    const xShiftVal = document.getElementById('x-shift-val');
+                    state.adjustments.xShift = 0; // Default
+                    if (xShiftInput) {
+                        xShiftInput.oninput = (e) => {
+                            const val = parseInt(e.target.value);
+                            if (xShiftVal) xShiftVal.innerText = (val > 0 ? '+' : '') + val + 'px';
+                            state.adjustments.xShift = val;
                         };
+                        xShiftInput.onchange = handleClientSideUpdate;
                     }
                 }
 

@@ -1,8 +1,3 @@
-// js/photoGeometry.js - GEOMETRY SOLVER (CORRECTED)
-// 核心幾何計算引擎 (SSOT)
-// 負責將物理規格 (mm) 轉換為 Canvas 座標
-// 禁止在此檔案中引入任何 Canvas 上下文或濾鏡運算
-
 export function calculateUniversalLayout(
     landmarks,
     topY_Resized,
@@ -10,15 +5,16 @@ export function calculateUniversalLayout(
     currentImgH,
     config,
     actualSourceWidth,
-    chinRatio = 1.2 // Default to Proportional Model ratio 1.2
+    chinRatio = 1.2, // Default to Proportional Model ratio 1.2
+    xShift = 0       // Horizontal Shift (pixels)
 ) {
     const TARGET_HEAD_PX = 402;
     const CANVAS_W = 413;
     const CANVAS_H = 531;
+    const TARGET_TOP_MARGIN = 40;
 
     // 1. Stable inputs
     const eyeMidY_Global = (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
-
     const eyeMidY_In_Source = (eyeMidY_Global - cropRect.y) * (currentImgH / cropRect.h);
     const topY_In_Source = topY_Resized;
 
@@ -34,23 +30,33 @@ export function calculateUniversalLayout(
     // We want Estimated Head Height to be EXACTLY the Target Head Height (3.4cm / 402px)
     const finalScale = TARGET_HEAD_PX / estimatedHeadH_Src;
 
-    // Check expectation (scale should be reasonable)
+    // Check expectation
     const expectedRange = (finalScale >= 0.5 && finalScale <= 1.5);
     if (!expectedRange) {
         console.warn(`[GEOMETRY WARNING] Scale ${finalScale.toFixed(4)} outside usual range.`);
     }
 
-    // 4. Positioning
-    // Fixed Top Margin rule: Top of head must be exactly at Y=40
-    const drawY = 40 - (topY_In_Source * finalScale);
+    // 4. Positioning (Eye Pivot Logic)
+    // Old Logic: Fixed Top at 40px
+    // New Logic: Fixed Eye Center at Standard Y
+    // Standard Model: HeadH=402, Ratio=1.2 => N_std = 402 / 2.2 = 182.7px
+    // Standard Eye Y = TARGET_TOP_MARGIN (40) + N_std (182.7) ≈ 222.7px
+    const N_std = TARGET_HEAD_PX / 2.2;
+    const TARGET_EYE_Y = TARGET_TOP_MARGIN + N_std;
 
-    // Horizontal Center
-    const sourceWidth = actualSourceWidth || (750 * (currentImgH / 1000)); // Fallback if unknown
+    // DrawY = TargetEyeY - (SourceEyeY * Scale)
+    const drawY = TARGET_EYE_Y - (eyeMidY_In_Source * finalScale);
+
+    // Horizontal Center + Shift
+    const sourceWidth = actualSourceWidth || (750 * (currentImgH / 1000));
     const drawnWidth = sourceWidth * finalScale;
-    const drawX = (413 - drawnWidth) / 2;
+    let drawX = (CANVAS_W - drawnWidth) / 2;
 
-    console.log(`[GEOMETRY PROPORTIONAL] N=${N.toFixed(1)}px, Ratio=${chinRatio}, HeadH_Src=${estimatedHeadH_Src.toFixed(1)}`);
-    console.log(`[GEOMETRY PROPORTIONAL] TargetHead=${TARGET_HEAD_PX}, FinalScale=${finalScale.toFixed(4)}`);
+    // Apply User Horizontal Shift
+    drawX += xShift;
+
+    console.log(`[GEOMETRY] N=${N.toFixed(1)}, Ratio=${chinRatio}, Scale=${finalScale.toFixed(4)}`);
+    console.log(`[GEOMETRY] Pivot EyeY=${TARGET_EYE_Y.toFixed(1)}, DrawY=${drawY.toFixed(1)}, XShift=${xShift}`);
 
     return {
         scale: finalScale,
@@ -59,7 +65,7 @@ export function calculateUniversalLayout(
         canvasW: CANVAS_W,
         canvasH: CANVAS_H,
         config: {
-            TOP_MARGIN_PX: 40,
+            TOP_MARGIN_PX: TARGET_TOP_MARGIN,
             TARGET_HEAD_PX: TARGET_HEAD_PX,
             CANVAS_W: CANVAS_W,
             CANVAS_H: CANVAS_H
@@ -67,7 +73,8 @@ export function calculateUniversalLayout(
         debug: {
             N: N,
             chinRatio: chinRatio,
-            finalScale: finalScale
+            finalScale: finalScale,
+            xShift: xShift
         }
     };
 }
