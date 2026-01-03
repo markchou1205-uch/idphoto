@@ -435,14 +435,13 @@ function injectAdvancedControls() {
             </button>
         `;
 
-        const controlsDiv = document.createElement('div');
-        controlsDiv.innerHTML = vSliderHtml + hSliderHtml + toggleHtml;
+        // Append HTML to Overlay
+        overlay.innerHTML = vSliderHtml + hSliderHtml + toggleHtml;
 
-        while (controlsDiv.firstChild) {
-            imageWrapper.appendChild(controlsDiv.firstChild);
-        }
+        // Append Overlay to Wrapper
+        imageWrapper.appendChild(overlay);
 
-        console.log("[Debug] injectAdvancedControls: Controls appended.");
+        console.log("[Debug] injectAdvancedControls: Controls appended to overlay, and overlay to wrapper.");
 
         // --- Bind Events ---
 
