@@ -558,7 +558,18 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
         const transparentBlob = await (await fetch(`data:image/png;base64,${base64Data}`)).blob();
 
         // 3. Composite
-        const cropRect = cropParams || { x: 0, y: 0, w: cleanBase64.length, h: cleanBase64.length };
+        let cropRect = cropParams;
+
+        // Critical Fix: If cropParams is missing, we MUST get actual image dimensions.
+        // cleanBase64.length is NOT the width/height.
+        if (!cropRect) {
+            console.log("[Process Preview] cropParams missing, fetching original dimensions...");
+            const tempImg = new Image();
+            tempImg.src = cleanBase64;
+            await new Promise(r => tempImg.onload = r);
+            cropRect = { x: 0, y: 0, w: tempImg.width, h: tempImg.height };
+            console.log(`[Process Preview] Fallback CropRect: ${cropRect.w}x${cropRect.h}`);
+        }
 
         const finalB64 = await compositeToWhiteBackground(transparentBlob, faceData, cropRect, config, userAdjustments);
         const retB64 = finalB64.split(',').pop();
