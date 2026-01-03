@@ -9,7 +9,8 @@ export function calculateUniversalLayout(
     cropRect,
     currentImgH,
     config,
-    actualSourceWidth
+    actualSourceWidth,
+    targetEyeLineDistance = 215 // Default to standard 215px
 ) {
     const TARGET_HEAD_PX = 402;
     const CANVAS_W = 413;
@@ -26,14 +27,14 @@ export function calculateUniversalLayout(
     // N = Distance from Hair Top to Pupil Midpoint in Source Pixels
     const N = eyeMidY_In_Source - topY_In_Source;
 
-    // We want N (Hair to Eyes) to be EXACTLY 215px on the final canvas.
-    // This forces the head to enlarge correctly to meet the 3.4cm requirement.
-    const finalScale = 215 / N;
+    // We want N (Hair to Eyes) to be EXACTLY the Target Distance on the final canvas.
+    // Default is 215px (1.82cm), but user can adjust this via slider (e.g. 180-250px).
+    const finalScale = targetEyeLineDistance / N;
 
     // Check expectation (User expects 0.86-0.90 for this image)
-    const expectedRange = (finalScale >= 0.8 && finalScale <= 1.0);
+    const expectedRange = (finalScale >= 0.5 && finalScale <= 1.5); // Relaxed range for manual override
     if (!expectedRange) {
-        console.warn(`[GEOMETRY WARNING] Scale ${finalScale.toFixed(4)} outside expected 0.8-1.0 range.`);
+        console.warn(`[GEOMETRY WARNING] Scale ${finalScale.toFixed(4)} outside usual range.`);
     }
 
     // 4. Positioning
@@ -46,7 +47,7 @@ export function calculateUniversalLayout(
     const drawX = (413 - drawnWidth) / 2;
 
     console.log(`[GEOMETRY OVERRIDE] N=${N.toFixed(1)}px (Src)`);
-    console.log(`[GEOMETRY OVERRIDE] Target N=215px, FinalScale=${finalScale.toFixed(4)}`);
+    console.log(`[GEOMETRY OVERRIDE] Target N=${targetEyeLineDistance}px, FinalScale=${finalScale.toFixed(4)}`);
 
     return {
         scale: finalScale,

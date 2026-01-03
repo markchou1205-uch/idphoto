@@ -100,7 +100,7 @@ async function handleFileUpload(e) {
         console.log("HEIC file detected. Starting conversion...");
         // Show loading state if possible or just log
         if (window.updateAILoading) window.updateAILoading("正在轉換 HEIC 照片...");
-        
+
         try {
             if (!window.heic2any) {
                 throw new Error("heic2any library not loaded");
@@ -115,10 +115,10 @@ async function handleFileUpload(e) {
             console.log("HEIC conversion successful.");
             // heic2any can return a Blob or an array of Blobs. We take the first one if array.
             const finalBlob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
-            
+
             // Create a new file object or just use the blob for FileReader
             // We'll treat it as the "file" for the rest of the flow
-            file = finalBlob; 
+            file = finalBlob;
 
         } catch (err) {
             console.error("HEIC Conversion Failed:", err);
@@ -165,6 +165,44 @@ async function handleFileUpload(e) {
 
                 // 2. Render Action Panel (Production vs Audit)
                 UI.renderActionPanel(runProductionPhase, runAuditPhase);
+
+                // [NEW] Head Scale Slider
+                const actionPanel = document.getElementById('action-panel');
+                if (actionPanel) {
+                    const sliderContainer = document.createElement('div');
+                    sliderContainer.className = 'mt-3 p-3 bg-white border rounded shadow-sm';
+                    sliderContainer.innerHTML = `
+                        <label class="form-label fw-bold d-flex justify-content-between">
+                            <span>頭部大小調整 (頭頂-眼睛距離)</span>
+                            <span id="head-scale-val" class="text-primary">215px</span>
+                        </label>
+                        <input type="range" class="form-range" id="head-scale-input" min="180" max="250" step="1" value="215">
+                        <div class="d-flex justify-content-between small text-muted">
+                            <span>更大 (180)</span>
+                            <span>更小 (250)</span>
+                        </div>
+                     `;
+                    // Insert after the primary button
+                    if (startBtn && startBtn.parentNode) {
+                        startBtn.parentNode.insertBefore(sliderContainer, startBtn.nextSibling);
+                    }
+
+                    // Bind Event
+                    const scaleInput = document.getElementById('head-scale-input');
+                    const scaleVal = document.getElementById('head-scale-val');
+                    if (scaleInput) {
+                        scaleInput.oninput = (e) => {
+                            const val = parseInt(e.target.value);
+                            if (scaleVal) scaleVal.innerText = val + 'px';
+                            state.adjustments.headScale = val;
+                        };
+                        // Debounce / Trigger on change
+                        scaleInput.onchange = () => {
+                            console.log("Slider Change -> Re-running production with HeadScale:", state.adjustments.headScale);
+                            runProductionPhase();
+                        };
+                    }
+                }
 
                 // 3. Show Original Image Preview
                 const previewImg = document.getElementById('main-preview-img');

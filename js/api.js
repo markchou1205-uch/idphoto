@@ -346,13 +346,18 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
                 try {
                     if (faceData && faceData.faceLandmarks && cropRect) {
                         // SSOT: Calculate Universal Layout
+                        // Allow override of Target N from user adjustments (Head Scale Slider)
+                        // Default to 215 if not provided
+                        const targetN = userAdjustments && userAdjustments.headScale ? userAdjustments.headScale : 215;
+
                         layout = calculateUniversalLayout(
                             faceData.faceLandmarks,
                             topY_Resized,
-                            cropRect,
+                            fullRect, // Always use full rect
                             img.height,
                             config,
-                            img.width // actualSourceWidth
+                            img.width, // actualSourceWidth
+                            targetN // Pass dynamic target  
                         );
 
                         // DEBUG REQUESTED BY USER
@@ -526,13 +531,18 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
                     // So EyeY = topY + (layout.debug.N * layout.scale)
                     if (layout.debug && layout.debug.N) {
                         const eyeY = topY + (layout.debug.N * layout.scale);
+
+                        console.log(`[Visual Debug] Drawing Eye Line at Y=${eyeY.toFixed(1)} (TopY=${topY}, N=${layout.debug.N}, Scale=${layout.scale})`);
+
                         rCtx.beginPath();
-                        rCtx.strokeStyle = 'red';
-                        rCtx.lineWidth = 1;
-                        rCtx.setLineDash([2, 4]); // Dotted line
-                        rCtx.moveTo(0, eyeY); // Draw across entire photo
+                        rCtx.strokeStyle = 'blue'; // Changed to Blue for visibility
+                        rCtx.lineWidth = 2;        // Thicker
+                        rCtx.setLineDash([5, 3]);
+                        rCtx.moveTo(0, eyeY);
                         rCtx.lineTo(canvas.width, eyeY);
                         rCtx.stroke();
+                    } else {
+                        console.warn("[Visual Debug] Cannot draw eye line: missing layout.debug.N");
                     }
                     // -------------------------------------------------------
 
