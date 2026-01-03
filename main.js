@@ -583,7 +583,36 @@ async function updateResultUI(b64) {
     // 5. Show Download Options
     const specData = DEFAULT_SPECS[state.spec];
     // UI.showAuditSuccess(state.processedImage, state.faceData, null); // REMOVED: This wipes the DOM and destroys controls!
-    UI.showDownloadOptions(b64, specData);
+
+    // Custom Callback for 4x2: Ensure Clean Image (No Guides)
+    const handle4x2Click = async () => {
+        console.log("[Debug] 4x2 Clicked. Preparing Clean Image...");
+        let cleanB64 = state.processedImage;
+
+        // If guides are ON, we need to regenerate a clean version for printing
+        if (state.adjustments.showGuides) {
+            console.log("[Debug] Guides are ON. Regenerating without guides for print...");
+            // Create a temp adjustments object
+            const cleanAdjustments = { ...state.adjustments, showGuides: false };
+            try {
+                if (state.assets && state.assets.transparentBlob) {
+                    cleanB64 = await API.recomposePreview(
+                        state.assets.transparentBlob,
+                        state.assets.fullRect,
+                        state.faceData,
+                        state.spec,
+                        cleanAdjustments
+                    );
+                }
+            } catch (e) {
+                console.warn("Failed to generate clean image for 4x2, using current:", e);
+            }
+        }
+
+        await UI.show4x2Preview(cleanB64, specData);
+    };
+
+    UI.showDownloadOptions(b64, specData, handle4x2Click);
     UI.updateToReuploadMode();
     UI.setAuditButtonRed();
 }
