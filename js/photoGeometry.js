@@ -10,12 +10,11 @@ export function calculateUniversalLayout(
     currentImgH,
     config,
     actualSourceWidth,
-    targetEyeLineDistance = 190 // Default to optimized 190px
+    chinRatio = 1.2 // Default to Proportional Model ratio 1.2
 ) {
     const TARGET_HEAD_PX = 402;
     const CANVAS_W = 413;
     const CANVAS_H = 531;
-    // const TOP_MARGIN = 40; // No longer used as a loose variable, integrated into calculation
 
     // 1. Stable inputs
     const eyeMidY_Global = (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
@@ -23,16 +22,20 @@ export function calculateUniversalLayout(
     const eyeMidY_In_Source = (eyeMidY_Global - cropRect.y) * (currentImgH / cropRect.h);
     const topY_In_Source = topY_Resized;
 
-    // 2. Physical Override Logic (Fixed Segment Scaling)
+    // 2. Proportional Model Logic
     // N = Distance from Hair Top to Pupil Midpoint in Source Pixels
     const N = eyeMidY_In_Source - topY_In_Source;
 
-    // We want N (Hair to Eyes) to be EXACTLY the Target Distance on the final canvas.
-    // Default is 215px (1.82cm), but user can adjust this via slider (e.g. 180-250px).
-    const finalScale = targetEyeLineDistance / N;
+    // Head Height Formulation: HeadH = TopToEye + EyeToChin
+    // User Thesis: EyeToChin = TopToEye * Ratio (Default 1.2)
+    const estimatedHeadH_Src = N * (1 + chinRatio);
 
-    // Check expectation (User expects 0.86-0.90 for this image)
-    const expectedRange = (finalScale >= 0.5 && finalScale <= 1.5); // Relaxed range for manual override
+    // 3. Scaling
+    // We want Estimated Head Height to be EXACTLY the Target Head Height (3.4cm / 402px)
+    const finalScale = TARGET_HEAD_PX / estimatedHeadH_Src;
+
+    // Check expectation (scale should be reasonable)
+    const expectedRange = (finalScale >= 0.5 && finalScale <= 1.5);
     if (!expectedRange) {
         console.warn(`[GEOMETRY WARNING] Scale ${finalScale.toFixed(4)} outside usual range.`);
     }
@@ -46,8 +49,8 @@ export function calculateUniversalLayout(
     const drawnWidth = sourceWidth * finalScale;
     const drawX = (413 - drawnWidth) / 2;
 
-    console.log(`[GEOMETRY OVERRIDE] N=${N.toFixed(1)}px (Src)`);
-    console.log(`[GEOMETRY OVERRIDE] Target N=${targetEyeLineDistance}px, FinalScale=${finalScale.toFixed(4)}`);
+    console.log(`[GEOMETRY PROPORTIONAL] N=${N.toFixed(1)}px, Ratio=${chinRatio}, HeadH_Src=${estimatedHeadH_Src.toFixed(1)}`);
+    console.log(`[GEOMETRY PROPORTIONAL] TargetHead=${TARGET_HEAD_PX}, FinalScale=${finalScale.toFixed(4)}`);
 
     return {
         scale: finalScale,
@@ -63,6 +66,7 @@ export function calculateUniversalLayout(
         },
         debug: {
             N: N,
+            chinRatio: chinRatio,
             finalScale: finalScale
         }
     };

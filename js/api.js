@@ -339,9 +339,9 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
             try {
                 if (faceData && faceData.faceLandmarks && fullRect) {
                     // SSOT: Calculate Universal Layout
-                    // Allow override of Target N from user adjustments (Head Scale Slider)
-                    // Default to 190 if not provided
-                    const targetN = userAdjustments && userAdjustments.headScale ? userAdjustments.headScale : 190;
+                    // Allow override of Chin Ratio from user adjustments (Head Scale Slider)
+                    // Default to 1.2 if not provided (Proportional Model)
+                    const chinRatio = userAdjustments && userAdjustments.headScale ? userAdjustments.headScale : 1.2;
 
                     layout = calculateUniversalLayout(
                         faceData.faceLandmarks,
@@ -350,7 +350,7 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
                         img.height,
                         config,
                         img.width, // actualSourceWidth
-                        targetN // Pass dynamic target  
+                        chinRatio // Pass dynamic ratio  
                     );
 
                     // DEBUG REQUESTED BY USER
@@ -360,7 +360,7 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
                     // === GEOMETRY DEBUG (Clean) ===
                     console.log(`[Universal Layout] Scale: ${layout.scale.toFixed(4)}, X: ${layout.x.toFixed(1)}, Y: ${layout.y.toFixed(1)}`);
                     if (layout.debug) {
-                        console.log(`[Solver Debug] N: ${layout.debug.N?.toFixed(1)}, Target N: 215px`);
+                        console.log(`[Solver Debug] N: ${layout.debug.N?.toFixed(1)}, Ratio: ${layout.debug.chinRatio}, HeadH_Src: ${(layout.debug.N * (1 + layout.debug.chinRatio)).toFixed(1)}`);
                     }
 
 
@@ -494,55 +494,51 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
             }
             rCtx.stroke();
 
-            // 4. Red Verification Lines (If detection enabled)
+            // 4. Verification Lines & Labels
             if (faceData && faceData.faceLandmarks && layout.config) {
                 const topY = margin + (layout.config.TOP_MARGIN_PX || 40);
                 const headH_Px = layout.config.TARGET_HEAD_PX;
                 const chinY = topY + headH_Px;
 
-                rCtx.strokeStyle = 'red';
+                // Common Styles
                 rCtx.lineWidth = 2;
-                rCtx.setLineDash([5, 5]);
+                rCtx.font = 'bold 12px Arial';
+                rCtx.setLineDash([5, 3]);
 
-                // Hair Top Line (Only on Right Ruler)
+                // 1. Head Top Line (Green) - Fixed Anchor
+                rCtx.strokeStyle = '#00CC00'; // Green
+                rCtx.fillStyle = '#00CC00';
                 rCtx.beginPath();
-                rCtx.moveTo(canvas.width, topY);
+                rCtx.moveTo(0, topY);
                 rCtx.lineTo(ruledCanvas.width, topY);
                 rCtx.stroke();
+                rCtx.fillText("Head Top", 5, topY - 5);
 
-                // Chin Line (Only on Right Ruler)
+                // 2. Calculated Chin Line (Red) - Target Anchor
+                // The algorithm scales the image so the calculated chin hits this line.
+                rCtx.strokeStyle = '#FF0000'; // Red
+                rCtx.fillStyle = '#FF0000';
                 rCtx.beginPath();
-                rCtx.moveTo(canvas.width, chinY);
+                rCtx.moveTo(0, chinY);
                 rCtx.lineTo(ruledCanvas.width, chinY);
                 rCtx.stroke();
+                rCtx.fillText("Calculated Chin", 5, chinY - 5);
 
-                // --- New: Eye Line Visualization (Requested by User) ---
-                // Calculate Eye Y on Final Canvas
-                // N (Src) = EyeY(Src) - TopY(Src)
-                // EyeY(Final) = DrawY + (EyeY(Src) * Scale) ... easier: TopY(Final) + Scaled N
-                // TopY(Final) is 40 + margin (topY variable above)
-                // So EyeY = topY + (layout.debug.N * layout.scale)
+                // 3. Eye Line (Blue) - Moving Indicator
                 if (layout.debug && layout.debug.N) {
                     const eyeY = topY + (layout.debug.N * layout.scale);
-
-                    console.log(`[Visual Debug] Drawing Eye Line at Y=${eyeY.toFixed(1)} (TopY=${topY}, N=${layout.debug.N}, Scale=${layout.scale})`);
-
+                    rCtx.strokeStyle = '#0000FF'; // Blue
+                    rCtx.fillStyle = '#0000FF';
                     rCtx.beginPath();
-                    rCtx.strokeStyle = 'blue'; // Changed to Blue for visibility
-                    rCtx.lineWidth = 2;        // Thicker
-                    rCtx.setLineDash([5, 3]);
                     rCtx.moveTo(0, eyeY);
-                    rCtx.lineTo(canvas.width, eyeY);
+                    rCtx.lineTo(ruledCanvas.width, eyeY);
                     rCtx.stroke();
-                } else {
-                    console.warn("[Visual Debug] Cannot draw eye line: missing layout.debug.N");
+                    rCtx.fillText("Eye Line", 5, eyeY - 5);
                 }
-                // -------------------------------------------------------
 
-                // Measurement Label
+                // Measurement Label (Right Side)
                 const targetHeadCm = ((config.head_mm[0] + config.head_mm[1]) / 2 / 10).toFixed(1);
                 rCtx.fillStyle = 'red';
-                rCtx.font = 'bold 12px Arial';
                 rCtx.setLineDash([]);
                 rCtx.fillText(`${targetHeadCm} cm`, canvas.width + 5, topY + (headH_Px / 2));
             }

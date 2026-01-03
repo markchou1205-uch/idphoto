@@ -173,13 +173,13 @@ async function handleFileUpload(e) {
                     sliderContainer.className = 'mt-3 p-3 bg-white border rounded shadow-sm';
                     sliderContainer.innerHTML = `
                         <label class="form-label fw-bold d-flex justify-content-between">
-                            <span>頭部大小調整 (頭頂-眼睛距離)</span>
-                            <span id="head-scale-val" class="text-primary">190px</span>
+                            <span>下巴距離倍數 (Multiplier)</span>
+                            <span id="head-scale-val" class="text-primary">1.2x</span>
                         </label>
-                        <input type="range" class="form-range" id="head-scale-input" min="180" max="250" step="1" value="190">
+                        <input type="range" class="form-range" id="head-scale-input" min="1.0" max="1.4" step="0.01" value="1.2">
                         <div class="d-flex justify-content-between small text-muted">
-                            <span>更大 (180)</span>
-                            <span>更小 (250)</span>
+                            <span>1.0 (短臉/大頭)</span>
+                            <span>1.4 (長臉/小頭)</span>
                         </div>
                      `;
                     // Insert after the primary button
@@ -193,8 +193,8 @@ async function handleFileUpload(e) {
                     const scaleVal = document.getElementById('head-scale-val');
                     if (scaleInput) {
                         scaleInput.oninput = (e) => {
-                            const val = parseInt(e.target.value);
-                            if (scaleVal) scaleVal.innerText = val + 'px';
+                            const val = parseFloat(e.target.value);
+                            if (scaleVal) scaleVal.innerText = val.toFixed(2) + 'x';
                             state.adjustments.headScale = val;
                         };
                         // Debounce / Trigger on change
