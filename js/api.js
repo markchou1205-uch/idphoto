@@ -326,6 +326,235 @@ async function prepareImageForUpload(base64) {
     }
 }
 
+// Helper: Composite with Physics Normalization + Lighting Compensation
+async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, config, userAdjustments) {
+    const topY_Resized = await getTopPixelY(transparentBlob);
+
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(transparentBlob);
+
+        img.onload = () => {
+            let layout;
+            try {
+                if (faceData && faceData.faceLandmarks && fullRect) {
+                    // SSOT: Calculate Universal Layout
+                    // Allow override of Target N from user adjustments (Head Scale Slider)
+                    // Default to 215 if not provided
+                    const targetN = userAdjustments && userAdjustments.headScale ? userAdjustments.headScale : 215;
+
+                    layout = calculateUniversalLayout(
+                        faceData.faceLandmarks,
+                        topY_Resized,
+                        fullRect, // Always use full rect
+                        img.height,
+                        config,
+                        img.width, // actualSourceWidth
+                        targetN // Pass dynamic target  
+                    );
+
+                    // DEBUG REQUESTED BY USER
+                    console.log("DEBUG: Scaling Image Height", img.height, "with Scale", layout.scale, "Final Scale:", layout.scale);
+
+                    // === COMPREHENSIVE DEBUG LOGGING ===
+                    // === GEOMETRY DEBUG (Clean) ===
+                    console.log(`[Universal Layout] Scale: ${layout.scale.toFixed(4)}, X: ${layout.x.toFixed(1)}, Y: ${layout.y.toFixed(1)}`);
+                    if (layout.debug) {
+                        console.log(`[Solver Debug] N: ${layout.debug.N?.toFixed(1)}, Target N: 215px`);
+                    }
+
+
+
+                    // Self-Verification Log
+                    const mmToPx = 300 / 25.4;
+                    const targetedHeadPx = ((config.head_mm[0] + config.head_mm[1]) / 2) * mmToPx;
+                    console.log(`[驗證] Target Head Px: ${targetedHeadPx.toFixed(1)}`);
+                } else {
+                    // Fallback Configuration
+                    const DPI = 300;
+                    const MM_TO_PX = DPI / 25.4;
+                    const tW = Math.round(config.canvas_mm[0] * MM_TO_PX);
+                    const tH = Math.round(config.canvas_mm[1] * MM_TO_PX);
+                    layout = { scale: 1, x: 0, y: 0, canvasW: tW, canvasH: tH };
+                }
+            } catch (e) {
+                console.error("Layout Calc Failed", e);
+                // Legacy SpecData Fallback
+                const DPI = 300;
+                const MM_TO_PX = DPI / 25.4;
+                const tW = Math.round(config.canvas_mm[0] * MM_TO_PX);
+                const tH = Math.round(config.canvas_mm[1] * MM_TO_PX);
+                layout = {
+                    scale: 1, x: 0, y: 0, canvasW: tW, canvasH: tH,
+                    config: { TOP_MARGIN_PX: 0, TARGET_HEAD_PX: 0 }
+                };
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = layout.canvasW;
+            canvas.height = layout.canvasH;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // --- Apply Lighting Filters (New) ---
+            const { brightness = 1, contrast = 1 } = userAdjustments;
+            const finalBrightness = IMAGE_PRESETS.DEFAULT_BRIGHTNESS * brightness;
+            const finalContrast = IMAGE_PRESETS.DEFAULT_CONTRAST * contrast;
+            // Note: Brightness/Contrast/Saturate standard Web filters
+            ctx.filter = `brightness(${finalBrightness}) contrast(${finalContrast}) saturate(${IMAGE_PRESETS.DEFAULT_SATURATION})`;
+            // ------------------------------------
+
+            if (faceData && faceData.faceLandmarks && fullRect && layout.scale !== 1) {
+                ctx.drawImage(img, layout.x, layout.y, img.width * layout.scale, img.height * layout.scale);
+
+                // [Must-Do Debugging] Step 2: Visual Anchor
+                ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([]);
+
+                // Line 1: Top Anchor at Y=40 (Target margin)
+                ctx.beginPath();
+                ctx.moveTo(0, 40);
+                ctx.lineTo(layout.canvasW, 40);
+                ctx.stroke();
+
+                // Line 2: Chin Anchor at Y=442 (Target 40 + 402px Head Height)
+                ctx.beginPath();
+                ctx.moveTo(0, 442);
+                ctx.lineTo(layout.canvasW, 442);
+                ctx.stroke();
+            } else {
+                console.warn("[Strict Perc] Missing landmarks/error, performing simple fit");
+                ctx.filter = `brightness(${finalBrightness}) contrast(${finalContrast}) saturate(${IMAGE_PRESETS.DEFAULT_SATURATION})`;
+
+                const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+                const dx = (canvas.width - img.width * scale) / 2;
+                const dy = (canvas.height - img.height * scale) / 2;
+                ctx.drawImage(img, dx, dy, img.width * scale, img.height * scale);
+            }
+
+            ctx.filter = 'none'; // Reset for Rulers
+
+            // --- Add Rulers & Guides (User Verification) ---
+            const margin = 60; // 尺標預留空間
+            const ruledCanvas = document.createElement('canvas');
+            ruledCanvas.width = canvas.width + margin;
+            ruledCanvas.height = canvas.height + margin;
+            const rCtx = ruledCanvas.getContext('2d');
+
+            // 1. Fill White Background
+            rCtx.fillStyle = '#FFFFFF';
+            rCtx.fillRect(0, 0, ruledCanvas.width, ruledCanvas.height);
+
+            // 2. Draw Original Photo (Offset Y by margin)
+            rCtx.drawImage(canvas, 0, margin);
+
+            // 3. Draw Rulers
+            rCtx.strokeStyle = '#000000';
+            rCtx.fillStyle = '#000000';
+            rCtx.font = '12px Arial';
+            rCtx.lineWidth = 1;
+
+            // A. Top Ruler (Horizontal)
+            rCtx.beginPath();
+            rCtx.moveTo(0, margin - 1);
+            rCtx.lineTo(canvas.width, margin - 1);
+
+            const wMM = config.canvas_mm[0] || 35;
+            for (let mm = 0; mm <= wMM; mm++) {
+                const x = mm * (canvas.width / wMM);
+                const isMajor = (mm % 5 === 0);
+                const tickH = isMajor ? 15 : 8;
+                rCtx.moveTo(x, margin - 1);
+                rCtx.lineTo(x, margin - 1 - tickH);
+                if (isMajor && x < canvas.width - 5) {
+                    if (x > 10) rCtx.fillText(mm.toString(), x - 4, margin - 20); // Adjust label pos
+                }
+            }
+            rCtx.stroke();
+
+            // B. Right Ruler (Vertical)
+            rCtx.beginPath();
+            const rightBaseX = canvas.width;
+            rCtx.moveTo(rightBaseX, margin);
+            rCtx.lineTo(rightBaseX, ruledCanvas.height);
+
+            const hMM = config.canvas_mm[1] || 45;
+            for (let mm = 0; mm <= hMM; mm++) {
+                const y = margin + (mm * (canvas.height / hMM));
+                const isMajor = (mm % 5 === 0);
+                const tickW = isMajor ? 15 : 8;
+                rCtx.moveTo(rightBaseX, y);
+                rCtx.lineTo(rightBaseX + tickW, y);
+                if (isMajor && y < ruledCanvas.height - 5) {
+                    rCtx.fillText(mm.toString(), rightBaseX + 20, y + 4);
+                }
+            }
+            rCtx.stroke();
+
+            // 4. Red Verification Lines (If detection enabled)
+            if (faceData && faceData.faceLandmarks && layout.config) {
+                const topY = margin + (layout.config.TOP_MARGIN_PX || 40);
+                const headH_Px = layout.config.TARGET_HEAD_PX;
+                const chinY = topY + headH_Px;
+
+                rCtx.strokeStyle = 'red';
+                rCtx.lineWidth = 2;
+                rCtx.setLineDash([5, 5]);
+
+                // Hair Top Line (Only on Right Ruler)
+                rCtx.beginPath();
+                rCtx.moveTo(canvas.width, topY);
+                rCtx.lineTo(ruledCanvas.width, topY);
+                rCtx.stroke();
+
+                // Chin Line (Only on Right Ruler)
+                rCtx.beginPath();
+                rCtx.moveTo(canvas.width, chinY);
+                rCtx.lineTo(ruledCanvas.width, chinY);
+                rCtx.stroke();
+
+                // --- New: Eye Line Visualization (Requested by User) ---
+                // Calculate Eye Y on Final Canvas
+                // N (Src) = EyeY(Src) - TopY(Src)
+                // EyeY(Final) = DrawY + (EyeY(Src) * Scale) ... easier: TopY(Final) + Scaled N
+                // TopY(Final) is 40 + margin (topY variable above)
+                // So EyeY = topY + (layout.debug.N * layout.scale)
+                if (layout.debug && layout.debug.N) {
+                    const eyeY = topY + (layout.debug.N * layout.scale);
+
+                    console.log(`[Visual Debug] Drawing Eye Line at Y=${eyeY.toFixed(1)} (TopY=${topY}, N=${layout.debug.N}, Scale=${layout.scale})`);
+
+                    rCtx.beginPath();
+                    rCtx.strokeStyle = 'blue'; // Changed to Blue for visibility
+                    rCtx.lineWidth = 2;        // Thicker
+                    rCtx.setLineDash([5, 3]);
+                    rCtx.moveTo(0, eyeY);
+                    rCtx.lineTo(canvas.width, eyeY);
+                    rCtx.stroke();
+                } else {
+                    console.warn("[Visual Debug] Cannot draw eye line: missing layout.debug.N");
+                }
+                // -------------------------------------------------------
+
+                // Measurement Label
+                const targetHeadCm = ((config.head_mm[0] + config.head_mm[1]) / 2 / 10).toFixed(1);
+                rCtx.fillStyle = 'red';
+                rCtx.font = 'bold 12px Arial';
+                rCtx.setLineDash([]);
+                rCtx.fillText(`${targetHeadCm} cm`, canvas.width + 5, topY + (headH_Px / 2));
+            }
+
+            resolve(ruledCanvas.toDataURL('image/jpeg', 0.95));
+            URL.revokeObjectURL(url);
+        };
+        img.onerror = (e) => reject(e);
+        img.src = url;
+    });
+}
+
 // 2. Process Preview (Optimized: Local Crop + Direct Vercel)
 export async function processPreview(base64, cropParams, faceData = null, specKey = 'taiwan_passport', userAdjustments = {}) {
     // 1. Resolve Spec Config
@@ -333,234 +562,7 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
 
     const cleanBase64 = ensureSinglePrefix(base64);
 
-    // Helper: Composite with Physics Normalization + Lighting Compensation
-    async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, config, userAdjustments) {
-        const topY_Resized = await getTopPixelY(transparentBlob);
 
-        return new Promise((resolve, reject) => {
-            const img = new Image();
-            const url = URL.createObjectURL(transparentBlob);
-
-            img.onload = () => {
-                let layout;
-                try {
-                    if (faceData && faceData.faceLandmarks && fullRect) {
-                        // SSOT: Calculate Universal Layout
-                        // Allow override of Target N from user adjustments (Head Scale Slider)
-                        // Default to 215 if not provided
-                        const targetN = userAdjustments && userAdjustments.headScale ? userAdjustments.headScale : 215;
-
-                        layout = calculateUniversalLayout(
-                            faceData.faceLandmarks,
-                            topY_Resized,
-                            fullRect, // Always use full rect
-                            img.height,
-                            config,
-                            img.width, // actualSourceWidth
-                            targetN // Pass dynamic target  
-                        );
-
-                        // DEBUG REQUESTED BY USER
-                        console.log("DEBUG: Scaling Image Height", img.height, "with Scale", layout.scale, "Final Scale:", layout.scale);
-
-                        // === COMPREHENSIVE DEBUG LOGGING ===
-                        // === GEOMETRY DEBUG (Clean) ===
-                        console.log(`[Universal Layout] Scale: ${layout.scale.toFixed(4)}, X: ${layout.x.toFixed(1)}, Y: ${layout.y.toFixed(1)}`);
-                        if (layout.debug) {
-                            console.log(`[Solver Debug] N: ${layout.debug.N?.toFixed(1)}, Target N: 215px`);
-                        }
-
-
-
-                        // Self-Verification Log
-                        const mmToPx = 300 / 25.4;
-                        const targetedHeadPx = ((config.head_mm[0] + config.head_mm[1]) / 2) * mmToPx;
-                        console.log(`[驗證] Target Head Px: ${targetedHeadPx.toFixed(1)}`);
-                    } else {
-                        // Fallback Configuration
-                        const DPI = 300;
-                        const MM_TO_PX = DPI / 25.4;
-                        const tW = Math.round(config.canvas_mm[0] * MM_TO_PX);
-                        const tH = Math.round(config.canvas_mm[1] * MM_TO_PX);
-                        layout = { scale: 1, x: 0, y: 0, canvasW: tW, canvasH: tH };
-                    }
-                } catch (e) {
-                    console.error("Layout Calc Failed", e);
-                    // Legacy SpecData Fallback
-                    const DPI = 300;
-                    const MM_TO_PX = DPI / 25.4;
-                    const tW = Math.round(config.canvas_mm[0] * MM_TO_PX);
-                    const tH = Math.round(config.canvas_mm[1] * MM_TO_PX);
-                    layout = {
-                        scale: 1, x: 0, y: 0, canvasW: tW, canvasH: tH,
-                        config: { TOP_MARGIN_PX: 0, TARGET_HEAD_PX: 0 }
-                    };
-                }
-
-                const canvas = document.createElement('canvas');
-                canvas.width = layout.canvasW;
-                canvas.height = layout.canvasH;
-                const ctx = canvas.getContext('2d');
-
-                ctx.fillStyle = '#FFFFFF';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                // --- Apply Lighting Filters (New) ---
-                const { brightness = 1, contrast = 1 } = userAdjustments;
-                const finalBrightness = IMAGE_PRESETS.DEFAULT_BRIGHTNESS * brightness;
-                const finalContrast = IMAGE_PRESETS.DEFAULT_CONTRAST * contrast;
-                // Note: Brightness/Contrast/Saturate standard Web filters
-                ctx.filter = `brightness(${finalBrightness}) contrast(${finalContrast}) saturate(${IMAGE_PRESETS.DEFAULT_SATURATION})`;
-                // ------------------------------------
-
-                if (faceData && faceData.faceLandmarks && fullRect && layout.scale !== 1) {
-                    ctx.drawImage(img, layout.x, layout.y, img.width * layout.scale, img.height * layout.scale);
-
-                    // [Must-Do Debugging] Step 2: Visual Anchor
-                    ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-                    ctx.lineWidth = 2;
-                    ctx.setLineDash([]);
-
-                    // Line 1: Top Anchor at Y=40 (Target margin)
-                    ctx.beginPath();
-                    ctx.moveTo(0, 40);
-                    ctx.lineTo(layout.canvasW, 40);
-                    ctx.stroke();
-
-                    // Line 2: Chin Anchor at Y=442 (Target 40 + 402px Head Height)
-                    ctx.beginPath();
-                    ctx.moveTo(0, 442);
-                    ctx.lineTo(layout.canvasW, 442);
-                    ctx.stroke();
-                } else {
-                    console.warn("[Strict Perc] Missing landmarks/error, performing simple fit");
-                    ctx.filter = `brightness(${finalBrightness}) contrast(${finalContrast}) saturate(${IMAGE_PRESETS.DEFAULT_SATURATION})`;
-
-                    const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
-                    const dx = (canvas.width - img.width * scale) / 2;
-                    const dy = (canvas.height - img.height * scale) / 2;
-                    ctx.drawImage(img, dx, dy, img.width * scale, img.height * scale);
-                }
-
-                ctx.filter = 'none'; // Reset for Rulers
-
-                // --- Add Rulers & Guides (User Verification) ---
-                const margin = 60; // 尺標預留空間
-                const ruledCanvas = document.createElement('canvas');
-                ruledCanvas.width = canvas.width + margin;
-                ruledCanvas.height = canvas.height + margin;
-                const rCtx = ruledCanvas.getContext('2d');
-
-                // 1. Fill White Background
-                rCtx.fillStyle = '#FFFFFF';
-                rCtx.fillRect(0, 0, ruledCanvas.width, ruledCanvas.height);
-
-                // 2. Draw Original Photo (Offset Y by margin)
-                rCtx.drawImage(canvas, 0, margin);
-
-                // 3. Draw Rulers
-                rCtx.strokeStyle = '#000000';
-                rCtx.fillStyle = '#000000';
-                rCtx.font = '12px Arial';
-                rCtx.lineWidth = 1;
-
-                // A. Top Ruler (Horizontal)
-                rCtx.beginPath();
-                rCtx.moveTo(0, margin - 1);
-                rCtx.lineTo(canvas.width, margin - 1);
-
-                const wMM = config.canvas_mm[0] || 35;
-                for (let mm = 0; mm <= wMM; mm++) {
-                    const x = mm * (canvas.width / wMM);
-                    const isMajor = (mm % 5 === 0);
-                    const tickH = isMajor ? 15 : 8;
-                    rCtx.moveTo(x, margin - 1);
-                    rCtx.lineTo(x, margin - 1 - tickH);
-                    if (isMajor && x < canvas.width - 5) {
-                        if (x > 10) rCtx.fillText(mm.toString(), x - 4, margin - 20); // Adjust label pos
-                    }
-                }
-                rCtx.stroke();
-
-                // B. Right Ruler (Vertical)
-                rCtx.beginPath();
-                const rightBaseX = canvas.width;
-                rCtx.moveTo(rightBaseX, margin);
-                rCtx.lineTo(rightBaseX, ruledCanvas.height);
-
-                const hMM = config.canvas_mm[1] || 45;
-                for (let mm = 0; mm <= hMM; mm++) {
-                    const y = margin + (mm * (canvas.height / hMM));
-                    const isMajor = (mm % 5 === 0);
-                    const tickW = isMajor ? 15 : 8;
-                    rCtx.moveTo(rightBaseX, y);
-                    rCtx.lineTo(rightBaseX + tickW, y);
-                    if (isMajor && y < ruledCanvas.height - 5) {
-                        rCtx.fillText(mm.toString(), rightBaseX + 20, y + 4);
-                    }
-                }
-                rCtx.stroke();
-
-                // 4. Red Verification Lines (If detection enabled)
-                if (faceData && faceData.faceLandmarks && layout.config) {
-                    const topY = margin + (layout.config.TOP_MARGIN_PX || 40);
-                    const headH_Px = layout.config.TARGET_HEAD_PX;
-                    const chinY = topY + headH_Px;
-
-                    rCtx.strokeStyle = 'red';
-                    rCtx.lineWidth = 2;
-                    rCtx.setLineDash([5, 5]);
-
-                    // Hair Top Line (Only on Right Ruler)
-                    rCtx.beginPath();
-                    rCtx.moveTo(canvas.width, topY);
-                    rCtx.lineTo(ruledCanvas.width, topY);
-                    rCtx.stroke();
-
-                    // Chin Line (Only on Right Ruler)
-                    rCtx.beginPath();
-                    rCtx.moveTo(canvas.width, chinY);
-                    rCtx.lineTo(ruledCanvas.width, chinY);
-                    rCtx.stroke();
-
-                    // --- New: Eye Line Visualization (Requested by User) ---
-                    // Calculate Eye Y on Final Canvas
-                    // N (Src) = EyeY(Src) - TopY(Src)
-                    // EyeY(Final) = DrawY + (EyeY(Src) * Scale) ... easier: TopY(Final) + Scaled N
-                    // TopY(Final) is 40 + margin (topY variable above)
-                    // So EyeY = topY + (layout.debug.N * layout.scale)
-                    if (layout.debug && layout.debug.N) {
-                        const eyeY = topY + (layout.debug.N * layout.scale);
-
-                        console.log(`[Visual Debug] Drawing Eye Line at Y=${eyeY.toFixed(1)} (TopY=${topY}, N=${layout.debug.N}, Scale=${layout.scale})`);
-
-                        rCtx.beginPath();
-                        rCtx.strokeStyle = 'blue'; // Changed to Blue for visibility
-                        rCtx.lineWidth = 2;        // Thicker
-                        rCtx.setLineDash([5, 3]);
-                        rCtx.moveTo(0, eyeY);
-                        rCtx.lineTo(canvas.width, eyeY);
-                        rCtx.stroke();
-                    } else {
-                        console.warn("[Visual Debug] Cannot draw eye line: missing layout.debug.N");
-                    }
-                    // -------------------------------------------------------
-
-                    // Measurement Label
-                    const targetHeadCm = ((config.head_mm[0] + config.head_mm[1]) / 2 / 10).toFixed(1);
-                    rCtx.fillStyle = 'red';
-                    rCtx.font = 'bold 12px Arial';
-                    rCtx.setLineDash([]);
-                    rCtx.fillText(`${targetHeadCm} cm`, canvas.width + 5, topY + (headH_Px / 2));
-                }
-
-                resolve(ruledCanvas.toDataURL('image/jpeg', 0.95));
-                URL.revokeObjectURL(url);
-            };
-            img.onerror = (e) => reject(e);
-            img.src = url;
-        });
-    }
 
     try {
         console.log("Process Preview Start. Spec:", config.name);
