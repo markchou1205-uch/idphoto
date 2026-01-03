@@ -334,7 +334,7 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
     const cleanBase64 = ensureSinglePrefix(base64);
 
     // Helper: Composite with Physics Normalization + Lighting Compensation
-    async function compositeToWhiteBackground(transparentBlob, faceData, cropRect, config, userAdjustments) {
+    async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, config, userAdjustments) {
         const topY_Resized = await getTopPixelY(transparentBlob);
 
         return new Promise((resolve, reject) => {
@@ -344,7 +344,7 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
             img.onload = () => {
                 let layout;
                 try {
-                    if (faceData && faceData.faceLandmarks && cropRect) {
+                    if (faceData && faceData.faceLandmarks && fullRect) {
                         // SSOT: Calculate Universal Layout
                         // Allow override of Target N from user adjustments (Head Scale Slider)
                         // Default to 215 if not provided

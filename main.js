@@ -183,6 +183,7 @@ async function handleFileUpload(e) {
                         </div>
                      `;
                     // Insert after the primary button
+                    const startBtn = document.getElementById('btn-start-production');
                     if (startBtn && startBtn.parentNode) {
                         startBtn.parentNode.insertBefore(sliderContainer, startBtn.nextSibling);
                     }
