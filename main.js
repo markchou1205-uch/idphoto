@@ -199,8 +199,8 @@ async function handleFileUpload(e) {
                         };
                         // Debounce / Trigger on change
                         scaleInput.onchange = () => {
-                            console.log("Slider Change -> Re-running production with HeadScale:", state.adjustments.headScale);
-                            runProductionPhase();
+                            console.log("Slider Change -> Client-Side Re-composition:", state.adjustments.headScale);
+                            handleClientSideUpdate();
                         };
                     }
                 }
@@ -382,35 +382,19 @@ async function runProductionPhase() {
                 console.log("API.processPreview Result Retrieved");
 
                 if (processRes && processRes.photos && processRes.photos.length > 0) {
+                    // Cache Assets for Client-Side Re-composition
+                    if (processRes.assets) {
+                        state.assets = processRes.assets;
+                    }
+
                     // Ensure proper Base64 prefix
                     let b64 = processRes.photos[0];
                     if (!b64.startsWith('data:image/')) {
                         b64 = `data:image/jpeg;base64,${b64}`;
                     }
                     state.processedImage = b64;
-                    console.log("Processed Image State Updated. Length:", b64.length);
-
-                    // Convert to Blob for download
-                    console.log("Converting to Blob...");
-                    const res = await fetch(state.processedImage);
-                    const blob = await res.blob();
-                    console.log("Blob Created. Size:", blob.size);
-
-                    // 5. Show Final Result & Download Options
-                    console.log("Updating UI (AuditSuccess)...");
-                    UI.showAuditSuccess(state.processedImage, state.faceData, null);
-
-                    // Show Buttons (Single + 4x2)
-                    console.log("Showing Download Options...");
-                    UI.showDownloadOptions(blob, DEFAULT_SPECS[state.spec]);
-
-                    // [FIX]: Update Button to "Re-upload"
-                    UI.updateToReuploadMode();
-
-                    // Set Audit Button to Red (Urgent)
-                    UI.setAuditButtonRed();
-
-                    console.log("UI Update Complete.");
+                    // ... (rest of update UI logic)
+                    await updateResultUI(b64); // Extract UI update logic
                 } else {
                     console.error("No photos returned from API");
                     alert("生成失敗：無回傳影像");
@@ -424,6 +408,44 @@ async function runProductionPhase() {
     } catch (err) {
         console.error("Production Failed:", err);
         alert("製作失敗，請重試");
+    }
+}
+
+// Extracted UI Update Logic
+async function updateResultUI(b64) {
+    if (!b64.startsWith('data:image/')) {
+        b64 = `data:image/jpeg;base64,${b64}`;
+    }
+    state.processedImage = b64;
+
+    // Convert to Blob for download
+    const res = await fetch(state.processedImage);
+    const blob = await res.blob();
+
+    // 5. Show Final Result & Download Options
+    UI.showAuditSuccess(state.processedImage, state.faceData, null);
+    UI.showDownloadOptions(blob, DEFAULT_SPECS[state.spec]);
+    UI.updateToReuploadMode();
+    UI.setAuditButtonRed();
+}
+
+// Client-Side Re-composition Handler
+async function handleClientSideUpdate() {
+    if (state.assets && state.assets.transparentBlob) {
+        try {
+            const b64 = await API.recomposePreview(
+                state.assets.transparentBlob,
+                state.assets.fullRect,
+                state.faceData,
+                state.spec,
+                state.adjustments
+            );
+            await updateResultUI(b64);
+        } catch (e) {
+            console.error("Client Recompose Failed:", e);
+        }
+    } else {
+        runProductionPhase(); // Fallback if no assets
     }
 }
 // Removed legacy applyGuideOverlay (logic moved to UI)

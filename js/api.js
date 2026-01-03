@@ -602,15 +602,38 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
 
         const finalB64 = await compositeToWhiteBackground(transparentBlob, faceData, fullRect, config, userAdjustments);
         const retB64 = finalB64.split(',').pop();
-        return { photos: [retB64, retB64] };
+
+        // Return structured object including assets for client-side re-composition
+        return {
+            photos: [retB64, retB64],
+            assets: {
+                transparentBlob: transparentBlob,
+                fullRect: fullRect
+            }
+        };
 
     } catch (e) {
         console.error("Production Flow Failed:", e);
         throw e;
-        // Note: We removed the heavy Local AI fallback for speed.
-        // If Vercel fails (500), we fail fast.
     }
 }
+
+// 3. Client-Side Re-Composition (Slider Optimization)
+// Uses cached transparent blob to avoid Vercel calls
+export async function recomposePreview(transparentBlob, fullRect, faceData, specKey, userAdjustments) {
+    console.log("Recomposing Preview (Client Side)...", userAdjustments);
+    try {
+        const config = PHOTO_CONFIGS[specKey] || PHOTO_CONFIGS['taiwan_passport'];
+        const finalB64 = await compositeToWhiteBackground(transparentBlob, faceData, fullRect, config, userAdjustments);
+        const retB64 = finalB64.split(',').pop();
+        return retB64;
+    } catch (e) {
+        console.error("Recomposition Failed:", e);
+        throw e;
+    }
+}
+
+
 
 /*
 // Helper: Local Canvas Crop
