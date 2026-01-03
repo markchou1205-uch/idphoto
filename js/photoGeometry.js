@@ -10,7 +10,7 @@ export function calculateUniversalLayout(
     currentImgH,
     config,
     actualSourceWidth,
-    targetEyeLineDistance = 215 // Default to standard 215px
+    targetEyeLineDistance = 190 // Default to optimized 190px
 ) {
     const TARGET_HEAD_PX = 402;
     const CANVAS_W = 413;

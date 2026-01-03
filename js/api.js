@@ -340,8 +340,8 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
                 if (faceData && faceData.faceLandmarks && fullRect) {
                     // SSOT: Calculate Universal Layout
                     // Allow override of Target N from user adjustments (Head Scale Slider)
-                    // Default to 215 if not provided
-                    const targetN = userAdjustments && userAdjustments.headScale ? userAdjustments.headScale : 215;
+                    // Default to 190 if not provided
+                    const targetN = userAdjustments && userAdjustments.headScale ? userAdjustments.headScale : 190;
 
                     layout = calculateUniversalLayout(
                         faceData.faceLandmarks,

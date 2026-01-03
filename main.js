@@ -174,9 +174,9 @@ async function handleFileUpload(e) {
                     sliderContainer.innerHTML = `
                         <label class="form-label fw-bold d-flex justify-content-between">
                             <span>頭部大小調整 (頭頂-眼睛距離)</span>
-                            <span id="head-scale-val" class="text-primary">215px</span>
+                            <span id="head-scale-val" class="text-primary">190px</span>
                         </label>
-                        <input type="range" class="form-range" id="head-scale-input" min="180" max="250" step="1" value="215">
+                        <input type="range" class="form-range" id="head-scale-input" min="180" max="250" step="1" value="190">
                         <div class="d-flex justify-content-between small text-muted">
                             <span>更大 (180)</span>
                             <span>更小 (250)</span>
