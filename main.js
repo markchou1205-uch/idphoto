@@ -403,8 +403,9 @@ function injectAdvancedControls() {
 
         // 1. Vertical Slider (Right)
         const vSliderHtml = `
-            <div class="position-absolute d-flex flex-column align-items-center" 
-                    style="right: -60px; top: 50%; transform: translateY(-50%); height: 80%; width: 40px; pointer-events: auto; z-index: 101;">
+            <div class="position-absolute d-flex flex-column align-items-center bg-white rounded shadow p-2" 
+                    style="right: -80px; top: 50%; transform: translateY(-50%); height: 85%; width: 50px; pointer-events: auto; z-index: 101;">
+                <span class="small fw-bold text-muted mb-2" style="writing-mode: vertical-lr; text-orientation: upright; letter-spacing: 2px;">縮放調整</span>
                 <button class="btn btn-sm btn-light border shadow-sm mb-2 p-0" id="btn-zoom-in" title="放大" style="width:24px;height:24px;">+</button>
                 <input type="range" class="form-range" id="head-scale-input" min="1.0" max="1.4" step="0.01" value="${state.adjustments.headScale || 1.2}" 
                         style="writing-mode: vertical-lr; direction: rtl; flex-grow: 1; margin: 0;">
@@ -415,8 +416,9 @@ function injectAdvancedControls() {
 
         // 2. Horizontal Slider (Bottom)
         const hSliderHtml = `
-            <div class="position-absolute d-flex align-items-center justify-content-center w-100" 
-                    style="bottom: -50px; left: 0; pointer-events: auto; z-index: 101;">
+            <div class="position-absolute d-flex align-items-center justify-content-center w-100 bg-white rounded shadow p-2" 
+                    style="bottom: -70px; left: 0; pointer-events: auto; z-index: 101;">
+                <span class="small fw-bold text-muted me-3">水平調整</span>
                 <span class="badge bg-light text-dark border me-2">L</span>
                 <input type="range" class="form-range flex-grow-1 shadow-sm" id="x-shift-input" min="-50" max="50" step="1" value="${state.adjustments.xShift || 0}" style="max-width: 60%;">
                 <span class="badge bg-light text-dark border ms-2">R</span>
