@@ -514,15 +514,43 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
                 rCtx.stroke();
                 rCtx.fillText("Head Top", 5, topY - 5);
 
-                // 2. Calculated Chin Line (Red) - Target Anchor
-                // The algorithm scales the image so the calculated chin hits this line.
-                rCtx.strokeStyle = '#FF0000'; // Red
-                rCtx.fillStyle = '#FF0000';
+                // 2. Calculated Chin Line & Valid Range (Red)
+                // Valid Range: 3.2cm - 3.6cm
+                // Target (3.4cm) = 402px
+                const rangeTopMm = 32;
+                const rangeBottomMm = 36;
+                const targetMm = 34;
+
+                const rangeTopPx = headH_Px * (rangeTopMm / targetMm);
+                const rangeBottomPx = headH_Px * (rangeBottomMm / targetMm);
+
+                const chinRangeTopY = topY + rangeTopPx;
+                const chinRangeBottomY = topY + rangeBottomPx;
+
+                // Draw Range Band
+                rCtx.fillStyle = 'rgba(255, 0, 0, 0.15)'; // Semi-transparent Red
+                rCtx.fillRect(0, chinRangeTopY, ruledCanvas.width, chinRangeBottomY - chinRangeTopY);
+
+                // Draw Limit Lines (Subtle)
+                rCtx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
+                rCtx.beginPath();
+                rCtx.moveTo(0, chinRangeTopY);
+                rCtx.lineTo(ruledCanvas.width, chinRangeTopY);
+                rCtx.moveTo(0, chinRangeBottomY);
+                rCtx.lineTo(ruledCanvas.width, chinRangeBottomY);
+                rCtx.stroke();
+
+                // Draw Target Center (Stronger Red)
+                rCtx.strokeStyle = '#FF0000';
                 rCtx.beginPath();
                 rCtx.moveTo(0, chinY);
                 rCtx.lineTo(ruledCanvas.width, chinY);
                 rCtx.stroke();
-                rCtx.fillText("Calculated Chin", 5, chinY - 5);
+
+                rCtx.fillStyle = '#FF0000';
+                rCtx.fillText("3.2cm", 5, chinRangeTopY - 5);
+                rCtx.fillText("3.6cm", 5, chinRangeBottomY + 15);
+                rCtx.fillText("Target 3.4cm", 5, chinY - 5);
 
                 // 3. Eye Line (Blue) - Moving Indicator
                 if (layout.debug && layout.debug.N) {
