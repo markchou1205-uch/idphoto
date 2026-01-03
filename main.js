@@ -428,12 +428,15 @@ function injectAdvancedControls() {
 
         // 3. Toggle Guide (Top Right)
         const isGuidesOn = state.adjustments.showGuides === undefined ? true : state.adjustments.showGuides;
-        const toggleClass = isGuidesOn ? 'btn-outline-primary shadow-sm' : 'btn-outline-secondary shadow-sm';
+        const toggleText = isGuidesOn ? "隱藏規格標線" : "顯示規格標線";
+        const toggleIcon = isGuidesOn ? "bi-eye-slash" : "bi-eye";
+        const toggleClass = isGuidesOn ? 'btn-white border shadow-sm text-primary' : 'btn-white border shadow-sm text-muted';
+
         const toggleHtml = `
-            <button class="btn btn-sm ${toggleClass} bg-white position-absolute" 
+            <button class="btn btn-sm ${toggleClass} position-absolute fw-bold" 
                     id="toggle-guides-btn" 
-                    style="top: -50px; right: 0; pointer-events: auto; z-index: 101;">
-                <i class="bi bi-eye"></i> 顯示/隱藏規格標線
+                    style="top: -50px; right: 0; pointer-events: auto; z-index: 101; white-space: nowrap;">
+                <i class="bi ${toggleIcon}"></i> <span id="toggle-btn-text">${toggleText}</span>
             </button>
         `;
 
@@ -449,12 +452,22 @@ function injectAdvancedControls() {
 
         // 1. Guide Toggle
         const toggleBtn = document.getElementById('toggle-guides-btn');
+        const toggleBtnText = document.getElementById('toggle-btn-text');
+        const toggleBtnIcon = toggleBtn ? toggleBtn.querySelector('i') : null;
+
         if (toggleBtn) {
             toggleBtn.onclick = () => {
                 console.log("[Debug] Toggle clicked");
                 state.adjustments.showGuides = !state.adjustments.showGuides;
                 const isOn = state.adjustments.showGuides;
-                toggleBtn.className = isOn ? 'btn btn-sm btn-outline-primary bg-white shadow-sm position-absolute' : 'btn btn-sm btn-outline-secondary bg-white shadow-sm position-absolute';
+
+                // Update UI Text & Icon
+                if (toggleBtnText) toggleBtnText.innerText = isOn ? "隱藏規格標線" : "顯示規格標線";
+                if (toggleBtnIcon) {
+                    toggleBtnIcon.className = isOn ? "bi bi-eye-slash" : "bi bi-eye";
+                }
+                toggleBtn.className = isOn ? 'btn btn-sm btn-white border shadow-sm text-primary position-absolute fw-bold' : 'btn btn-sm btn-white border shadow-sm text-muted position-absolute fw-bold';
+
                 handleClientSideUpdate();
             };
         }
