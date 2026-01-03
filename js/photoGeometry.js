@@ -14,114 +14,53 @@ export function calculateUniversalLayout(
     const TARGET_HEAD_PX = 402;
     const CANVAS_W = 413;
     const CANVAS_H = 531;
-    const TOP_MARGIN = 40; // 規格給定，不是 solver 變數
+    // const TOP_MARGIN = 40; // No longer used as a loose variable, integrated into calculation
 
     // 1. Stable inputs
-    const eyeMidY_Global =
-        (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
+    const eyeMidY_Global = (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
 
-    const eyeMidY_In_Source =
-        (eyeMidY_Global - cropRect.y) * (currentImgH / cropRect.h);
-
+    const eyeMidY_In_Source = (eyeMidY_Global - cropRect.y) * (currentImgH / cropRect.h);
     const topY_In_Source = topY_Resized;
-    const topToEye_Px = eyeMidY_In_Source - topY_In_Source;
 
-    // 2. Multi-alpha solve (NO margin check here)
-    const candidates = [];
+    // 2. Physical Override Logic (N-Ratio)
+    // N = Distance from Hair Top to Pupil Midpoint in Source Pixels
+    const N = eyeMidY_In_Source - topY_In_Source;
 
-    for (let alpha = 0.42; alpha <= 0.48; alpha += 0.01) {
-        const headPx_Src = topToEye_Px / alpha;
-        if (headPx_Src < 450 || headPx_Src > 750) continue;
+    // Estimated Physical Head Height (User Rule: Top=N, Bottom=1.2N => Total=2.2N)
+    const estimatedHeadH_Src = N * 2.2;
 
-        const scale = TARGET_HEAD_PX / headPx_Src;
+    // 3. Scale Calculation
+    // Target Head Height is strictly 402px
+    const finalScale = TARGET_HEAD_PX / estimatedHeadH_Src;
 
-        // Margin NOT used for elimination, only scale/head size matters for the solver
-        candidates.push({ alpha, scale, headPx_Src });
-    }
+    // 4. Positioning
+    // Fixed Top Margin rule: Top of head must be exactly at Y=40
+    const drawY = 40 - (topY_In_Source * finalScale);
 
-    if (candidates.length === 0) {
-        // Failsafe for very weird extreme cases, though unlikely with [450, 750] range
-        console.warn("[GEOMETRY SOLVER] No candidates in strict range. Using fallback.");
-        const fallbackAlpha = 0.46;
-        const fallbackHeadPx = topToEye_Px / fallbackAlpha;
-        const fallbackScale = TARGET_HEAD_PX / fallbackHeadPx;
-        candidates.push({ alpha: fallbackAlpha, scale: fallbackScale, headPx_Src: fallbackHeadPx });
-    }
+    // Horizontal Center
+    const sourceWidth = actualSourceWidth || (750 * (currentImgH / 1000)); // Fallback if unknown
+    const drawnWidth = sourceWidth * finalScale;
+    const drawX = (413 - drawnWidth) / 2;
 
-    candidates.sort(
-        (a, b) =>
-            Math.abs(a.headPx_Src - TARGET_HEAD_PX) -
-            Math.abs(b.headPx_Src - TARGET_HEAD_PX)
-    );
-
-    const best = candidates[0];
-
-    // === HARD REJECTION CHECKS ===
-    // 1. Chin/Collar Rejection (Critical)
-    // Prevent accepting a "fake chin" (collar) that is too high.
-    // We check where the detected chin WOULD land on the final canvas.
-    if (landmarks.chin) {
-        const chinY_Global = landmarks.chin.y;
-        const chinY_In_Source = (chinY_Global - cropRect.y) * (currentImgH / cropRect.h);
-
-        // Distance from Hair Top to Chin in Source Pixels
-        const chinDist_Src = chinY_In_Source - topY_In_Source;
-
-        // Scaled Distance on Final Canvas
-        const chinPx_Scaled = chinDist_Src * best.scale;
-
-        // Spec: Head Height ~402px. 
-        // If Chin is < 360px -> Too short (Collar detected as Chin).
-        // If Chin is > 440px -> Too long.
-        if (chinPx_Scaled < 360 || chinPx_Scaled > 440) {
-            console.warn(`[GEOMETRY REJECT] Chin consistency failure. Scaled Chin Dist: ${chinPx_Scaled.toFixed(1)}px`);
-            throw new Error("Invalid head geometry: chin polluted (likely collar interference)");
-        }
-    }
-
-    // 2. Mouth-Eye Check (Sanity)
-    // Prevent inverted faces or extreme parsing errors.
-    const mouthY = landmarks.underLipBottom ? landmarks.underLipBottom.y : (landmarks.mouthBottom ? landmarks.mouthBottom.y : null);
-    if (mouthY) {
-        const mouthY_In_Source = (mouthY - cropRect.y) * (currentImgH / cropRect.h);
-        // Comparing Y in Source (Y increases downwards)
-        if (mouthY_In_Source <= eyeMidY_In_Source) {
-            throw new Error("Invalid facial geometry: mouth above eyes");
-        }
-    }
-    // =============================
-
-    // 3. Rendering geometry (margin applied HERE)
-    const sourceWidth =
-        actualSourceWidth || (750 * (currentImgH / 1000));
-
-    const finalW = sourceWidth * best.scale;
-    const finalH = currentImgH * best.scale;
-
-    const drawX = (CANVAS_W - finalW) / 2;
-    const drawY = TOP_MARGIN - topY_In_Source * best.scale;
-
-    console.log(
-        `[GEOMETRY SOLVER] α=${best.alpha.toFixed(2)} ` +
-        `scale=${best.scale.toFixed(4)}`
-    );
+    console.log(`[GEOMETRY OVERRIDE] N=${N.toFixed(1)}px (Src), EstHead=${estimatedHeadH_Src.toFixed(1)}px (Src)`);
+    console.log(`[GEOMETRY OVERRIDE] Target=402px, FinalScale=${finalScale.toFixed(4)}`);
 
     return {
-        scale: best.scale,
+        scale: finalScale,
         x: drawX,
         y: drawY,
         canvasW: CANVAS_W,
         canvasH: CANVAS_H,
         config: {
-            TOP_MARGIN_PX: TOP_MARGIN,
+            TOP_MARGIN_PX: 40,
             TARGET_HEAD_PX: TARGET_HEAD_PX,
             CANVAS_W: CANVAS_W,
             CANVAS_H: CANVAS_H
         },
         debug: {
-            alpha: best.alpha,
-            headPx_Src: best.headPx_Src,
-            topMargin: TOP_MARGIN
+            N: N,
+            estimatedHeadHSrc: estimatedHeadH_Src,
+            finalScale: finalScale
         }
     };
 }
