@@ -567,7 +567,7 @@ async function updateResultUI(b64) {
 
     // 5. Show Download Options
     const specData = DEFAULT_SPECS[state.spec];
-    UI.showAuditSuccess(state.processedImage, state.faceData, null);
+    // UI.showAuditSuccess(state.processedImage, state.faceData, null); // REMOVED: This wipes the DOM and destroys controls!
     UI.showDownloadOptions(b64, specData);
     UI.updateToReuploadMode();
     UI.setAuditButtonRed();
