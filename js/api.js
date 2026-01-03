@@ -356,13 +356,13 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
                         );
 
                         // DEBUG REQUESTED BY USER
-                        console.log("DEBUG: Scaling Image Height", img.height, "with Scale", layout.scale, "Resulting Head Px:", layout.debug ? layout.debug.estimatedHeadHSrc : "N/A");
+                        console.log("DEBUG: Scaling Image Height", img.height, "with Scale", layout.scale, "Final Scale:", layout.scale);
 
                         // === COMPREHENSIVE DEBUG LOGGING ===
                         // === GEOMETRY DEBUG (Clean) ===
                         console.log(`[Universal Layout] Scale: ${layout.scale.toFixed(4)}, X: ${layout.x.toFixed(1)}, Y: ${layout.y.toFixed(1)}`);
                         if (layout.debug) {
-                            console.log(`[Solver Debug] N: ${layout.debug.N?.toFixed(1)}, EstHead(Src): ${layout.debug.estimatedHeadHSrc?.toFixed(1)}`);
+                            console.log(`[Solver Debug] N: ${layout.debug.N?.toFixed(1)}, Target N: 215px`);
                         }
 
 

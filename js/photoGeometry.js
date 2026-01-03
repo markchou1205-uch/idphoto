@@ -22,16 +22,19 @@ export function calculateUniversalLayout(
     const eyeMidY_In_Source = (eyeMidY_Global - cropRect.y) * (currentImgH / cropRect.h);
     const topY_In_Source = topY_Resized;
 
-    // 2. Physical Override Logic (N-Ratio)
+    // 2. Physical Override Logic (Fixed Segment Scaling)
     // N = Distance from Hair Top to Pupil Midpoint in Source Pixels
     const N = eyeMidY_In_Source - topY_In_Source;
 
-    // Estimated Physical Head Height (User Rule: Top=N, Bottom=1.2N => Total=2.2N)
-    const estimatedHeadH_Src = N * 2.2;
+    // We want N (Hair to Eyes) to be EXACTLY 215px on the final canvas.
+    // This forces the head to enlarge correctly to meet the 3.4cm requirement.
+    const finalScale = 215 / N;
 
-    // 3. Scale Calculation
-    // Target Head Height is strictly 402px
-    const finalScale = TARGET_HEAD_PX / estimatedHeadH_Src;
+    // Check expectation (User expects 0.86-0.90 for this image)
+    const expectedRange = (finalScale >= 0.8 && finalScale <= 1.0);
+    if (!expectedRange) {
+        console.warn(`[GEOMETRY WARNING] Scale ${finalScale.toFixed(4)} outside expected 0.8-1.0 range.`);
+    }
 
     // 4. Positioning
     // Fixed Top Margin rule: Top of head must be exactly at Y=40
@@ -42,8 +45,8 @@ export function calculateUniversalLayout(
     const drawnWidth = sourceWidth * finalScale;
     const drawX = (413 - drawnWidth) / 2;
 
-    console.log(`[GEOMETRY OVERRIDE] N=${N.toFixed(1)}px (Src), EstHead=${estimatedHeadH_Src.toFixed(1)}px (Src)`);
-    console.log(`[GEOMETRY OVERRIDE] Target=402px, FinalScale=${finalScale.toFixed(4)}`);
+    console.log(`[GEOMETRY OVERRIDE] N=${N.toFixed(1)}px (Src)`);
+    console.log(`[GEOMETRY OVERRIDE] Target N=215px, FinalScale=${finalScale.toFixed(4)}`);
 
     return {
         scale: finalScale,
@@ -59,7 +62,6 @@ export function calculateUniversalLayout(
         },
         debug: {
             N: N,
-            estimatedHeadHSrc: estimatedHeadH_Src,
             finalScale: finalScale
         }
     };
