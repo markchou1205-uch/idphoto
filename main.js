@@ -380,12 +380,17 @@ async function runProductionPhase() {
 
 // [NEW] Helper: Inject Advanced Controls into Preview Overlay
 function injectAdvancedControls() {
+    console.log("[Debug] injectAdvancedControls: Starting...");
     const imageWrapper = document.getElementById('image-wrapper');
     // Remove existing if any to avoid duplicates
     const existingOverlay = document.getElementById('control-overlay');
-    if (existingOverlay) existingOverlay.remove();
+    if (existingOverlay) {
+        console.log("[Debug] injectAdvancedControls: Removing existing overlay.");
+        existingOverlay.remove();
+    }
 
     if (imageWrapper) {
+        console.log("[Debug] injectAdvancedControls: Wrapper found. Injecting controls.");
         const overlay = document.createElement('div');
         overlay.id = 'control-overlay';
         overlay.style.position = 'absolute';
@@ -437,12 +442,15 @@ function injectAdvancedControls() {
             imageWrapper.appendChild(controlsDiv.firstChild);
         }
 
+        console.log("[Debug] injectAdvancedControls: Controls appended.");
+
         // --- Bind Events ---
 
         // 1. Guide Toggle
         const toggleBtn = document.getElementById('toggle-guides-btn');
         if (toggleBtn) {
             toggleBtn.onclick = () => {
+                console.log("[Debug] Toggle clicked");
                 state.adjustments.showGuides = !state.adjustments.showGuides;
                 const isOn = state.adjustments.showGuides;
                 toggleBtn.className = isOn ? 'btn btn-sm btn-outline-primary bg-white shadow-sm position-absolute' : 'btn btn-sm btn-outline-secondary bg-white shadow-sm position-absolute';
@@ -495,11 +503,14 @@ function injectAdvancedControls() {
                 scaleInput.dispatchEvent(new Event('change'));
             };
         }
+    } else {
+        console.error("[Debug] injectAdvancedControls: image-wrapper NOT FOUND!");
     }
 }
 
 // Extracted UI Update Logic
 async function updateResultUI(b64) {
+    console.log("[Debug] updateResultUI: Called.");
     if (!b64.startsWith('data:image/')) {
         b64 = `data:image/jpeg;base64,${b64}`;
     }
@@ -507,14 +518,17 @@ async function updateResultUI(b64) {
 
     // 1. Ensure Container
     const container = document.getElementById('preview-container');
-    if (!container) return;
+    if (!container) {
+        console.error("[Debug] updateResultUI: preview-container NOT FOUND.");
+        return;
+    }
 
     // 2. Check/Recreate Wrapper & Image (Robustness against UI wipes)
     let wrapper = document.getElementById('image-wrapper');
     let img = document.getElementById('main-preview-img');
 
     if (!wrapper) {
-        console.warn("Image Wrapper missing, recreating...");
+        console.warn("[Debug] updateResultUI: Image Wrapper missing, recreating...");
         // Rebuild structure that supports overlay
         container.innerHTML = ''; // Start fresh
 
@@ -535,14 +549,18 @@ async function updateResultUI(b64) {
         wrapper.appendChild(img);
         container.appendChild(wrapper);
     } else {
+        console.log("[Debug] updateResultUI: Wrapper found.");
         // Ensure img reference is valid
         if (!img) img = document.getElementById('main-preview-img');
     }
 
     // 3. Update Image
     if (img) {
+        console.log("[Debug] updateResultUI: Updating Image Src.");
         img.src = b64;
         img.classList.remove('d-none');
+    } else {
+        console.error("[Debug] updateResultUI: Image element missing!");
     }
 
     // 4. Inject Controls (Now guaranteed to have wrapper)
