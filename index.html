@@ -139,8 +139,15 @@
                     <div class="col-md-9 h-100 d-flex flex-column bg-light">
                         <div class="flex-grow-1 d-flex justify-content-center align-items-center p-4 position-relative"
                             id="preview-container">
-                            <img id="main-preview-img" class="img-fluid shadow-sm rounded border d-none"
-                                style="max-height: 80%; background:white;">
+
+                            <!-- Image Wrapper for Relative Controls -->
+                            <div id="image-wrapper"
+                                class="position-relative d-inline-flex justify-content-center align-items-center"
+                                style="max-height: 80%; max-width: 100%;">
+                                <img id="main-preview-img" class="img-fluid shadow-sm rounded border d-none"
+                                    style="max-height: 100%; max-width: 100%; object-fit: contain; background:white;">
+                                <!-- Advanced Controls will be injected here by main.js -->
+                            </div>
 
                             <div id="compare-view"
                                 class="d-none w-100 h-100 d-flex gap-3 align-items-center justify-content-center">

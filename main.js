@@ -166,55 +166,67 @@ async function handleFileUpload(e) {
                 // 2. Render Action Panel (Production vs Audit)
                 UI.renderActionPanel(runProductionPhase, runAuditPhase);
 
-                // [NEW] Advanced Adjustment UI (User Request)
-                const actionPanel = document.getElementById('action-panel');
-                if (actionPanel) {
-                    // 1. Create Control Container (Grid Layout)
-                    const adjustmentContainer = document.createElement('div');
-                    adjustmentContainer.className = 'mt-3 p-3 bg-white border rounded shadow-sm';
+                // [NEW] Advanced Adjustment UI (Overlay on Preview)
+                const imageWrapper = document.getElementById('image-wrapper');
+                // Remove existing overlays if any
+                const existingOverlay = document.getElementById('control-overlay');
+                if (existingOverlay) existingOverlay.remove();
 
-                    // HTML Structure for Advanced Controls
-                    adjustmentContainer.innerHTML = `
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h6 class="m-0 fw-bold"><i class="bi bi-sliders"></i> 微調控制</h6>
-                            <button class="btn btn-sm btn-outline-secondary" id="toggle-guides-btn">
-                                <i class="bi bi-eye"></i> 顯示/隱藏規格標線
-                            </button>
+                if (imageWrapper) {
+                    const overlay = document.createElement('div');
+                    overlay.id = 'control-overlay';
+                    overlay.style.position = 'absolute';
+                    overlay.style.top = '0';
+                    overlay.style.left = '0';
+                    overlay.style.width = '100%';
+                    overlay.style.height = '100%';
+                    overlay.style.pointerEvents = 'none'; // Allow clicks to pass through only where needed? No, sliders need events.
+                    // Actually, we append siblings to the image, not a full cover overlay, to avoid z-index issues.
+                    // But 'imageWrapper' is strictly the size of the image (d-inline-flex).
+                    // So we can put absolute elements relative to it.
+
+                    // 1. Vertical Slider (Right)
+                    const vSliderHtml = `
+                        <div class="position-absolute d-flex flex-column align-items-center" 
+                             style="right: -60px; top: 50%; transform: translateY(-50%); height: 80%; width: 40px; pointer-events: auto;">
+                            <button class="btn btn-sm btn-light border shadow-sm mb-2 p-0" id="btn-zoom-in" title="放大" style="width:24px;height:24px;">+</button>
+                            <input type="range" class="form-range" id="head-scale-input" min="1.0" max="1.4" step="0.01" value="1.2" 
+                                   style="writing-mode: vertical-lr; direction: rtl; flex-grow: 1; margin: 0;">
+                            <button class="btn btn-sm btn-light border shadow-sm mt-2 p-0" id="btn-zoom-out" title="縮小" style="width:24px;height:24px;">-</button>
+                            <div class="mt-2 badge bg-dark opacity-75" id="head-scale-val">1.2x</div>
                         </div>
+                    `;
 
-                        <div class="row g-3">
-                            <!-- Vertical Slider (Scale) -->
-                            <div class="col-8 d-flex flex-column justify-content-center align-items-center" style="min-height: 200px; position: relative;">
-                                <!-- Image Preview Placeholder or Reference? -->
-                                <!-- The actual sliders are separate. Let's make a compact layout. -->
-                                <div class="text-center w-100">
-                                    <label class="form-label d-block fw-bold mb-2">水平調整 (X-Shift)</label>
-                                    <input type="range" class="form-range" id="x-shift-input" min="-50" max="50" step="1" value="0">
-                                    <div class="d-flex justify-content-between small text-muted">
-                                        <span>Left</span>
-                                        <span id="x-shift-val">0px</span>
-                                        <span>Right</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-4 d-flex flex-column align-items-center border-start">
-                                <label class="form-label fw-bold mb-2">縮放調整</label>
-                                <div style="height: 150px; display: flex; align-items: center;">
-                                    <!-- Vertical Slider Hack using CSS writing-mode -->
-                                    <input type="range" class="form-range" id="head-scale-input" min="1.0" max="1.4" step="0.01" value="1.2" 
-                                           style="writing-mode: vertical-lr; direction: rtl; vertical-align: bottom; width: 40px;">
-                                </div>
-                                <div class="mt-2 text-primary fw-bold" id="head-scale-val">1.2x</div>
-                                <small class="text-muted text-center" style="font-size: 0.75rem;">(小頭 - 大頭)</small>
-                            </div>
+                    // 2. Horizontal Slider (Bottom)
+                    const hSliderHtml = `
+                        <div class="position-absolute d-flex align-items-center justify-content-center w-100" 
+                             style="bottom: -50px; left: 0; pointer-events: auto;">
+                            <span class="badge bg-light text-dark border me-2">L</span>
+                            <input type="range" class="form-range flex-grow-1 shadow-sm" id="x-shift-input" min="-50" max="50" step="1" value="0" style="max-width: 60%;">
+                            <span class="badge bg-light text-dark border ms-2">R</span>
+                            <div class="ms-2 badge bg-dark opacity-75" id="x-shift-val">0px</div>
                         </div>
-                     `;
+                    `;
 
-                    // Insert after the primary button
-                    const startBtn = document.getElementById('btn-start-production');
-                    if (startBtn && startBtn.parentNode) {
-                        startBtn.parentNode.insertBefore(adjustmentContainer, startBtn.nextSibling);
+                    // 3. Toggle Guide (Top Right or Top Center)
+                    const toggleHtml = `
+                        <button class="btn btn-sm btn-outline-primary bg-white shadow-sm position-absolute" 
+                                id="toggle-guides-btn" 
+                                style="top: -50px; right: 0; pointer-events: auto; z-index: 10;">
+                            <i class="bi bi-eye"></i> 顯示/隱藏規格標線
+                        </button>
+                    `;
+
+                    // We need a container to hold these that allows pointer events
+                    // Since specific elements have pointer-events: auto, we can set wrapper to none if needed, 
+                    // or just append them directly to imageWrapper.
+
+                    const controlsDiv = document.createElement('div');
+                    controlsDiv.innerHTML = vSliderHtml + hSliderHtml + toggleHtml;
+
+                    // Append children to wrapper
+                    while (controlsDiv.firstChild) {
+                        imageWrapper.appendChild(controlsDiv.firstChild);
                     }
 
                     // --- Bind Events ---
@@ -225,7 +237,7 @@ async function handleFileUpload(e) {
                     if (toggleBtn) {
                         toggleBtn.onclick = () => {
                             state.adjustments.showGuides = !state.adjustments.showGuides;
-                            toggleBtn.className = state.adjustments.showGuides ? 'btn btn-sm btn-outline-primary' : 'btn btn-sm btn-outline-secondary';
+                            toggleBtn.className = state.adjustments.showGuides ? 'btn btn-sm btn-outline-primary bg-white shadow-sm position-absolute' : 'btn btn-sm btn-outline-secondary bg-white shadow-sm position-absolute';
                             handleClientSideUpdate();
                         };
                     }

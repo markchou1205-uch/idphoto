@@ -539,12 +539,12 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
                 rCtx.lineTo(ruledCanvas.width, chinRangeBottomY);
                 rCtx.stroke();
 
-                // Draw Target Center (Stronger Red)
-                rCtx.strokeStyle = '#FF0000';
-                rCtx.beginPath();
-                rCtx.moveTo(0, chinY);
-                rCtx.lineTo(ruledCanvas.width, chinY);
-                rCtx.stroke();
+                // Draw Target Center (Stronger Red) - REMOVED per user request
+                // rCtx.strokeStyle = '#FF0000';
+                // rCtx.beginPath();
+                // rCtx.moveTo(0, chinY);
+                // rCtx.lineTo(ruledCanvas.width, chinY);
+                // rCtx.stroke();
 
                 rCtx.fillStyle = '#FF0000';
                 rCtx.fillText("3.2cm", 5, chinRangeTopY - 5);
