@@ -438,133 +438,132 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
 
             ctx.filter = 'none'; // Reset for Rulers
 
-            // --- Add Rulers & Guides (User Verification) ---
-            const margin = 60; // 尺標預留空間
-            const ruledCanvas = document.createElement('canvas');
-            ruledCanvas.width = canvas.width + margin;
-            ruledCanvas.height = canvas.height + margin;
-            const rCtx = ruledCanvas.getContext('2d');
+            // [NEW] Clean Mode: If guides are hidden, return the pure cropped image (No Padding, No Rulers)
+            if (!showGuides) {
+                resolve(canvas.toDataURL('image/jpeg', 0.95));
+                URL.revokeObjectURL(url);
+                return;
+            }
 
-            // 1. Fill White Background
+            // --- Add Rulers & Guides (User Verification) ---
+            const margin = 40; // Space for rulers
+            const ruledCanvas = document.createElement('canvas');
+            ruledCanvas.width = canvas.width + margin; // Right margin
+            ruledCanvas.height = canvas.height + margin; // Top margin
+
+            const rCtx = ruledCanvas.getContext('2d');
             rCtx.fillStyle = '#FFFFFF';
             rCtx.fillRect(0, 0, ruledCanvas.width, ruledCanvas.height);
 
-            // 2. Draw Original Photo (Offset Y by margin)
+            // 3. Draw Original Photo (Offset Y by margin)
             rCtx.drawImage(canvas, 0, margin);
 
-            // 3. Draw Rulers & Verification (Conditional)
-            if (showGuides) {
-                // 3. Draw Rulers
-                rCtx.strokeStyle = '#000000';
-                rCtx.fillStyle = '#000000';
-                rCtx.font = '12px Arial';
+            // 4. Draw Rulers
+            rCtx.strokeStyle = '#000000';
+            rCtx.fillStyle = '#000000';
+            rCtx.font = '12px Arial';
+            rCtx.lineWidth = 1;
+
+            // A. Top Ruler (Horizontal)
+            rCtx.beginPath();
+            rCtx.moveTo(0, margin - 1);
+            rCtx.lineTo(canvas.width, margin - 1);
+            const wMM = config.canvas_mm[0] || 35;
+            for (let mm = 0; mm <= wMM; mm++) {
+                const x = mm * (canvas.width / wMM);
+                const isMajor = (mm % 5 === 0);
+                const tickH = isMajor ? 15 : 8;
+                rCtx.moveTo(x, margin - 1);
+                rCtx.lineTo(x, margin - 1 - tickH);
+                if (isMajor && x < canvas.width - 5) {
+                    if (x > 10) rCtx.fillText(mm.toString(), x - 4, margin - 20);
+                }
+            }
+            rCtx.stroke();
+
+            // B. Right Ruler (Vertical)
+            rCtx.beginPath();
+            const rightBaseX = canvas.width;
+            rCtx.moveTo(rightBaseX, margin);
+            rCtx.lineTo(rightBaseX, ruledCanvas.height);
+            const hMM = config.canvas_mm[1] || 45;
+            for (let mm = 0; mm <= hMM; mm++) {
+                const y = margin + (mm * (canvas.height / hMM));
+                const isMajor = (mm % 5 === 0);
+                const tickW = isMajor ? 15 : 8;
+                rCtx.moveTo(rightBaseX, y);
+                rCtx.lineTo(rightBaseX + tickW, y);
+                if (isMajor && y < ruledCanvas.height - 5) {
+                    rCtx.fillText(mm.toString(), rightBaseX + 20, y + 4);
+                }
+            }
+            rCtx.stroke();
+
+            // 5. Verification Lines & Labels
+            if (faceData && faceData.faceLandmarks && layout.config) {
+                const topY = margin + (layout.config.TOP_MARGIN_PX || 40);
+                const headH_Px = layout.config.TARGET_HEAD_PX;
+
+                // Common Styles
+                rCtx.lineWidth = 2;
+                rCtx.font = 'bold 12px Arial';
+                rCtx.setLineDash([5, 3]);
+
+                // 1. Head Top Line (Green)
+                rCtx.strokeStyle = '#00CC00'; // Green
+                rCtx.fillStyle = '#00CC00';
+                rCtx.beginPath();
+                rCtx.moveTo(0, topY);
+                rCtx.lineTo(ruledCanvas.width, topY);
+                rCtx.stroke();
+                rCtx.fillText("Head Top", 5, topY - 5);
+
+                // 2. Chin Range Band (Semi-transparent Red)
+                const rangeTopMm = 32;
+                const rangeBottomMm = 36;
+                const targetMm = 34;
+
+                const rangeTopPx = headH_Px * (rangeTopMm / targetMm);
+                const rangeBottomPx = headH_Px * (rangeBottomMm / targetMm);
+                const chinRangeTopY = topY + rangeTopPx;
+                const chinRangeBottomY = topY + rangeBottomPx;
+
+                rCtx.fillStyle = 'rgba(255, 0, 0, 0.15)';
+                rCtx.fillRect(0, chinRangeTopY, ruledCanvas.width, chinRangeBottomY - chinRangeTopY);
+
+                rCtx.fillStyle = '#FF0000';
+                rCtx.fillText("3.2cm", 5, chinRangeTopY - 5);
+                rCtx.fillText("3.6cm", 5, chinRangeBottomY + 15);
+
+                // 3. Eye Line (Blue)
+                if (layout.debug && layout.debug.N) {
+                    const eyeY = topY + (layout.debug.N * layout.scale);
+                    rCtx.strokeStyle = '#0000FF'; // Blue
+                    rCtx.fillStyle = '#0000FF';
+                    rCtx.beginPath();
+                    rCtx.moveTo(0, eyeY);
+                    rCtx.lineTo(ruledCanvas.width, eyeY);
+                    rCtx.stroke();
+                    rCtx.fillText("Eye Line", 5, eyeY - 5);
+                }
+
+                // 4. Vertical Center Line
+                const centerX = canvas.width / 2;
+                rCtx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
                 rCtx.lineWidth = 1;
-
-                // A. Top Ruler (Horizontal)
+                rCtx.setLineDash([10, 5]);
                 rCtx.beginPath();
-                rCtx.moveTo(0, margin - 1);
-                rCtx.lineTo(canvas.width, margin - 1);
-                const wMM = config.canvas_mm[0] || 35;
-                for (let mm = 0; mm <= wMM; mm++) {
-                    const x = mm * (canvas.width / wMM);
-                    const isMajor = (mm % 5 === 0);
-                    const tickH = isMajor ? 15 : 8;
-                    rCtx.moveTo(x, margin - 1);
-                    rCtx.lineTo(x, margin - 1 - tickH);
-                    if (isMajor && x < canvas.width - 5) {
-                        if (x > 10) rCtx.fillText(mm.toString(), x - 4, margin - 20);
-                    }
-                }
+                rCtx.moveTo(centerX, margin);
+                rCtx.lineTo(centerX, ruledCanvas.height);
                 rCtx.stroke();
+                rCtx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                rCtx.fillText("Center", centerX + 5, margin + 20);
 
-                // B. Right Ruler (Vertical)
-                rCtx.beginPath();
-                const rightBaseX = canvas.width;
-                rCtx.moveTo(rightBaseX, margin);
-                rCtx.lineTo(rightBaseX, ruledCanvas.height);
-                const hMM = config.canvas_mm[1] || 45;
-                for (let mm = 0; mm <= hMM; mm++) {
-                    const y = margin + (mm * (canvas.height / hMM));
-                    const isMajor = (mm % 5 === 0);
-                    const tickW = isMajor ? 15 : 8;
-                    rCtx.moveTo(rightBaseX, y);
-                    rCtx.lineTo(rightBaseX + tickW, y);
-                    if (isMajor && y < ruledCanvas.height - 5) {
-                        rCtx.fillText(mm.toString(), rightBaseX + 20, y + 4);
-                    }
-                }
-                rCtx.stroke();
-
-                // 4. Verification Lines & Labels
-                if (faceData && faceData.faceLandmarks && layout.config) {
-                    const topY = margin + (layout.config.TOP_MARGIN_PX || 40);
-                    const headH_Px = layout.config.TARGET_HEAD_PX;
-                    const chinY = topY + headH_Px;
-
-                    // Common Styles
-                    rCtx.lineWidth = 2;
-                    rCtx.font = 'bold 12px Arial';
-                    rCtx.setLineDash([5, 3]);
-
-                    // 1. Head Top Line (Green) - Fixed Anchor
-                    rCtx.strokeStyle = '#00CC00'; // Green
-                    rCtx.fillStyle = '#00CC00';
-                    rCtx.beginPath();
-                    rCtx.moveTo(0, topY);
-                    rCtx.lineTo(ruledCanvas.width, topY);
-                    rCtx.stroke();
-                    rCtx.fillText("Head Top", 5, topY - 5);
-
-                    // 2. Calculated Chin Line & Valid Range (Band)
-                    const rangeTopMm = 32;
-                    const rangeBottomMm = 36;
-                    const targetMm = 34;
-
-                    const rangeTopPx = headH_Px * (rangeTopMm / targetMm);
-                    const rangeBottomPx = headH_Px * (rangeBottomMm / targetMm);
-
-                    const chinRangeTopY = topY + rangeTopPx;
-                    const chinRangeBottomY = topY + rangeBottomPx;
-
-                    // Draw Range Band (Semi-transparent Red) - Restored
-                    rCtx.fillStyle = 'rgba(255, 0, 0, 0.15)';
-                    rCtx.fillRect(0, chinRangeTopY, ruledCanvas.width, chinRangeBottomY - chinRangeTopY);
-
-                    // Labels for Range
-                    rCtx.fillStyle = '#FF0000';
-                    rCtx.fillText("3.2cm", 5, chinRangeTopY - 5);
-                    rCtx.fillText("3.6cm", 5, chinRangeBottomY + 15);
-
-                    // 3. Eye Line (Blue) - Moving Indicator
-                    if (layout.debug && layout.debug.N) {
-                        const eyeY = topY + (layout.debug.N * layout.scale);
-                        rCtx.strokeStyle = '#0000FF'; // Blue
-                        rCtx.fillStyle = '#0000FF';
-                        rCtx.beginPath();
-                        rCtx.moveTo(0, eyeY);
-                        rCtx.lineTo(ruledCanvas.width, eyeY);
-                        rCtx.stroke();
-                        rCtx.fillText("Eye Line", 5, eyeY - 5);
-                    }
-
-                    // 4. Vertical Center Line
-                    const centerX = canvas.width / 2;
-                    rCtx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
-                    rCtx.lineWidth = 1;
-                    rCtx.setLineDash([10, 5]);
-                    rCtx.beginPath();
-                    rCtx.moveTo(centerX, margin);
-                    rCtx.lineTo(centerX, ruledCanvas.height);
-                    rCtx.stroke();
-                    rCtx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-                    rCtx.fillText("Center", centerX + 5, margin + 20);
-
-                    // Measurement Label (Right Side)
-                    const targetHeadCm = ((config.head_mm[0] + config.head_mm[1]) / 2 / 10).toFixed(1);
-                    rCtx.fillStyle = 'red';
-                    rCtx.setLineDash([]);
-                    rCtx.fillText(`${targetHeadCm} cm`, canvas.width + 5, topY + (headH_Px / 2));
-                }
+                // Measurement Label
+                const targetHeadCm = ((config.head_mm[0] + config.head_mm[1]) / 2 / 10).toFixed(1);
+                rCtx.fillStyle = 'red';
+                rCtx.setLineDash([]);
+                rCtx.fillText(`${targetHeadCm} cm`, canvas.width + 5, topY + (headH_Px / 2));
             }
 
             resolve(ruledCanvas.toDataURL('image/jpeg', 0.95));

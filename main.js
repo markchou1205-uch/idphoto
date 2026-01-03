@@ -435,11 +435,11 @@ function injectAdvancedControls() {
         const toggleIcon = isGuidesOn ? "bi-eye-slash" : "bi-eye";
         const toggleClass = isGuidesOn ? 'btn-white border shadow-sm text-primary' : 'btn-white border shadow-sm text-muted';
 
-        // 4. Size Toggle (Next to Guide Toggle) - New
+        // 4. Size Toggle (Next to Guide Toggle) - New Position: Top Center
         const sizeHtml = `
             <button class="btn btn-sm btn-white border shadow-sm text-dark position-absolute fw-bold" 
                     id="toggle-size-btn" 
-                    style="top: -50px; right: 140px; pointer-events: auto; z-index: 101; white-space: nowrap;">
+                    style="top: -50px; left: 50%; transform: translateX(-50%); pointer-events: auto; z-index: 101; white-space: nowrap;">
                 <i class="bi bi-aspect-ratio"></i> <span id="toggle-size-text">顯示輸出尺寸</span>
             </button>
         `;
@@ -502,10 +502,25 @@ function injectAdvancedControls() {
                 const isRealSize = mainImg.style.maxHeight === '45mm'; // Check current state
                 if (isRealSize) {
                     // Switch to Preview (Fit)
-                    mainImg.style.maxHeight = '100%';
-                    mainImg.style.maxWidth = '100%';
-                    mainImg.style.height = 'auto';
-                    mainImg.style.width = 'auto';
+                    state.adjustments.showGuides = true; // Restore Guides
+                    handleClientSideUpdate(); // Re-render
+
+                    // Force Styles after render (needs delay or check)
+                    // Actually handleClientSideUpdate is async.
+                    // We can rely on state persistence, but here we want visual snap.
+                    // Wait for update? UI might flicker.
+                    // Let's just set the styles. The update will refresh the src.
+
+                    setTimeout(() => {
+                        const img = document.getElementById('main-preview-img');
+                        if (img) {
+                            img.style.maxHeight = '100%';
+                            img.style.maxWidth = '100%';
+                            img.style.height = 'auto';
+                            img.style.width = 'auto';
+                        }
+                    }, 50);
+
                     sizeText.innerText = "顯示輸出尺寸";
                     sizeBtn.classList.remove('text-primary');
                     sizeBtn.classList.add('text-dark');
@@ -516,11 +531,19 @@ function injectAdvancedControls() {
                     if (guidesBtn) guidesBtn.classList.remove('d-none');
                 } else {
                     // Switch to Real Size (35mm x 45mm)
-                    mainImg.style.maxHeight = '45mm'; // CSS mm units
-                    mainImg.style.maxWidth = '35mm';
-                    // We also need to unset percentage limits or force them
-                    mainImg.style.height = '45mm';
-                    mainImg.style.width = '35mm';
+                    state.adjustments.showGuides = false; // Force Clean
+                    handleClientSideUpdate(); // Re-render
+
+                    setTimeout(() => {
+                        const img = document.getElementById('main-preview-img');
+                        if (img) {
+                            img.style.maxHeight = '45mm'; // CSS mm units
+                            img.style.maxWidth = '35mm';
+                            img.style.height = '45mm';
+                            img.style.width = '35mm';
+                        }
+                    }, 50);
+
                     sizeText.innerText = "顯示預覽尺寸";
                     sizeBtn.classList.remove('text-dark');
                     sizeBtn.classList.add('text-primary');
@@ -699,6 +722,16 @@ async function handleClientSideUpdate() {
 }
 // Removed legacy applyGuideOverlay (logic moved to UI)
 // Expose functions to Global Scope for HTML Buttons / UI
+// [NEW] Quick Restore Helper (No Spinner)
+window.restorePreview = function () {
+    if (state.processedImage) {
+        updateResultUI(state.processedImage);
+    } else {
+        console.error("No processed image to restore");
+        runProductionPhase(); // Fallback
+    }
+};
+
 window.handleFileUpload = handleFileUpload;
 window.runProductionPhase = runProductionPhase;
 window.runAuditPhase = runAuditPhase;

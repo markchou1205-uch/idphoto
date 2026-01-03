@@ -663,14 +663,18 @@ export const UI = {
                 document.getElementById('btn-dl-4x2-direct').onclick = async () => {
                     // PDF Logic
                     try {
-                        await UI.generate4x2PDF(imgUrl, specData);
+                        ```
+                await UI.generate4x2PDF(imgUrl, specData);
                     } catch (e) { alert("下載失敗"); }
                 };
 
                 // Bind Back
-                document.getElementById('btn-back-single').onclick = () => {
-                    // Restore Single View via Main Pipeline to ensure controls are re-injected
-                    if (window.runProductionPhase) {
+            document.getElementById('btn-back-single').onclick = () => {
+                // Restore Single View via Quick Restore (No Spinner)
+                if (window.restorePreview) {
+                    console.log("[Debug] Back to Single: Using restorePreview.");
+                    window.restorePreview();
+                } else if (window.runProductionPhase) {
                         console.log("[Debug] Back to Single: Triggering runProductionPhase to restore controls.");
                         window.runProductionPhase();
                     } else {
@@ -752,7 +756,7 @@ export const UI = {
                 // How many rows fit in 1200?
                 const rows = Math.floor((1200 - gapY) / (photoH + gapY));
 
-                console.log(`Layout Config: ${mmW}x${mmH}mm -> ${photoW}x${photoH}px | Fits ${cols}x${rows}`);
+                console.log(`Layout Config: ${ mmW }x${ mmH } mm -> ${ photoW }x${ photoH } px | Fits ${ cols }x${ rows } `);
 
                 // Center Grid
                 const totalGridW = cols * photoW + (cols - 1) * gapX;
@@ -809,7 +813,7 @@ export const UI = {
             const cols = Math.floor((152.4 - gap) / (mmW + gap));
             const rows = Math.floor((101.6 - gap) / (mmH + gap));
 
-            console.log(`PDF Layout: ${cols}x${rows}`);
+            console.log(`PDF Layout: ${ cols }x${ rows } `);
 
             // Center
             const totalW = cols * mmW + (cols - 1) * gap;
@@ -940,10 +944,10 @@ export const UI = {
         const btnContainer = document.createElement('div');
         btnContainer.className = 'mt-3';
         btnContainer.innerHTML = `
-            <button id="manual-adjust-btn" class="btn btn-secondary btn-sm shadow-sm">
-                <i class="bi bi-tools"></i> 🛠 手動調整 / 重新裁切
-            </button>
-        `;
+                            < button id = "manual-adjust-btn" class="btn btn-secondary btn-sm shadow-sm" >
+                                <i class="bi bi-tools"></i> 🛠 手動調整 / 重新裁切
+            </button >
+    `;
         rightCol.appendChild(btnContainer);
 
         mainWrapper.appendChild(rightCol);
