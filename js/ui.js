@@ -669,18 +669,27 @@ export const UI = {
 
                 // Bind Back
                 document.getElementById('btn-back-single').onclick = () => {
-                    // Restore Single View (Simple: re-render result dashboard with single image logic)
-                    // We need to re-show the Single Image in container and restore buttons.
-                    // Shortcut: Just re-show download options?
-                    // We need to put the original image back into preview.
-                    container.innerHTML = '';
-                    const orig = new Image();
-                    orig.src = imgUrl; // Using the ruled/single image
-                    orig.className = 'img-fluid'; // Adjust style as needed
-                    // Actually usually we use applyResultGuides? Or just raw image.
-                    // Let's use simple image for now.
-                    container.appendChild(orig);
-                    UI.showDownloadOptions(imgUrl, specData);
+                    // Restore Single View via Main Pipeline to ensure controls are re-injected
+                    if (window.runProductionPhase) {
+                        console.log("[Debug] Back to Single: Triggering runProductionPhase to restore controls.");
+                        window.runProductionPhase();
+                    } else {
+                        // Fallback (Controls might be missing, but image shows)
+                        container.innerHTML = '';
+                        const orig = new Image();
+                        orig.src = imgUrl;
+                        orig.className = 'img-fluid shadow-sm rounded border';
+                        orig.style.maxHeight = '100%';
+                        orig.style.maxWidth = '100%';
+                        const wrapper = document.createElement('div');
+                        wrapper.id = 'image-wrapper';
+                        wrapper.className = 'position-relative d-inline-flex justify-content-center align-items-center';
+                        wrapper.style.maxHeight = '80%';
+                        wrapper.style.maxWidth = '100%';
+                        wrapper.appendChild(orig);
+                        container.appendChild(wrapper);
+                        UI.showDownloadOptions(imgUrl, specData);
+                    }
                 };
             }
 
