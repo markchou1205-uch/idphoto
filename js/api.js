@@ -549,7 +549,7 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
                 rCtx.fillStyle = '#FF0000';
                 rCtx.fillText("3.2cm", 5, chinRangeTopY - 5);
                 rCtx.fillText("3.6cm", 5, chinRangeBottomY + 15);
-                rCtx.fillText("Target 3.4cm", 5, chinY - 5);
+                // rCtx.fillText("Target 3.4cm", 5, chinY - 5); // Removed
 
                 // 3. Eye Line (Blue) - Moving Indicator
                 if (layout.debug && layout.debug.N) {

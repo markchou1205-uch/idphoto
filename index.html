@@ -76,7 +76,8 @@
             </div>
         </div>
 
-        <div id="main-content" class="flex-grow-1 bg-light position-relative overflow-hidden">
+        <div id="main-content" class="flex-grow-1 bg-light position-relative">
+            <!-- Removed overflow-hidden to allow controls to be seen if they extend -->
 
             <div id="dashboard-area" class="container py-5 h-100 d-flex flex-column justify-content-center">
                 <div class="text-center mb-5">
@@ -90,35 +91,20 @@
                     <!-- Sidebar: Audit Report (Restored) -->
                     <!-- Sidebar: Action & Audit Panel -->
                     <div class="col-md-3 h-100 bg-white border-end shadow-sm overflow-auto" id="sidebar-container">
-
-                        <!-- NEW: Action Panel (Show after upload) -->
+                        <!-- ... -->
                         <div id="action-panel" class="p-4 d-flex flex-column gap-3">
+                            <!-- ... content ... -->
                             <h5 class="fw-bold mb-2">請選擇下一步</h5>
-
-                            <!-- Primary Action -->
                             <button id="btn-start-production"
                                 class="btn btn-primary btn-lg w-100 py-3 shadow-sm fw-bold">
                                 <i class="bi bi-magic"></i> 開始製作證件照
                             </button>
-
-                            <!-- Service Status Table (Visible by Default) -->
-                            <div id="service-table-container" class="mt-2">
-                                <!-- Service items injected here -->
-                            </div>
-
+                            <div id="service-table-container" class="mt-2"></div>
                             <hr class="my-2 opacity-25">
-
-                            <!-- Secondary Action (Audit) - Starts secondary, becomes Urgent (Red) -->
                             <button id="btn-start-audit" class="btn btn-outline-secondary w-100">
                                 <i class="bi bi-shield-check"></i> 合規審查 (檢測報告)
                             </button>
-
-                            <!-- Audit Report (Hidden by Default) -->
-                            <div id="audit-report-container" class="d-none">
-                                <!-- Audit items injected here -->
-                            </div>
-
-                            <!-- MOFA Info -->
+                            <div id="audit-report-container" class="d-none"></div>
                             <div class="mt-2 p-3 bg-light rounded border">
                                 <h6 class="fw-bold text-muted mb-2"><small>外交部相關規定</small></h6>
                                 <ul class="list-unstyled small text-muted mb-2 ps-1" style="font-size: 0.85rem;">
@@ -136,8 +122,10 @@
                     </div>
 
                     <!-- Main Preview Area -->
-                    <div class="col-md-9 h-100 d-flex flex-column bg-dark">
-                        <div class="flex-grow-1 d-flex justify-content-center align-items-center p-4 position-relative"
+                    <!-- Added overflow-auto to allow scrolling if controls stick out -->
+                    <div class="col-md-9 h-100 d-flex flex-column bg-dark overflow-auto"
+                        style="overflow-x: auto; overflow-y: auto;">
+                        <div class="flex-grow-1 d-flex justify-content-center align-items-center p-5 position-relative"
                             id="preview-container">
 
                             <!-- Image Wrapper for Relative Controls -->

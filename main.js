@@ -394,11 +394,12 @@ function injectAdvancedControls() {
         overlay.style.width = '100%';
         overlay.style.height = '100%';
         overlay.style.pointerEvents = 'none';
+        overlay.style.zIndex = '100'; // Ensure above image
 
         // 1. Vertical Slider (Right)
         const vSliderHtml = `
             <div class="position-absolute d-flex flex-column align-items-center" 
-                    style="right: -60px; top: 50%; transform: translateY(-50%); height: 80%; width: 40px; pointer-events: auto;">
+                    style="right: -60px; top: 50%; transform: translateY(-50%); height: 80%; width: 40px; pointer-events: auto; z-index: 101;">
                 <button class="btn btn-sm btn-light border shadow-sm mb-2 p-0" id="btn-zoom-in" title="放大" style="width:24px;height:24px;">+</button>
                 <input type="range" class="form-range" id="head-scale-input" min="1.0" max="1.4" step="0.01" value="${state.adjustments.headScale || 1.2}" 
                         style="writing-mode: vertical-lr; direction: rtl; flex-grow: 1; margin: 0;">
@@ -410,7 +411,7 @@ function injectAdvancedControls() {
         // 2. Horizontal Slider (Bottom)
         const hSliderHtml = `
             <div class="position-absolute d-flex align-items-center justify-content-center w-100" 
-                    style="bottom: -50px; left: 0; pointer-events: auto;">
+                    style="bottom: -50px; left: 0; pointer-events: auto; z-index: 101;">
                 <span class="badge bg-light text-dark border me-2">L</span>
                 <input type="range" class="form-range flex-grow-1 shadow-sm" id="x-shift-input" min="-50" max="50" step="1" value="${state.adjustments.xShift || 0}" style="max-width: 60%;">
                 <span class="badge bg-light text-dark border ms-2">R</span>
@@ -424,7 +425,7 @@ function injectAdvancedControls() {
         const toggleHtml = `
             <button class="btn btn-sm ${toggleClass} bg-white position-absolute" 
                     id="toggle-guides-btn" 
-                    style="top: -50px; right: 0; pointer-events: auto; z-index: 10;">
+                    style="top: -50px; right: 0; pointer-events: auto; z-index: 101;">
                 <i class="bi bi-eye"></i> 顯示/隱藏規格標線
             </button>
         `;
