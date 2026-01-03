@@ -401,9 +401,13 @@ function injectAdvancedControls() {
         overlay.style.pointerEvents = 'none';
         overlay.style.zIndex = '100'; // Ensure above image
 
+        // Check Guides State
+        const isGuidesOn = state.adjustments.showGuides === undefined ? true : state.adjustments.showGuides;
+        const sliderVisibilityClass = isGuidesOn ? "" : "d-none";
+
         // 1. Vertical Slider (Right)
         const vSliderHtml = `
-            <div class="position-absolute d-flex flex-column align-items-center bg-white rounded shadow p-2" 
+            <div id="v-slider-container" class="position-absolute d-flex flex-column align-items-center bg-white rounded shadow p-2 ${sliderVisibilityClass}" 
                     style="right: -80px; top: 50%; transform: translateY(-50%); height: 85%; width: 50px; pointer-events: auto; z-index: 101;">
                 <span class="small fw-bold text-muted mb-2" style="writing-mode: vertical-lr; text-orientation: upright; letter-spacing: 2px;">縮放調整</span>
                 <button class="btn btn-sm btn-light border shadow-sm mb-2 p-0" id="btn-zoom-in" title="放大" style="width:24px;height:24px;">+</button>
@@ -416,7 +420,7 @@ function injectAdvancedControls() {
 
         // 2. Horizontal Slider (Bottom)
         const hSliderHtml = `
-            <div class="position-absolute d-flex align-items-center justify-content-center w-100 bg-white rounded shadow p-2" 
+            <div id="h-slider-container" class="position-absolute d-flex align-items-center justify-content-center w-100 bg-white rounded shadow p-2 ${sliderVisibilityClass}" 
                     style="bottom: -70px; left: 0; pointer-events: auto; z-index: 101;">
                 <span class="small fw-bold text-muted me-3">水平調整</span>
                 <span class="badge bg-light text-dark border me-2">L</span>
@@ -427,10 +431,18 @@ function injectAdvancedControls() {
         `;
 
         // 3. Toggle Guide (Top Right)
-        const isGuidesOn = state.adjustments.showGuides === undefined ? true : state.adjustments.showGuides;
         const toggleText = isGuidesOn ? "隱藏規格標線" : "顯示規格標線";
         const toggleIcon = isGuidesOn ? "bi-eye-slash" : "bi-eye";
         const toggleClass = isGuidesOn ? 'btn-white border shadow-sm text-primary' : 'btn-white border shadow-sm text-muted';
+
+        // 4. Size Toggle (Next to Guide Toggle) - New
+        const sizeHtml = `
+            <button class="btn btn-sm btn-white border shadow-sm text-dark position-absolute fw-bold" 
+                    id="toggle-size-btn" 
+                    style="top: -50px; right: 140px; pointer-events: auto; z-index: 101; white-space: nowrap;">
+                <i class="bi bi-aspect-ratio"></i> <span id="toggle-size-text">顯示輸出尺寸</span>
+            </button>
+        `;
 
         const toggleHtml = `
             <button class="btn btn-sm ${toggleClass} position-absolute fw-bold" 
@@ -441,7 +453,7 @@ function injectAdvancedControls() {
         `;
 
         // Append HTML to Overlay
-        overlay.innerHTML = vSliderHtml + hSliderHtml + toggleHtml;
+        overlay.innerHTML = vSliderHtml + hSliderHtml + sizeHtml + toggleHtml;
 
         // Append Overlay to Wrapper
         imageWrapper.appendChild(overlay);
@@ -454,6 +466,8 @@ function injectAdvancedControls() {
         const toggleBtn = document.getElementById('toggle-guides-btn');
         const toggleBtnText = document.getElementById('toggle-btn-text');
         const toggleBtnIcon = toggleBtn ? toggleBtn.querySelector('i') : null;
+        const vContainer = document.getElementById('v-slider-container');
+        const hContainer = document.getElementById('h-slider-container');
 
         if (toggleBtn) {
             toggleBtn.onclick = () => {
@@ -468,7 +482,42 @@ function injectAdvancedControls() {
                 }
                 toggleBtn.className = isOn ? 'btn btn-sm btn-white border shadow-sm text-primary position-absolute fw-bold' : 'btn btn-sm btn-white border shadow-sm text-muted position-absolute fw-bold';
 
+                // Toggle Sliders Visibility
+                if (vContainer) vContainer.classList.toggle('d-none', !isOn);
+                if (hContainer) hContainer.classList.toggle('d-none', !isOn);
+
                 handleClientSideUpdate();
+            };
+        }
+
+        // 4. Size Toggle
+        const sizeBtn = document.getElementById('toggle-size-btn');
+        const sizeText = document.getElementById('toggle-size-text');
+        const mainImg = document.getElementById('main-preview-img');
+
+        if (sizeBtn && mainImg) {
+            sizeBtn.onclick = () => {
+                const isRealSize = mainImg.style.maxHeight === '45mm'; // Check current state
+                if (isRealSize) {
+                    // Switch to Preview (Fit)
+                    mainImg.style.maxHeight = '100%';
+                    mainImg.style.maxWidth = '100%';
+                    mainImg.style.height = 'auto';
+                    mainImg.style.width = 'auto';
+                    sizeText.innerText = "顯示輸出尺寸";
+                    sizeBtn.classList.remove('text-primary');
+                    sizeBtn.classList.add('text-dark');
+                } else {
+                    // Switch to Real Size (35mm x 45mm)
+                    mainImg.style.maxHeight = '45mm'; // CSS mm units
+                    mainImg.style.maxWidth = '35mm';
+                    // We also need to unset percentage limits or force them
+                    mainImg.style.height = '45mm';
+                    mainImg.style.width = '35mm';
+                    sizeText.innerText = "顯示預覽尺寸";
+                    sizeBtn.classList.remove('text-dark');
+                    sizeBtn.classList.add('text-primary');
+                }
             };
         }
 

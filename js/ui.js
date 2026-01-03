@@ -527,7 +527,7 @@ export const UI = {
     },
 
     // Final Stage: Download Options
-    showDownloadOptions(singleBlob, specData) {
+    showDownloadOptions(singleBlob, specData, custom4x2Handler = null) {
         // [FIX]: Look for Service Area primarily, fallback to audit
         const area = document.getElementById('service-action-area') || document.getElementById('audit-action-area');
         if (!area) return;
@@ -544,9 +544,13 @@ export const UI = {
         };
 
         const preview4x2Action = async () => {
-            // Switch to 4x2 Preview Mode
-            const url = (singleBlob instanceof Blob) ? URL.createObjectURL(singleBlob) : singleBlob;
-            await UI.show4x2Preview(url, specData);
+            if (custom4x2Handler) {
+                await custom4x2Handler();
+            } else {
+                // Default Fallback
+                const url = (singleBlob instanceof Blob) ? URL.createObjectURL(singleBlob) : singleBlob;
+                await UI.show4x2Preview(url, specData);
+            }
         };
 
         newArea.innerHTML = `
