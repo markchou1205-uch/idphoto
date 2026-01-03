@@ -490,10 +490,12 @@ function injectAdvancedControls() {
             };
         }
 
+
         // 4. Size Toggle
         const sizeBtn = document.getElementById('toggle-size-btn');
         const sizeText = document.getElementById('toggle-size-text');
         const mainImg = document.getElementById('main-preview-img');
+        const guidesBtn = document.getElementById('toggle-guides-btn');
 
         if (sizeBtn && mainImg) {
             sizeBtn.onclick = () => {
@@ -507,6 +509,11 @@ function injectAdvancedControls() {
                     sizeText.innerText = "顯示輸出尺寸";
                     sizeBtn.classList.remove('text-primary');
                     sizeBtn.classList.add('text-dark');
+
+                    // Show Controls
+                    if (vContainer) vContainer.classList.remove('d-none');
+                    if (hContainer) hContainer.classList.remove('d-none');
+                    if (guidesBtn) guidesBtn.classList.remove('d-none');
                 } else {
                     // Switch to Real Size (35mm x 45mm)
                     mainImg.style.maxHeight = '45mm'; // CSS mm units
@@ -517,6 +524,11 @@ function injectAdvancedControls() {
                     sizeText.innerText = "顯示預覽尺寸";
                     sizeBtn.classList.remove('text-dark');
                     sizeBtn.classList.add('text-primary');
+
+                    // Hide Controls (Clean Mode)
+                    if (vContainer) vContainer.classList.add('d-none');
+                    if (hContainer) hContainer.classList.add('d-none');
+                    if (guidesBtn) guidesBtn.classList.add('d-none');
                 }
             };
         }
@@ -603,7 +615,7 @@ async function updateResultUI(b64) {
 
         img = document.createElement('img');
         img.id = 'main-preview-img';
-        img.className = 'img-fluid shadow-sm rounded border';
+        img.className = 'img-fluid shadow-sm border'; // Removed 'rounded'
         img.style.maxHeight = '100%';
         img.style.maxWidth = '100%';
         img.style.objectFit = 'contain';

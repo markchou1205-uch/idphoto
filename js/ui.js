@@ -678,7 +678,7 @@ export const UI = {
                         container.innerHTML = '';
                         const orig = new Image();
                         orig.src = imgUrl;
-                        orig.className = 'img-fluid shadow-sm rounded border';
+                        orig.className = 'img-fluid shadow-sm border';
                         orig.style.maxHeight = '100%';
                         orig.style.maxWidth = '100%';
                         const wrapper = document.createElement('div');
@@ -958,42 +958,8 @@ export const UI = {
 
     // 5. Apply Red Guide Lines (Ministry of Interior Spec)
     applyResultGuides(wrapperElement) {
-        // Ensure relative context
+        // GUIDES REMOVED BY USER REQUEST
+        // Ensuring no residual elements interfere
         wrapperElement.style.position = 'relative';
-
-        const createLine = (topPercent, color, text) => {
-            const line = document.createElement('div');
-            line.style.position = 'absolute';
-            line.style.top = `${topPercent}%`;
-            line.style.left = '0';
-            line.style.right = '0';
-            line.style.width = '100%';
-            line.style.borderTop = `2px dashed ${color}`;
-            line.style.zIndex = '10';
-            line.style.pointerEvents = 'none';
-
-            if (text) {
-                const label = document.createElement('span');
-                label.innerText = text;
-                label.style.position = 'absolute';
-                label.style.right = '5px';
-                label.style.top = '-22px'; // Above the line
-                label.style.color = color;
-                label.style.fontSize = '12px';
-                label.style.fontWeight = 'bold';
-                label.style.background = 'rgba(255,255,255,0.8)';
-                label.style.padding = '1px 4px';
-                label.style.borderRadius = '3px';
-                line.appendChild(label);
-            }
-            wrapperElement.appendChild(line);
-        };
-
-        // Hair Top Line (10% = 4.5mm)
-        createLine(10, 'red', '頭髮頂端');
-
-        // Chin Bottom (90% = 40.5mm, implying 3.6cm head height)
-        createLine(90, 'red', '下巴 (3.6cm)');
-
     }
 };
