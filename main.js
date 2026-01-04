@@ -88,8 +88,20 @@ function initSpecs() {
         div.style.cursor = 'pointer';
         div.innerHTML = `<div class="fw-bold">${s.name}</div><div class="small opacity-75">${s.desc}</div>`;
         div.onclick = () => {
+            if (state.spec === key) return; // No change
+
+            console.log(`Switching Spec: ${state.spec} -> ${key}`);
             state.spec = key;
             updateSpecUI();
+
+            // [NEW FEATURE] Live Switch: If image exists, re-run production
+            if (state.originalImage) {
+                console.log("Image exists, re-running production with new spec...");
+
+                // Show standard loading if needed or just run
+                // Assuming runProductionPhase handles UI reset/loading
+                runProductionPhase();
+            }
         };
         specsContainer.appendChild(div);
     });
