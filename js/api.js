@@ -413,20 +413,26 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
                 ctx.drawImage(img, layout.x, layout.y, img.width * layout.scale, img.height * layout.scale);
 
                 // [Visual Anchor Update]
-                // 1. Remove Solid Red Lines (Top/Bottom)
-                // 2. Add 3mm Red Semi-Transparent Zone for Chin
-                // Only draw if guides are enabled
-                if (showGuides) {
-                    // 300 DPI -> 1mm = 11.81px -> 3mm = 35.4px
-                    // Standard Chin Y = 442 (40 margin + 402 head)
-                    // Center the 35px zone at 442
-                    const zoneH = 35;
-                    const zoneY = 442 - (zoneH / 2);
+                // Dynamic Chin Zone from Spec
+                if (showGuides && config.chin_range_mm) {
+                    const PPI = config.ppi || 300;
+                    const MM_TO_PX = PPI / 25.4;
+
+                    // Chin Range is relative to Head Top? No, spec says "Head Length" range.
+                    // Chin Position Y = Top Margin + Head Length
+                    const topMarginMm = config.top_margin_mm;
+                    const minHeadMm = config.chin_range_mm[0];
+                    const maxHeadMm = config.chin_range_mm[1];
+
+                    const minY_mm = topMarginMm + minHeadMm;
+                    const maxY_mm = topMarginMm + maxHeadMm;
+
+                    const zoneY = minY_mm * MM_TO_PX;
+                    const zoneH = (maxY_mm - minY_mm) * MM_TO_PX;
 
                     ctx.fillStyle = 'rgba(255, 0, 0, 0.2)'; // Semi-transparent Red
                     ctx.fillRect(0, zoneY, layout.canvasW, zoneH);
 
-                    // Optional: Add thin border to zone for clarity
                     ctx.strokeStyle = 'rgba(255, 0, 0, 0.4)';
                     ctx.lineWidth = 1;
                     ctx.strokeRect(0, zoneY, layout.canvasW, zoneH);

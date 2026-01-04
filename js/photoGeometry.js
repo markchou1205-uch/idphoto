@@ -8,10 +8,17 @@ export function calculateUniversalLayout(
     chinRatio = 1.2, // Default to Proportional Model ratio 1.2
     xShift = 0       // Horizontal Shift (pixels)
 ) {
-    const TARGET_HEAD_PX = 402;
-    const CANVAS_W = 413;
-    const CANVAS_H = 531;
-    const TARGET_TOP_MARGIN = 40;
+    // --- Dynamic Spec Calculation ---
+    const PPI = config.ppi || 300;
+    const MM_TO_PX = PPI / 25.4;
+
+    const CANVAS_W = Math.round(config.width_mm * MM_TO_PX);
+    const CANVAS_H = Math.round(config.height_mm * MM_TO_PX);
+    const TARGET_HEAD_PX = config.head_target_mm * MM_TO_PX;
+    const TARGET_TOP_MARGIN = config.top_margin_mm * MM_TO_PX;
+
+    // Debug
+    // console.log(`[Geometry] Spec: ${config.name}, Canvas: ${CANVAS_W}x${CANVAS_H}, Head: ${TARGET_HEAD_PX.toFixed(1)}, Top: ${TARGET_TOP_MARGIN.toFixed(1)}`);
 
     // 1. Stable inputs
     const eyeMidY_Global = (landmarks.pupilLeft.y + landmarks.pupilRight.y) / 2;
