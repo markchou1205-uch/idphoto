@@ -415,19 +415,22 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
                 // [Visual Anchor Update]
                 // 1. Remove Solid Red Lines (Top/Bottom)
                 // 2. Add 3mm Red Semi-Transparent Zone for Chin
-                // 300 DPI -> 1mm = 11.81px -> 3mm = 35.4px
-                // Standard Chin Y = 442 (40 margin + 402 head)
-                // Center the 35px zone at 442
-                const zoneH = 35;
-                const zoneY = 442 - (zoneH / 2);
+                // Only draw if guides are enabled
+                if (showGuides) {
+                    // 300 DPI -> 1mm = 11.81px -> 3mm = 35.4px
+                    // Standard Chin Y = 442 (40 margin + 402 head)
+                    // Center the 35px zone at 442
+                    const zoneH = 35;
+                    const zoneY = 442 - (zoneH / 2);
 
-                ctx.fillStyle = 'rgba(255, 0, 0, 0.2)'; // Semi-transparent Red
-                ctx.fillRect(0, zoneY, layout.canvasW, zoneH);
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.2)'; // Semi-transparent Red
+                    ctx.fillRect(0, zoneY, layout.canvasW, zoneH);
 
-                // Optional: Add thin border to zone for clarity
-                ctx.strokeStyle = 'rgba(255, 0, 0, 0.4)';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(0, zoneY, layout.canvasW, zoneH);
+                    // Optional: Add thin border to zone for clarity
+                    ctx.strokeStyle = 'rgba(255, 0, 0, 0.4)';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(0, zoneY, layout.canvasW, zoneH);
+                }
             } else {
                 console.warn("[Strict Perc] Missing landmarks/error, performing simple fit");
                 const scale = Math.min(canvas.width / img.width, canvas.height / img.height);

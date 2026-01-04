@@ -36,16 +36,20 @@ export function calculateUniversalLayout(
         console.warn(`[GEOMETRY WARNING] Scale ${finalScale.toFixed(4)} outside usual range.`);
     }
 
-    // 4. Positioning (Eye Pivot Logic)
-    // Old Logic: Fixed Top at 40px
-    // New Logic: Fixed Eye Center at Standard Y
-    // Standard Model: HeadH=402, Ratio=1.2 => N_std = 402 / 2.2 = 182.7px
-    // Standard Eye Y = TARGET_TOP_MARGIN (40) + N_std (182.7) ≈ 222.7px
+    // 4. Positioning (Pivot Logic)
+    // Old Pivot: Eye Center (TARGET_EYE_Y)
+    // New Pivot: Head Top (Target Top Margin)
+    // Logic: calculated DrawY so that topY_In_Source maps exactly to TARGET_TOP_MARGIN
+
+    // DrawY = TargetY - (SourceY * Scale)
+    const drawY = TARGET_TOP_MARGIN - (topY_In_Source * finalScale);
+
+    // Old Eye Logic (Commented out for reference)
+    /*
     const N_std = TARGET_HEAD_PX / 2.2;
     const TARGET_EYE_Y = TARGET_TOP_MARGIN + N_std;
-
-    // DrawY = TargetEyeY - (SourceEyeY * Scale)
     const drawY = TARGET_EYE_Y - (eyeMidY_In_Source * finalScale);
+    */
 
     // Horizontal Center + Shift
     const sourceWidth = actualSourceWidth || (750 * (currentImgH / 1000));
