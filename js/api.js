@@ -412,22 +412,22 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
             if (faceData && faceData.faceLandmarks && fullRect && layout.scale !== 1) {
                 ctx.drawImage(img, layout.x, layout.y, img.width * layout.scale, img.height * layout.scale);
 
-                // [Must-Do Debugging] Step 2: Visual Anchor
-                ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-                ctx.lineWidth = 2;
-                ctx.setLineDash([]);
+                // [Visual Anchor Update]
+                // 1. Remove Solid Red Lines (Top/Bottom)
+                // 2. Add 3mm Red Semi-Transparent Zone for Chin
+                // 300 DPI -> 1mm = 11.81px -> 3mm = 35.4px
+                // Standard Chin Y = 442 (40 margin + 402 head)
+                // Center the 35px zone at 442
+                const zoneH = 35;
+                const zoneY = 442 - (zoneH / 2);
 
-                // Line 1: Top Anchor at Y=40 (Target margin)
-                ctx.beginPath();
-                ctx.moveTo(0, 40);
-                ctx.lineTo(layout.canvasW, 40);
-                ctx.stroke();
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.2)'; // Semi-transparent Red
+                ctx.fillRect(0, zoneY, layout.canvasW, zoneH);
 
-                // Line 2: Chin Anchor at Y=442 (Target 40 + 402px Head Height)
-                ctx.beginPath();
-                ctx.moveTo(0, 442);
-                ctx.lineTo(layout.canvasW, 442);
-                ctx.stroke();
+                // Optional: Add thin border to zone for clarity
+                ctx.strokeStyle = 'rgba(255, 0, 0, 0.4)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(0, zoneY, layout.canvasW, zoneH);
             } else {
                 console.warn("[Strict Perc] Missing landmarks/error, performing simple fit");
                 const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
