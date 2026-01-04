@@ -21,6 +21,48 @@ function preloadLocalAI() {
         .catch(err => console.warn("AI Pre-load failed:", err));
 }
 
+// [Optimization] Helper: Client-Side Compression
+async function compressImage(base64, targetBytes = 1024 * 1024, maxWidth = 1500) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = base64;
+        img.onload = () => {
+            let w = img.width;
+            let h = img.height;
+            let scale = 1;
+
+            // 1. Resize first if too large
+            if (w > maxWidth || h > maxWidth) {
+                scale = Math.min(maxWidth / w, maxWidth / h);
+                w = Math.floor(w * scale);
+                h = Math.floor(h * scale);
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+
+            // 2. Iterative Compression
+            let quality = 0.9;
+            const tryCompress = () => {
+                const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                // Base64 length ~= size * 1.33
+                // dataUrl length > targetBytes * 1.37 (approx safety)
+                if (dataUrl.length > targetBytes * 1.37 && quality > 0.5) {
+                    quality -= 0.1;
+                    tryCompress();
+                } else {
+                    resolve(dataUrl);
+                }
+            };
+            tryCompress();
+        };
+        img.onerror = () => resolve(base64); // Fallback
+    });
+}
+
 // --- DOM Elements ---
 const uploadInput = document.getElementById('fileInput');
 const specsContainer = document.getElementById('specs-container');
@@ -132,12 +174,15 @@ async function handleFileUpload(e) {
         preloadLocalAI();
     }
 
+    // Perf: Warmup Backend Immediately (Eliminate Serial Logic)
+    // Don't wait for FileReader. Fire and forget.
+    API.warmupBackend();
+
     const reader = new FileReader();
     reader.onload = async (event) => {
         console.log("File Reader Loaded");
         try {
-            // Perf: Warmup Backend Immediately
-            API.warmupBackend();
+            // API.warmupBackend(); // Moved up
 
             let rawResult = event.target.result;
 
@@ -337,19 +382,29 @@ async function runProductionPhase() {
         // This shows the overlay and progress indicators immediately
         UI.renderServiceAnimation(async () => {
             try {
-                // 3. Start API Task (Inside Animation Callback)
-                const processRes = await API.processPreview(
-                    state.originalImage,
-                    state.faceData.suggestedCrop,
-                    state.faceData,
+                // [Optimization] 1. Client-Side Downsampling (<1.0MB)
+                const compressedB64 = await compressImage(state.originalImage, 1024 * 1024, 1500); // 1MB limit, 1500px max
+                console.log(`[Optimization] Compressed: ${state.originalImage.length} -> ${compressedB64.length}`);
+
+                // 3. Start API Task (Parallel Execution)
+                console.time("ParallelProduction");
+                const processRes = await API.executeParallelProduction(
+                    compressedB64,       // Send compressed image
+                    state.originalImage, // Keep original for high-res crop if needed (though API uses input for both now)
                     state.spec,
                     state.adjustments
                 );
+                console.timeEnd("ParallelProduction");
 
-                console.log("API.processPreview Result Retrieved");
+                console.log("API.executeParallelProduction Result Retrieved");
 
                 if (processRes && processRes.photos && processRes.photos.length > 0) {
                     // Cache Assets for Client-Side Re-composition
+                    // Note: Parallel API returns fullRect based on the image passed to it.
+                    // If we passed compressedB64, fullRect corresponds to that.
+                    // Ideally we might want the original high-res result, but for speed 1500px is sufficient for 4x6 print usually.
+                    // If user needs strict high-res, we might need to rethink, but requirement says <1MB upload.
+
                     if (processRes.assets) {
                         state.assets = processRes.assets;
                     }

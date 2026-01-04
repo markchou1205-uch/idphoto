@@ -577,44 +577,53 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
 }
 
 // 2. Process Preview (Optimized: Local Crop + Direct Vercel)
-export async function processPreview(base64, cropParams, faceData = null, specKey = 'taiwan_passport', userAdjustments = {}) {
-    // 1. Resolve Spec Config
-    const config = PHOTO_CONFIGS[specKey] || PHOTO_CONFIGS['taiwan_passport'];
-
+// 2. Fetch Transparent Blob (Extracted)
+export async function fetchTransparentImage(base64) {
     const cleanBase64 = ensureSinglePrefix(base64);
+    // 1. Prepare Upload Blob (Resize & Compress) - Re-use logic
+    const optimizedBlob = await prepareImageForUpload(cleanBase64);
+
+    console.log("Calling Vercel Backend...");
+    const vercelRes = await fetch('/api/remove-bg', {
+        method: 'POST',
+        body: optimizedBlob
+    });
+
+    if (!vercelRes.ok) {
+        const errorText = await vercelRes.text();
+        console.error("Vercel Backend Error Details:", errorText);
+        throw new Error(`Vercel Fail: ${vercelRes.status} - ${errorText}`);
+    }
+
+    const base64Data = await vercelRes.text();
+    return await (await fetch(`data:image/png;base64,${base64Data}`)).blob();
+}
+
+// 2b. Parallel Production (New Entry Point)
+export async function executeParallelProduction(compressedBase64, originalBase64, specKey = 'taiwan_passport', userAdjustments = {}) {
+    const config = PHOTO_CONFIGS[specKey] || PHOTO_CONFIGS['taiwan_passport'];
+    console.log("[Parallel] Starting Production for:", config.name);
 
     try {
-        console.log("Process Preview Start. Spec:", config.name);
+        // --- PARALLEL EXECUTION ---
+        console.time("Parallel_API");
+        const [faceRes, transparentBlob] = await Promise.all([
+            detectFace(compressedBase64),          // Azure (takes ~2-4s)
+            fetchTransparentImage(compressedBase64) // Vercel (takes ~3-5s)
+        ]);
+        console.timeEnd("Parallel_API");
 
-        // 1. Prepare Upload Blob (Resize & Compress)
-        // Note: prepareImageForUpload is assumed to be in this file scope (lines 80+)
-        const optimizedBlob = await prepareImageForUpload(cleanBase64);
+        // Note: transparentBlob is result of compressedBase64.
+        // If we want to use originalBase64 for high-res cropping, we need to be careful about coordinate systems.
+        // Current logic: detectFace returns coordinates relative to the input image (compressedBase64).
+        // compositeToWhiteBackground maps transparency to "Full Rect".
 
-        // 2. Call Vercel Backend (Direct)
-        console.log("Calling Vercel Backend...");
-        const vercelRes = await fetch('/api/remove-bg', {
-            method: 'POST',
-            body: optimizedBlob
-        });
+        // Strategy: Use compressedBase64 as the source of truth for "Full Rect" to match coordinates.
+        // High-res optimization is secondary to speed here (1500px is enough).
 
-        if (!vercelRes.ok) {
-            const errorText = await vercelRes.text();
-            console.error("Vercel Backend Error Details:", errorText);
-            throw new Error(`Vercel Fail: ${vercelRes.status} - ${errorText}`);
-        }
-
-        const base64Data = await vercelRes.text();
-        const transparentBlob = await (await fetch(`data:image/png;base64,${base64Data}`)).blob();
-
-        // 3. Composite
-        // 3. Composite
-        // FIX: The transparency processing works on the FULL image (resized), not the cropped version.
-        // Therefore, we MUST use the Full Original Image dimensions as the "cropRect" for geometry mapping.
-        // Using "cropParams" (which is a partial crop) causes the coordinate mapping to be wrong (Scale > 1).
-
-        console.log("[Process Preview] Fetching original dimensions for correct Full-Image mapping...");
+        console.log("[Parallel] Fetching dimensions of utilized image...");
         const tempImg = new Image();
-        tempImg.src = cleanBase64;
+        tempImg.src = ensureSinglePrefix(compressedBase64);
         await new Promise(r => tempImg.onload = r);
 
         const fullRect = {
@@ -624,9 +633,19 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
             h: tempImg.height
         };
 
+        // If faceRes used a different scale (it has internal resizing logic), we need to ensure consistency.
+        // detectFace logic: "Resizing 4000 -> 1500... Reverse Scale Factor...". 
+        // Checks internal logic: It returns coordinates mapped back to ORIGINAL size if it resized internally?
+        // Let's check detectFace again.
+        // Line 109: const reverseScale = 1 / scale;
+        // Line 114: left: rawRect.left * reverseScale...
+        // YES. detectFace returns coordinates mapped to the INPUT image's original dimensions.
+        // So if we passed compressedBase64 (Width 1500), it returns coords for Width 1500.
+        // So fullRect should match compressedBase64. Correct.
+
         const retB64 = await compositeToWhiteBackground(
             transparentBlob,
-            faceData,
+            faceRes,
             fullRect,
             config,
             userAdjustments
@@ -641,11 +660,19 @@ export async function processPreview(base64, cropParams, faceData = null, specKe
         };
 
     } catch (e) {
-        console.error("Process Preview Failed:", e);
-        // Fallback: Return original
-        const safeB64 = cleanBase64.replace(/^data:image\/\w+;base64,/, '');
-        return { photos: [safeB64, safeB64] };
+        console.error("Parallel Production Failed:", e);
+        // Fallback or re-throw
+        throw e;
     }
+}
+
+// 2. Process Preview (Legacy / Serial Fallback)
+export async function processPreview(base64, cropParams, faceData = null, specKey = 'taiwan_passport', userAdjustments = {}) {
+    // Legacy wrapper if needed, or deprecate.
+    // For now, re-route to new function if faceData is null, otherwise just do composite?
+    // Actually processPreview was doing serial fetch then composite.
+    // We can leave it as is for backward compatibility or replace body.
+    return executeParallelProduction(base64, base64, specKey, userAdjustments);
 }
 
 // 3. Client-Side Re-Composition (Slider Optimization)
