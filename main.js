@@ -409,6 +409,12 @@ async function runProductionPhase() {
                         state.assets = processRes.assets;
                     }
 
+                    // [Fix 1] Sync Face Data (Critical for Recompose)
+                    syncProductionState(processRes);
+
+                    // [Fix 2] Reset View Mode
+                    state.viewMode = 'fit';
+
                     // Ensure proper Base64 prefix
                     let b64 = processRes.photos[0];
                     if (!b64.startsWith('data:image/')) {
@@ -440,224 +446,188 @@ function injectAdvancedControls() {
     // Remove existing if any to avoid duplicates
     const existingOverlay = document.getElementById('control-overlay');
     if (existingOverlay) {
-        console.log("[Debug] injectAdvancedControls: Removing existing overlay.");
         existingOverlay.remove();
     }
 
-    if (imageWrapper) {
-        console.log("[Debug] injectAdvancedControls: Wrapper found. Injecting controls.");
-        const overlay = document.createElement('div');
-        overlay.id = 'control-overlay';
-        overlay.style.position = 'absolute';
-        overlay.style.top = '0';
-        overlay.style.left = '0';
-        overlay.style.width = '100%';
-        overlay.style.height = '100%';
-        overlay.style.pointerEvents = 'none';
-        overlay.style.zIndex = '100'; // Ensure above image
+    if (!imageWrapper) {
+        console.error("[Debug] injectAdvancedControls: image-wrapper NOT FOUND!");
+        return;
+    }
 
-        // Check Guides State
-        const isGuidesOn = state.adjustments.showGuides === undefined ? true : state.adjustments.showGuides;
-        const sliderVisibilityClass = isGuidesOn ? "" : "d-none";
+    // Default to 'fit' if undefined
+    if (!state.viewMode) state.viewMode = 'fit';
+    const isFitMode = state.viewMode === 'fit';
+    const isGuidesOn = state.adjustments.showGuides === undefined ? true : state.adjustments.showGuides;
 
-        // 1. Vertical Slider (Right)
-        const vSliderHtml = `
-            <div id="v-slider-container" class="position-absolute d-flex flex-column align-items-center bg-white rounded shadow p-2 ${sliderVisibilityClass}" 
-                    style="right: -80px; top: 50%; transform: translateY(-50%); height: 85%; width: 50px; pointer-events: auto; z-index: 101;">
-                <span class="small fw-bold text-muted mb-2" style="writing-mode: vertical-lr; text-orientation: upright; letter-spacing: 2px;">縮放調整</span>
-                <button class="btn btn-sm btn-light border shadow-sm mb-2 p-0" id="btn-zoom-in" title="放大" style="width:24px;height:24px;">+</button>
-                <input type="range" class="form-range" id="head-scale-input" min="1.0" max="1.4" step="0.01" value="${state.adjustments.headScale || 1.2}" 
-                        style="writing-mode: vertical-lr; direction: rtl; flex-grow: 1; margin: 0;">
-                <button class="btn btn-sm btn-light border shadow-sm mt-2 p-0" id="btn-zoom-out" title="縮小" style="width:24px;height:24px;">-</button>
-                <div class="mt-2 badge bg-dark opacity-75" id="head-scale-val">${(state.adjustments.headScale || 1.2).toFixed(2)}x</div>
-            </div>
-        `;
+    const overlay = document.createElement('div');
+    overlay.id = 'control-overlay';
+    overlay.style.position = 'absolute';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.pointerEvents = 'none';
+    overlay.style.zIndex = '100';
 
-        // 2. Horizontal Slider (Bottom)
-        const hSliderHtml = `
-            <div id="h-slider-container" class="position-absolute d-flex align-items-center justify-content-center w-100 bg-white rounded shadow p-2 ${sliderVisibilityClass}" 
-                    style="bottom: -70px; left: 0; pointer-events: auto; z-index: 101;">
-                <span class="small fw-bold text-muted me-3">水平調整</span>
-                <span class="badge bg-light text-dark border me-2">L</span>
-                <input type="range" class="form-range flex-grow-1 shadow-sm" id="x-shift-input" min="-50" max="50" step="1" value="${state.adjustments.xShift || 0}" style="max-width: 60%;">
-                <span class="badge bg-light text-dark border ms-2">R</span>
-                <div class="ms-2 badge bg-dark opacity-75" id="x-shift-val">${(state.adjustments.xShift > 0 ? '+' : '') + (state.adjustments.xShift || 0)}px</div>
-            </div>
-        `;
+    // Logic: 
+    // If Print Mode -> Hide Guides Button, Hide Sliders. Show "Switch to Preview"
+    // If Fit Mode -> Show Guides Button. Sliders depend on Guides. Show "Switch to Print"
 
-        // 3. Toggle Guide (Top Right)
-        const toggleText = isGuidesOn ? "隱藏規格標線" : "顯示規格標線";
-        const toggleIcon = isGuidesOn ? "bi-eye-slash" : "bi-eye";
-        const toggleClass = isGuidesOn ? 'btn-white border shadow-sm text-primary' : 'btn-white border shadow-sm text-muted';
+    // Visibility Classes
+    const controlsVisible = isFitMode && isGuidesOn;
+    const guidesBtnVisible = isFitMode;
 
-        // 4. Size Toggle (Next to Guide Toggle) - New Position: Top Center
-        const sizeHtml = `
-            <button class="btn btn-sm btn-white border shadow-sm text-dark position-absolute fw-bold" 
-                    id="toggle-size-btn" 
-                    style="top: -50px; left: 50%; transform: translateX(-50%); pointer-events: auto; z-index: 101; white-space: nowrap;">
-                <i class="bi bi-aspect-ratio"></i> <span id="toggle-size-text">顯示輸出尺寸</span>
-            </button>
-        `;
+    const sliderClass = controlsVisible ? "" : "d-none";
+    const guidesBtnClass = guidesBtnVisible ? "" : "d-none";
 
-        const toggleHtml = `
-            <button class="btn btn-sm ${toggleClass} position-absolute fw-bold" 
-                    id="toggle-guides-btn" 
-                    style="top: -50px; right: 0; pointer-events: auto; z-index: 101; white-space: nowrap;">
-                <i class="bi ${toggleIcon}"></i> <span id="toggle-btn-text">${toggleText}</span>
-            </button>
-        `;
+    // 1. Vertical Slider
+    const vSliderHtml = `
+        <div id="v-slider-container" class="position-absolute d-flex flex-column align-items-center bg-white rounded shadow p-2 ${sliderClass}" 
+                style="right: -80px; top: 50%; transform: translateY(-50%); height: 85%; width: 50px; pointer-events: auto; z-index: 101;">
+            <span class="small fw-bold text-muted mb-2" style="writing-mode: vertical-lr; text-orientation: upright; letter-spacing: 2px;">縮放調整</span>
+            <button class="btn btn-sm btn-light border shadow-sm mb-2 p-0" id="btn-zoom-in" title="放大" style="width:24px;height:24px;">+</button>
+            <input type="range" class="form-range" id="head-scale-input" min="1.0" max="1.4" step="0.01" value="${state.adjustments.headScale || 1.2}" 
+                    style="writing-mode: vertical-lr; direction: rtl; flex-grow: 1; margin: 0;">
+            <button class="btn btn-sm btn-light border shadow-sm mt-2 p-0" id="btn-zoom-out" title="縮小" style="width:24px;height:24px;">-</button>
+            <div class="mt-2 badge bg-dark opacity-75" id="head-scale-val">${(state.adjustments.headScale || 1.2).toFixed(2)}x</div>
+        </div>
+    `;
 
-        // Append HTML to Overlay
-        overlay.innerHTML = vSliderHtml + hSliderHtml + sizeHtml + toggleHtml;
+    // 2. Horizontal Slider
+    const hSliderHtml = `
+        <div id="h-slider-container" class="position-absolute d-flex align-items-center justify-content-center w-100 bg-white rounded shadow p-2 ${sliderClass}" 
+                style="bottom: -70px; left: 0; pointer-events: auto; z-index: 101;">
+            <span class="small fw-bold text-muted me-3">水平調整</span>
+            <span class="badge bg-light text-dark border me-2">L</span>
+            <input type="range" class="form-range flex-grow-1 shadow-sm" id="x-shift-input" min="-50" max="50" step="1" value="${state.adjustments.xShift || 0}" style="max-width: 60%;">
+            <span class="badge bg-light text-dark border ms-2">R</span>
+            <div class="ms-2 badge bg-dark opacity-75" id="x-shift-val">${(state.adjustments.xShift > 0 ? '+' : '') + (state.adjustments.xShift || 0)}px</div>
+        </div>
+    `;
 
-        // Append Overlay to Wrapper
-        imageWrapper.appendChild(overlay);
+    // 3. Size Toggle
+    const sizeBtnText = isFitMode ? "顯示輸出尺寸" : "顯示預覽尺寸";
+    const sizeBtnIcon = isFitMode ? "bi-aspect-ratio" : "bi-arrows-angle-contract";
+    const sizeBtnClass = isFitMode ? "text-dark" : "text-primary";
 
-        console.log("[Debug] injectAdvancedControls: Controls appended to overlay, and overlay to wrapper.");
+    const sizeHtml = `
+        <button class="btn btn-sm btn-white border shadow-sm ${sizeBtnClass} position-absolute fw-bold" 
+                id="toggle-size-btn" 
+                style="top: -50px; left: 50%; transform: translateX(-50%); pointer-events: auto; z-index: 101; white-space: nowrap;">
+            <i class="bi ${sizeBtnIcon}"></i> <span id="toggle-size-text">${sizeBtnText}</span>
+        </button>
+    `;
 
-        // --- Bind Events ---
+    // 4. Guide Toggle
+    const toggleText = isGuidesOn ? "隱藏規格標線" : "顯示規格標線";
+    const toggleIcon = isGuidesOn ? "bi-eye-slash" : "bi-eye";
+    const toggleColor = isGuidesOn ? 'text-primary' : 'text-muted';
 
-        // 1. Guide Toggle
-        const toggleBtn = document.getElementById('toggle-guides-btn');
-        const toggleBtnText = document.getElementById('toggle-btn-text');
-        const toggleBtnIcon = toggleBtn ? toggleBtn.querySelector('i') : null;
-        const vContainer = document.getElementById('v-slider-container');
-        const hContainer = document.getElementById('h-slider-container');
+    const toggleHtml = `
+        <button class="btn btn-sm btn-white border shadow-sm ${toggleColor} position-absolute fw-bold ${guidesBtnClass}" 
+                id="toggle-guides-btn" 
+                style="top: -50px; right: 0; pointer-events: auto; z-index: 101; white-space: nowrap;">
+            <i class="bi ${toggleIcon}"></i> <span id="toggle-btn-text">${toggleText}</span>
+        </button>
+    `;
 
-        if (toggleBtn) {
-            toggleBtn.onclick = () => {
-                console.log("[Debug] Toggle clicked");
-                state.adjustments.showGuides = !state.adjustments.showGuides;
-                const isOn = state.adjustments.showGuides;
+    overlay.innerHTML = vSliderHtml + hSliderHtml + sizeHtml + toggleHtml;
+    imageWrapper.appendChild(overlay);
 
-                // Update UI Text & Icon
-                if (toggleBtnText) toggleBtnText.innerText = isOn ? "隱藏規格標線" : "顯示規格標線";
-                if (toggleBtnIcon) {
-                    toggleBtnIcon.className = isOn ? "bi bi-eye-slash" : "bi bi-eye";
-                }
-                toggleBtn.className = isOn ? 'btn btn-sm btn-white border shadow-sm text-primary position-absolute fw-bold' : 'btn btn-sm btn-white border shadow-sm text-muted position-absolute fw-bold';
-
-                // Toggle Sliders Visibility
-                if (vContainer) vContainer.classList.toggle('d-none', !isOn);
-                if (hContainer) hContainer.classList.toggle('d-none', !isOn);
-
-                handleClientSideUpdate();
-            };
+    // --- Enforce Image Styles based on Mode ---
+    const img = document.getElementById('main-preview-img');
+    if (img) {
+        if (state.viewMode === 'print') {
+            img.style.maxHeight = '45mm';
+            img.style.maxWidth = '35mm';
+            img.style.height = '45mm';
+            img.style.width = '35mm';
+        } else {
+            img.style.maxHeight = '100%';
+            img.style.maxWidth = '100%';
+            img.style.height = 'auto';
+            img.style.width = 'auto';
         }
+    }
 
+    // --- Bind Events ---
 
-        // 4. Size Toggle
-        const sizeBtn = document.getElementById('toggle-size-btn');
-        const sizeText = document.getElementById('toggle-size-text');
-        const mainImg = document.getElementById('main-preview-img');
-        const guidesBtn = document.getElementById('toggle-guides-btn');
+    // Toggle Guides
+    const toggleBtn = document.getElementById('toggle-guides-btn');
+    if (toggleBtn) {
+        toggleBtn.onclick = () => {
+            state.adjustments.showGuides = !state.adjustments.showGuides;
+            // Re-render UI
+            handleClientSideUpdate();
+        };
+    }
 
-        if (sizeBtn && mainImg) {
-            sizeBtn.onclick = () => {
-                const isRealSize = mainImg.style.maxHeight === '45mm'; // Check current state
-                if (isRealSize) {
-                    // Switch to Preview (Fit)
-                    state.adjustments.showGuides = true; // Restore Guides
-                    handleClientSideUpdate(); // Re-render
+    // Toggle Size
+    const sizeBtn = document.getElementById('toggle-size-btn');
+    if (sizeBtn) {
+        sizeBtn.onclick = () => {
+            if (state.viewMode === 'fit') {
+                // Switch to Print
+                state.viewMode = 'print';
+                // Force Clean (No Guides)
+                state.adjustments.showGuides = false;
+            } else {
+                // Switch to Fit
+                state.viewMode = 'fit';
+                // Restore Guides (Default to ON for editing)
+                state.adjustments.showGuides = true;
+            }
+            handleClientSideUpdate();
+        };
+    }
 
-                    // Force Styles after render (needs delay or check)
-                    // Actually handleClientSideUpdate is async.
-                    // We can rely on state persistence, but here we want visual snap.
-                    // Wait for update? UI might flicker.
-                    // Let's just set the styles. The update will refresh the src.
-
-                    setTimeout(() => {
-                        const img = document.getElementById('main-preview-img');
-                        if (img) {
-                            img.style.maxHeight = '100%';
-                            img.style.maxWidth = '100%';
-                            img.style.height = 'auto';
-                            img.style.width = 'auto';
-                        }
-                    }, 50);
-
-                    sizeText.innerText = "顯示輸出尺寸";
-                    sizeBtn.classList.remove('text-primary');
-                    sizeBtn.classList.add('text-dark');
-
-                    // Show Controls
-                    if (vContainer) vContainer.classList.remove('d-none');
-                    if (hContainer) hContainer.classList.remove('d-none');
-                    if (guidesBtn) guidesBtn.classList.remove('d-none');
-                } else {
-                    // Switch to Real Size (35mm x 45mm)
-                    state.adjustments.showGuides = false; // Force Clean
-                    handleClientSideUpdate(); // Re-render
-
-                    setTimeout(() => {
-                        const img = document.getElementById('main-preview-img');
-                        if (img) {
-                            img.style.maxHeight = '45mm'; // CSS mm units
-                            img.style.maxWidth = '35mm';
-                            img.style.height = '45mm';
-                            img.style.width = '35mm';
-                        }
-                    }, 50);
-
-                    sizeText.innerText = "顯示預覽尺寸";
-                    sizeBtn.classList.remove('text-dark');
-                    sizeBtn.classList.add('text-primary');
-
-                    // Hide Controls (Clean Mode)
-                    if (vContainer) vContainer.classList.add('d-none');
-                    if (hContainer) hContainer.classList.add('d-none');
-                    if (guidesBtn) guidesBtn.classList.add('d-none');
-                }
-            };
-        }
-
-        // 2. Vertical Scale Slider
-        const scaleInput = document.getElementById('head-scale-input');
-        const scaleVal = document.getElementById('head-scale-val');
-        if (scaleInput) {
-            scaleInput.oninput = (e) => {
-                const val = parseFloat(e.target.value);
-                if (scaleVal) scaleVal.innerText = val.toFixed(2) + 'x';
-                state.adjustments.headScale = val;
-            };
-            scaleInput.onchange = handleClientSideUpdate;
-        }
-
-        // 3. Horizontal Shift Slider
-        const xShiftInput = document.getElementById('x-shift-input');
-        const xShiftVal = document.getElementById('x-shift-val');
-        if (xShiftInput) {
-            xShiftInput.oninput = (e) => {
-                const val = parseInt(e.target.value);
-                if (xShiftVal) xShiftVal.innerText = (val > 0 ? '+' : '') + val + 'px';
-                state.adjustments.xShift = val;
-            };
-            xShiftInput.onchange = handleClientSideUpdate;
-        }
+    // Sliders
+    const scaleInput = document.getElementById('head-scale-input');
+    const scaleVal = document.getElementById('head-scale-val');
+    if (scaleInput) {
+        scaleInput.oninput = (e) => {
+            const val = parseFloat(e.target.value);
+            if (scaleVal) scaleVal.innerText = val.toFixed(2) + 'x';
+            state.adjustments.headScale = val;
+        };
+        scaleInput.onchange = handleClientSideUpdate;
 
         // Zoom Buttons
         const zIn = document.getElementById('btn-zoom-in');
         const zOut = document.getElementById('btn-zoom-out');
-        if (zIn && scaleInput) {
-            zIn.onclick = () => {
-                let v = parseFloat(scaleInput.value) + 0.01;
-                if (v > 1.4) v = 1.4;
-                scaleInput.value = v;
-                scaleInput.dispatchEvent(new Event('input'));
-                scaleInput.dispatchEvent(new Event('change'));
-            };
-        }
-        if (zOut && scaleInput) {
-            zOut.onclick = () => {
-                let v = parseFloat(scaleInput.value) - 0.01;
-                if (v < 1.0) v = 1.0;
-                scaleInput.value = v;
-                scaleInput.dispatchEvent(new Event('input'));
-                scaleInput.dispatchEvent(new Event('change'));
-            };
-        }
-    } else {
-        console.error("[Debug] injectAdvancedControls: image-wrapper NOT FOUND!");
+        if (zIn) zIn.onclick = () => {
+            let v = parseFloat(scaleInput.value) + 0.01;
+            if (v > 1.4) v = 1.4;
+            scaleInput.value = v;
+            scaleInput.dispatchEvent(new Event('input'));
+            scaleInput.dispatchEvent(new Event('change'));
+        };
+        if (zOut) zOut.onclick = () => {
+            let v = parseFloat(scaleInput.value) - 0.01;
+            if (v < 1.0) v = 1.0;
+            scaleInput.value = v;
+            scaleInput.dispatchEvent(new Event('input'));
+            scaleInput.dispatchEvent(new Event('change'));
+        };
+    }
+
+    const xShiftInput = document.getElementById('x-shift-input');
+    const xShiftVal = document.getElementById('x-shift-val');
+    if (xShiftInput) {
+        xShiftInput.oninput = (e) => {
+            const val = parseInt(e.target.value);
+            if (xShiftVal) xShiftVal.innerText = (val > 0 ? '+' : '') + val + 'px';
+            state.adjustments.xShift = val;
+        };
+        xShiftInput.onchange = handleClientSideUpdate;
+    }
+}
+
+// [Optimization] Fix: Sync FaceData
+function syncProductionState(processRes) {
+    if (processRes.faceData) {
+        console.log("[State] Syncing FaceData to match Compressed Assets");
+        state.faceData = processRes.faceData;
     }
 }
 

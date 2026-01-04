@@ -656,7 +656,8 @@ export async function executeParallelProduction(compressedBase64, originalBase64
             assets: {
                 transparentBlob: transparentBlob,
                 fullRect: fullRect
-            }
+            },
+            faceData: faceRes // Return the face structure that matches these assets
         };
 
     } catch (e) {
