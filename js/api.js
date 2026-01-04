@@ -79,8 +79,8 @@ export async function detectFace(base64) {
         }
 
         const endpoint = AZURE.ENDPOINT.endsWith('/') ? AZURE.ENDPOINT.slice(0, -1) : AZURE.ENDPOINT;
-        // Fix: Enable returnFaceLandmarks=true AND returnFaceAttributes
-        const url = `${endpoint}/face/v1.0/detect?returnFaceId=false&returnFaceLandmarks=true&returnFaceAttributes=glasses,occlusion,exposure,blur,noise,smile,headPose&recognitionModel=recognition_01&detectionModel=detection_01`;
+        // Fix: Enable returnFaceLandmarks=true AND returnFaceAttributes (Removed deprecated 'smile')
+        const url = `${endpoint}/face/v1.0/detect?returnFaceId=false&returnFaceLandmarks=true&returnFaceAttributes=glasses,occlusion,exposure,blur,noise,headPose&recognitionModel=recognition_01&detectionModel=detection_01`;
 
         console.log("Fetching Azure URL:", url);
 

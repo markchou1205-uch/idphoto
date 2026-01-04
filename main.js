@@ -300,8 +300,8 @@ async function runAuditPhase() {
             if (mouthGap > threshold) mouthPass = false;
             console.log(`Mouth Check: Gap=${mouthGap.toFixed(1)}, Thres=${threshold.toFixed(1)} -> ${mouthPass}`);
         }
-        // Force check attribute if available
-        if (attributes.smile > 0.5) mouthPass = false;
+        // Force check attribute if available (Smile deprecated in Azure v1.0, relying on landmarks)
+        // if (attributes.smile > 0.5) mouthPass = false;
 
 
         // --- 3. Glasses/Occlusion (Attributes) ---
