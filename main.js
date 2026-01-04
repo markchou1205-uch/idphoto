@@ -516,34 +516,35 @@ function injectAdvancedControls() {
             <div class="ms-2 badge bg-dark opacity-75" id="x-shift-val">${(state.adjustments.xShift > 0 ? '+' : '') + (state.adjustments.xShift || 0)}px</div>
         </div>
     `;
-
-    // 3. Size Toggle
+    // 3. Button Group (Centered Top)
     const sizeBtnText = isFitMode ? "顯示輸出尺寸" : "顯示預覽尺寸";
     const sizeBtnIcon = isFitMode ? "bi-aspect-ratio" : "bi-arrows-angle-contract";
     const sizeBtnClass = isFitMode ? "text-dark" : "text-primary";
 
-    const sizeHtml = `
-        <button class="btn btn-sm btn-white border shadow-sm ${sizeBtnClass} position-absolute fw-bold" 
-                id="toggle-size-btn" 
-                style="top: -50px; left: 50%; transform: translateX(-50%); pointer-events: auto; z-index: 101; white-space: nowrap;">
-            <i class="bi ${sizeBtnIcon}"></i> <span id="toggle-size-text">${sizeBtnText}</span>
-        </button>
-    `;
-
-    // 4. Guide Toggle
     const toggleText = isGuidesOn ? "隱藏規格標線" : "顯示規格標線";
     const toggleIcon = isGuidesOn ? "bi-eye-slash" : "bi-eye";
-    const toggleColor = isGuidesOn ? 'text-primary' : 'text-muted';
+    const toggleClass = isGuidesOn ? 'btn-white border shadow-sm text-primary' : 'btn-white border shadow-sm text-muted';
+    const guideBtnDisplay = guidesBtnVisible ? "" : "d-none";
 
-    const toggleHtml = `
-        <button class="btn btn-sm btn-white border shadow-sm ${toggleColor} position-absolute fw-bold ${guidesBtnClass}" 
-                id="toggle-guides-btn" 
-                style="top: -50px; right: 0; pointer-events: auto; z-index: 101; white-space: nowrap;">
-            <i class="bi ${toggleIcon}"></i> <span id="toggle-btn-text">${toggleText}</span>
-        </button>
-    `;
+    // Container
+    const btnContainerHtml = `
+            <div id="top-btn-container" class="position-absolute d-flex gap-2 justify-content-center" 
+                 style="top: -60px; left: 50%; transform: translateX(-50%); pointer-events: auto; z-index: 101; width: 100%;">
+                
+                <button class="btn btn-light border shadow-sm ${sizeBtnClass} fw-bold px-3 py-2" 
+                        id="toggle-size-btn" style="font-size: 1rem;">
+                    <i class="bi ${sizeBtnIcon} me-1"></i> <span id="toggle-size-text">${sizeBtnText}</span>
+                </button>
 
-    overlay.innerHTML = vSliderHtml + hSliderHtml + sizeHtml + toggleHtml;
+                <button class="btn ${toggleClass} fw-bold px-3 py-2 ${guideBtnDisplay}" 
+                        id="toggle-guides-btn" style="font-size: 1rem;">
+                    <i class="bi ${toggleIcon} me-1"></i> <span id="toggle-btn-text">${toggleText}</span>
+                </button>
+            </div>
+        `;
+
+    // Append HTML to Overlay
+    overlay.innerHTML = vSliderHtml + hSliderHtml + btnContainerHtml;
     imageWrapper.appendChild(overlay);
 
     // --- Enforce Image Styles based on Mode ---
