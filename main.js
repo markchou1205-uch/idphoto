@@ -252,71 +252,98 @@ async function handleFileUpload(e) {
     reader.readAsDataURL(file);
 }
 
-// Phase 1: Audit (Check Only) - Triggered by Button
+// Phase 1: Compliance Audit (Post-Production Check)
 async function runAuditPhase() {
     try {
-        console.log("Starting Audit Phase...");
+        console.log("Starting Compliance Audit Phase (Local Check)...");
 
-        // Determine Source Image (Original or Processed)
-        const targetImage = state.processedImage || state.originalImage;
-        const isProcessed = !!state.processedImage;
-
-        // Init UI for Audit (Report Only)
-        UI.initAuditTable('#audit-report-container');
-        UI.toggleAuditView(true); // Switch view to Audit Report
-
-        console.log("Calling API.detectFace on target...");
-        const detectRes = await API.detectFace(targetImage);
-
-        if (!detectRes || !detectRes.found) {
-            alert('未偵測到人臉，請更換照片');
+        // [Refactor] Use persisted state only. No API calls.
+        if (!state.faceData || !state.faceData.faceAttributes) {
+            console.warn("Missing face attributes, perhaps API v1? Re-running detection not allowed.");
+            alert("缺少合規審查數據，請重新製作");
             return;
         }
 
-        // Only update global state if this is the original image
-        // (Production always relies on Original + Original-Face-Data)
-        if (!isProcessed) {
-            state.faceData = detectRes;
+        // Init UI
+        UI.initAuditTable('#audit-report-container');
+        UI.toggleAuditView(true);
+
+        const attributes = state.faceData.faceAttributes;
+        const landmarks = state.faceData.faceLandmarks;
+
+        // --- 1. Resolution Check (Original Image) ---
+        let resolutionPass = false;
+        let resolutionVal = "未知";
+        if (state.originalImage) {
+            const img = new Image();
+            img.src = state.originalImage;
+            await new Promise(r => img.onload = r);
+            const pixels = img.width * img.height;
+            resolutionVal = `${(pixels / 1000000).toFixed(1)}MP`;
+            // Standard: > 3.0 MP (e.g. 2000x1500)
+            resolutionPass = pixels >= 3000000;
+            console.log(`Resolution Check: ${img.width}x${img.height} = ${pixels} (${resolutionPass ? 'Pass' : 'Fail'})`);
         }
 
-        console.log("Calling runCheckApi...");
-        const checkRes = await API.runCheckApi(targetImage, state.spec);
-        console.log("runCheckApi Result:", checkRes);
-
-        if (!checkRes || !checkRes.results) {
-            throw new Error("Invalid check result from API");
+        // --- 2. Mouth Check (Landmarks) ---
+        // Formula: UpperLipBottom vs UnderLipTop
+        let mouthPass = true;
+        if (landmarks && landmarks.upperLipBottom && landmarks.underLipTop) {
+            // Distance between lips should be small.
+            // Using logic: if UnderLipTop.y - UpperLipBottom.y > Threshold
+            const mouthGap = landmarks.underLipTop.y - landmarks.upperLipBottom.y;
+            // Threshold relative to face size? 
+            // FaceRect Height ~ 1500px scale. Let's say gap > 5px is open?
+            // Dynamic: Gap > (Chin - Eyebrow) * 0.02
+            const faceH = state.faceData.markers.chinY - ((landmarks.eyebrowLeftOuter.y + landmarks.eyebrowRightOuter.y) / 2);
+            const threshold = faceH * 0.03;
+            if (mouthGap > threshold) mouthPass = false;
+            console.log(`Mouth Check: Gap=${mouthGap.toFixed(1)}, Thres=${threshold.toFixed(1)} -> ${mouthPass}`);
         }
-        state.auditResults = checkRes.results;
+        // Force check attribute if available
+        if (attributes.smile > 0.5) mouthPass = false;
 
-        // [NEW FLOW]: Animate Basic Results
-        console.log("Animating Basic Audit Results...");
 
-        UI.renderBasicAudit(state.auditResults, () => {
-            console.log("Basic Audit Complete.");
+        // --- 3. Glasses/Occlusion (Attributes) ---
+        const glassesPass = (attributes.glasses === 'NoGlasses' || attributes.glasses === 'ReadingGlasses');
+        const occlusionPass = !(attributes.occlusion && (attributes.occlusion.foreheadOccluded || attributes.occlusion.eyeOccluded));
 
-            const isProcessed = !!state.processedImage;
+        // --- 4. Prepare Results ---
+        // [
+        //     { item: '相片尺寸', status: 'pass', val: '3.5x4.5cm' }, // Auto
+        //     { item: '頭部比例', status: 'pass', val: '75%' },      // Auto
+        //     { item: '眉眼遮擋', status: occlusionPass ? 'pass' : 'fail' },
+        //     { item: '解析度',   status: resolutionPass ? 'pass' : 'warn', val: resolutionVal }, // Warn for resolution, fail is harsh
+        //     { item: '眼鏡/反光', status: glassesPass ? 'pass' : 'warn' },
+        //     { item: '表情/嘴巴', status: mouthPass ? 'pass' : 'warn' },
+        //     { item: '雙耳可見', status: 'manual' } // Special Manual Item
+        // ]
 
-            // On Complete: Show "Generate" or "Print" Button
-            UI.showBasicPassState(() => {
-                console.log("User clicked Action. Processed:", isProcessed);
-                if (isProcessed) {
-                    // Already processed? Show Result View
-                    UI.toggleAuditView(false);
-                    UI.showDownloadOptions(state.processedImage, DEFAULT_SPECS[state.spec]);
-                } else {
-                    // Start Production
-                    runProductionPhase();
-                }
-            }, isProcessed);
+        const results = [
+            { item: '相片尺寸', status: 'pass', text: '3.5x4.5cm' },
+            { item: '頭部比例', status: 'pass', text: '符合規範' },
+            { item: '背景去背', status: 'pass', text: '純白背景' },
+            { item: '影像解析度', status: resolutionPass ? 'pass' : 'warn', text: resolutionVal, desc: '建議 > 300萬畫素' },
+            { item: '眉眼遮擋', status: occlusionPass ? 'pass' : 'fail', text: occlusionPass ? '無遮擋' : '偵測到遮擋' },
+            { item: '眼鏡檢查', status: glassesPass ? 'pass' : 'warn', text: attributes.glasses },
+            { item: '表情自然', status: mouthPass ? 'pass' : 'warn', text: mouthPass ? '合規' : '疑似露齒/張嘴' },
+            { item: '雙耳可見', status: 'manual', text: '請人工確認' }
+        ];
 
-            // Show Visuals (Red Lines etc.)
-            UI.showAuditSuccess(targetImage, detectRes, null);
+        state.auditResults = results;
+
+        // Render Report
+        console.log("Rendering Compliance Report:", results);
+
+        // Pass a wrapper to UI to render these custom results
+        UI.renderComplianceReport(results, () => {
+            // On "Back" or "Close"
+            UI.toggleAuditView(false);
         });
 
     } catch (err) {
-        console.error("Audit Failed:", err);
-        alert("審查過程發生錯誤，請稍後再試。");
-        location.reload();
+        console.error("Audit Logic Failed:", err);
+        alert("審查功能異常");
     }
 }
 

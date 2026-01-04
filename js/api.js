@@ -79,8 +79,8 @@ export async function detectFace(base64) {
         }
 
         const endpoint = AZURE.ENDPOINT.endsWith('/') ? AZURE.ENDPOINT.slice(0, -1) : AZURE.ENDPOINT;
-        // Fix: Enable returnFaceLandmarks=true
-        const url = `${endpoint}/face/v1.0/detect?returnFaceId=false&returnFaceLandmarks=true&recognitionModel=recognition_01&detectionModel=detection_01`;
+        // Fix: Enable returnFaceLandmarks=true AND returnFaceAttributes
+        const url = `${endpoint}/face/v1.0/detect?returnFaceId=false&returnFaceLandmarks=true&returnFaceAttributes=glasses,occlusion,exposure,blur,noise,smile,headPose&recognitionModel=recognition_01&detectionModel=detection_01`;
 
         console.log("Fetching Azure URL:", url);
 
@@ -212,7 +212,8 @@ export async function detectFace(base64) {
                 },
                 // Pass markers for UI guide drawing if needed
                 markers: { hairTopY, chinY },
-                faceLandmarks: l // Important: Pass scaled landmarks for composition
+                faceLandmarks: l, // Important: Pass scaled landmarks for composition
+                faceAttributes: data[0].faceAttributes // Pass attributes for compliance check
             };
         }
     } catch (e) {
