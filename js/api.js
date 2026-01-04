@@ -571,7 +571,7 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
                 rCtx.fillText("Center", centerX + 5, margin + 20);
 
                 // Measurement Label
-                const targetHeadCm = ((config.head_mm[0] + config.head_mm[1]) / 2 / 10).toFixed(1);
+                const targetHeadCm = (config.head_target_mm / 10).toFixed(1);
                 rCtx.fillStyle = 'red';
                 rCtx.setLineDash([]);
                 rCtx.fillText(`${targetHeadCm} cm`, canvas.width + 5, topY + (headH_Px / 2));
