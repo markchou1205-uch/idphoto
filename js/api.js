@@ -372,8 +372,8 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
 
                     // Self-Verification Log
                     const mmToPx = 300 / 25.4;
-                    const targetedHeadPx = ((config.head_mm[0] + config.head_mm[1]) / 2) * mmToPx;
-                    console.log(`[驗證] Target Head Px: ${targetedHeadPx.toFixed(1)}`);
+                    const targetedHeadPx = config.head_target_mm * mmToPx;
+                    console.log(`[驗證] Target Head Px: ${targetedHeadPx.toFixed(1)} (from ${config.head_target_mm}mm)`);
                 } else {
                     // Fallback Configuration
                     const DPI = 300;
