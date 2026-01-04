@@ -477,7 +477,7 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
             rCtx.beginPath();
             rCtx.moveTo(0, margin - 1);
             rCtx.lineTo(canvas.width, margin - 1);
-            const wMM = config.canvas_mm[0] || 35;
+            const wMM = config.width_mm || 35;
             for (let mm = 0; mm <= wMM; mm++) {
                 const x = mm * (canvas.width / wMM);
                 const isMajor = (mm % 5 === 0);
@@ -495,7 +495,7 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
             const rightBaseX = canvas.width;
             rCtx.moveTo(rightBaseX, margin);
             rCtx.lineTo(rightBaseX, ruledCanvas.height);
-            const hMM = config.canvas_mm[1] || 45;
+            const hMM = config.height_mm || 45;
             for (let mm = 0; mm <= hMM; mm++) {
                 const y = margin + (mm * (canvas.height / hMM));
                 const isMajor = (mm % 5 === 0);
