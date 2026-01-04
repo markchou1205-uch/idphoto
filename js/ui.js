@@ -347,7 +347,7 @@ export const UI = {
         }
     },
 
-    // [NEW] Render Full Compliance Report
+    // [NEW] Render Full Compliance Report with Sequential Animation
     renderComplianceReport(results, onClose) {
         const area = document.getElementById('audit-report-container');
         if (!area) return;
@@ -355,49 +355,25 @@ export const UI = {
         area.innerHTML = '';
         area.classList.remove('d-none');
 
-        // Styles for Report
-        const createRow = (item, idx) => {
-            let statusIcon = '';
-            let statusClass = '';
-            let statusText = '';
-
-            if (item.status === 'pass') {
-                statusIcon = '<i class="bi bi-check-circle-fill text-success"></i>';
-                statusClass = 'bg-success bg-opacity-10 text-success border-success';
-                statusText = '合格';
-            } else if (item.status === 'warn') {
-                statusIcon = '<i class="bi bi-exclamation-triangle-fill text-warning"></i>';
-                statusClass = 'bg-warning bg-opacity-10 text-dark border-warning';
-                statusText = '注意';
-            } else if (item.status === 'fail') {
-                statusIcon = '<i class="bi bi-x-circle-fill text-danger"></i>';
-                statusClass = 'bg-danger bg-opacity-10 text-danger border-danger';
-                statusText = '不符';
-            } else if (item.status === 'manual') {
-                statusIcon = '<i class="bi bi-hand-index-thumb-fill text-primary"></i>';
-                statusClass = 'bg-info bg-opacity-10 text-primary border-info';
-                statusText = '人工確認';
-            }
-
-            // Desc for failure/warn
-            const desc = item.desc ? `<div class="small text-muted mt-1"><i class="bi bi-info-circle"></i> ${item.desc}</div>` : '';
-
+        // 1. Initial Render: All "Pending" (Spinner or Gray)
+        const createPendingRow = (item, idx) => {
             return `
-                <div class="d-flex align-items-center p-3 border rounded mb-2 bg-white shadow-sm audit-item" style="animation: popIn 0.3s ease forwards; animation-delay: ${idx * 0.1}s; opacity: 0; transform: scale(0.9);">
-                    <div class="me-3 fs-4">${statusIcon}</div>
+                <div class="d-flex align-items-center p-3 border rounded mb-2 bg-white shadow-sm audit-item" id="audit-row-item-${idx}">
+                    <div class="me-3 fs-4" id="audit-icon-wrapper-${idx}">
+                         <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                    </div>
                     <div class="flex-grow-1">
                         <div class="fw-bold text-dark">${item.item}</div>
-                        <div class="small text-secondary">${item.text || ''}</div>
-                        ${desc}
+                        <div class="small text-secondary" id="audit-text-${idx}">檢測中...</div>
                     </div>
                     <div>
-                        <span class="badge ${statusClass} p-2 px-3 rounded-pill">${statusText}</span>
+                        <span class="badge bg-light text-secondary p-2 px-3 rounded-pill border" id="audit-badge-${idx}">待檢測</span>
                     </div>
                 </div>
             `;
         };
 
-        const rows = results.map((r, i) => createRow(r, i)).join('');
+        const rows = results.map((r, i) => createPendingRow(r, i)).join('');
 
         area.innerHTML = `
             <div class="p-2">
@@ -406,25 +382,99 @@ export const UI = {
                     ${rows}
                 </div>
                 
-                <div class="mt-4 pt-3 border-top text-center">
+                <div class="mt-4 pt-3 border-top text-center opacity-50" id="audit-footer-area">
                     <p class="small text-muted text-start mb-3 bg-light p-2 rounded">
                         <i class="bi bi-exclamation-circle-fill"></i> <strong>免責聲明：</strong><br>
                         本檢測結果僅供參考，系統依據國際通用證件照規範進行 AI 分析，最終審核結果仍以相關收件單位認定為準。
                     </p>
-                    <button id="btn-close-audit" class="btn btn-outline-secondary w-100 py-2">
-                        關閉報告
+                    <button id="btn-close-audit" class="btn btn-outline-secondary w-100 py-2" disabled>
+                        檢測中...
                     </button>
                 </div>
             </div>
         `;
 
-        // Bind Close
-        const closeBtn = document.getElementById('btn-close-audit');
-        if (closeBtn) {
-            closeBtn.onclick = () => {
-                if (onClose) onClose();
-            };
+        // 2. Sequential Update
+        let i = 0;
+        function updateNext() {
+            if (i >= results.length) {
+                // Done
+                const footer = document.getElementById('audit-footer-area');
+                if (footer) footer.classList.remove('opacity-50');
+
+                const btn = document.getElementById('btn-close-audit');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerText = '關閉報告';
+                    btn.onclick = () => { if (onClose) onClose(); };
+                }
+                return;
+            }
+
+            const item = results[i];
+            const idx = i;
+
+            // DOM Elements
+            const iconWrapper = document.getElementById(`audit-icon-wrapper-${idx}`);
+            const textBox = document.getElementById(`audit-text-${idx}`);
+            const badge = document.getElementById(`audit-badge-${idx}`);
+
+            // Wait a bit then flip state
+            setTimeout(() => {
+                let statusIcon = '';
+                let statusClass = '';
+                let statusText = '';
+                let iconClass = '';
+
+                if (item.status === 'pass') {
+                    statusIcon = '<i class="bi bi-check-circle-fill"></i>';
+                    iconClass = 'text-success';
+                    statusClass = 'bg-success bg-opacity-10 text-success border-success';
+                    statusText = '合格';
+                } else if (item.status === 'warn') {
+                    statusIcon = '<i class="bi bi-exclamation-triangle-fill"></i>';
+                    iconClass = 'text-warning';
+                    statusClass = 'bg-warning bg-opacity-10 text-dark border-warning';
+                    statusText = '注意';
+                } else if (item.status === 'fail') {
+                    statusIcon = '<i class="bi bi-x-circle-fill"></i>';
+                    iconClass = 'text-danger';
+                    statusClass = 'bg-danger bg-opacity-10 text-danger border-danger';
+                    statusText = '不符';
+                } else if (item.status === 'manual') {
+                    statusIcon = '<i class="bi bi-hand-index-thumb-fill"></i>';
+                    iconClass = 'text-primary';
+                    statusClass = 'bg-info bg-opacity-10 text-primary border-info';
+                    statusText = '人工確認';
+                }
+
+                // Update UI
+                if (iconWrapper) {
+                    iconWrapper.innerHTML = statusIcon;
+                    iconWrapper.className = `me-3 fs-4 ${iconClass}`;
+                    // Add pop animation
+                    iconWrapper.style.animation = 'popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                }
+                if (textBox) {
+                    textBox.innerText = item.text || '';
+                    if (item.desc) {
+                        textBox.insertAdjacentHTML('beforeend', `<div class="small text-muted mt-1"><i class="bi bi-info-circle"></i> ${item.desc}</div>`);
+                    }
+                }
+                if (badge) {
+                    badge.className = `badge p-2 px-3 rounded-pill ${statusClass}`;
+                    badge.innerText = statusText;
+                }
+
+                // Next
+                i++;
+                updateNext();
+
+            }, 400); // 400ms delay per item
         }
+
+        // Start animation loop
+        updateNext();
     },
 
     // Stage 2: Service Animation (Service Table)

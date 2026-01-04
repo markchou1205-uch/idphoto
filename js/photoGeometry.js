@@ -61,7 +61,39 @@ export function calculateUniversalLayout(
     // Horizontal Center + Shift
     const sourceWidth = actualSourceWidth || (750 * (currentImgH / 1000));
     const drawnWidth = sourceWidth * finalScale;
-    let drawX = (CANVAS_W - drawnWidth) / 2;
+
+    // [New Feature] Nose-Tip Centering
+    // Goal: Align Nose Tip (or Mid-Eye as fallback) to Canvas Center (CANVAS_W / 2)
+    let anchorX_Global;
+    if (landmarks.noseTip) {
+        anchorX_Global = landmarks.noseTip.x;
+        // console.log("[Geometry] Using Nose Tip for centering:", anchorX_Global);
+    } else {
+        anchorX_Global = (landmarks.pupilLeft.x + landmarks.pupilRight.x) / 2;
+        // console.log("[Geometry] Nose missing, using Eye Midpoint for centering:", anchorX_Global);
+    }
+
+    // Map Global Anchor X to Source Image X (taking crop/resize into account)
+    // Assuming uniform scaling (width ratio ~ height ratio)
+    // ratio = currentImgH / cropRect.h
+    const ratio = currentImgH / cropRect.h;
+    const anchorX_In_Source = (anchorX_Global - cropRect.x) * ratio;
+
+    // Calculate DrawX
+    // CanvasCenterX = DrawX + (AnchorX_Src * Scale)
+    // DrawX = CanvasCenterX - (AnchorX_Src * Scale)
+    let drawX = (CANVAS_W / 2) - (anchorX_In_Source * finalScale);
+
+    // Fallback protection: If the shift is too extreme (leaving gaps), clamp it?
+    // For ID photos, blank space on sides is bad.
+    // However, if we center the nose, edges might be empty if the face is too far side.
+    // User requested nose centering, so we prioritize that. 
+    // Ideally, we'd fill background, but we rely on `compositeToWhiteBackground` to fill gaps?
+    // Usually `compositeToWhiteBackground` fills canvas with white, then draws image. 
+    // If we draw off-center, white bars appear. This is acceptable/expected for correcting off-center faces.
+
+    // Old Centering Logic (Image Center)
+    // let drawX = (CANVAS_W - drawnWidth) / 2;
 
     // Apply User Horizontal Shift
     drawX += xShift;
