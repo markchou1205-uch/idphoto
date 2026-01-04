@@ -60,7 +60,7 @@ export function calculateUniversalLayout(
     drawX += xShift;
 
     console.log(`[GEOMETRY] N=${N.toFixed(1)}, Ratio=${chinRatio}, Scale=${finalScale.toFixed(4)}`);
-    console.log(`[GEOMETRY] Pivot EyeY=${TARGET_EYE_Y.toFixed(1)}, DrawY=${drawY.toFixed(1)}, XShift=${xShift}`);
+    console.log(`[GEOMETRY] Pivot (HeadTop)=${TARGET_TOP_MARGIN.toFixed(1)}, DrawY=${drawY.toFixed(1)}, XShift=${xShift}`);
 
     return {
         scale: finalScale,
