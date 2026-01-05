@@ -478,11 +478,13 @@ export const UI = {
     },
 
     // Stage 2: Service Animation (Service Table)
-    // Stage 2: Service Animation (Service Table)
+    // [REFACTORED] Execute API immediately, animate in parallel
     renderServiceAnimation(onComplete, taskPromise) {
+        console.log("🎬 [動畫] 啟動服務動畫與 API 並行處理");
+
         // Correct Indices for 6 services (100 to 105)
         const serviceIndices = [100, 101, 102, 103, 104, 105];
-        let i = 0;
+        let animationIndex = 0;
 
         // 1. Setup Preview Overlay
         const previewContainer = document.getElementById('preview-container');
@@ -509,25 +511,36 @@ export const UI = {
             if (txt) txt.innerText = `${Math.round(pct)}%`;
         }
 
+        // 2. ⚡ IMMEDIATELY start API processing (don't wait for animation)
+        console.log("⚡ [動畫] 立即開始執行 API 處理");
+        console.timeEnd("⏱️ [UI動畫初始化]");
+
+        const apiPromise = onComplete ? onComplete() : Promise.resolve();
+
+        // 3. Animate in parallel (visual feedback only)
         function animateNext() {
             // Update Progress
-            const pct = (i / serviceIndices.length) * 100;
+            const pct = (animationIndex / serviceIndices.length) * 100;
             updateProgress(pct);
 
-            if (i >= serviceIndices.length) {
+            if (animationIndex >= serviceIndices.length) {
                 updateProgress(100);
-                // Completion Handling
-                setTimeout(() => {
+
+                // Animation complete, wait for API if still running
+                console.log("🎬 [動畫] 動畫序列完成，等待 API 處理完成...");
+                apiPromise.then(() => {
+                    console.log("✅ [動畫] API 處理完成，移除載入畫面");
                     const old = document.getElementById('ui-prog-overlay');
                     if (old) old.remove();
-
-                    // 直接完成，無需等待用戶確認
-                    console.log("✅ 服務動畫完成，直接呼叫 onComplete");
-                    if (onComplete) onComplete();
-                }, 100);
+                }).catch(err => {
+                    console.error("❌ [動畫] API 處理失敗:", err);
+                    const old = document.getElementById('ui-prog-overlay');
+                    if (old) old.remove();
+                });
                 return;
             }
-            const idx = serviceIndices[i];
+
+            const idx = serviceIndices[animationIndex];
 
             const text = document.getElementById(`audit-text-${idx}`);
             const spinner = document.getElementById(`audit-spinner-${idx}`);
@@ -540,21 +553,8 @@ export const UI = {
                 badge.className = 'status-badge status-warn';
             }
 
-            // Timing: 1st item (Face Detect) 5s, others 3s
-            const baseDelay = (i === 0) ? 5000 : 3000;
-
-            setTimeout(async () => {
-                // [SYNC POINT] If Last Step (Resolution Logic 105), Wait for Promise
-                if (idx === 105 && taskPromise) {
-                    try {
-                        console.log("Waiting for API Task to complete...");
-                        await taskPromise;
-                        console.log("API Task Completed. Finishing Animation.");
-                    } catch (e) {
-                        console.error("API Task Failed during animation wait", e);
-                    }
-                }
-
+            // Faster animation (500ms per item instead of 3-5s)
+            setTimeout(() => {
                 if (spinner) spinner.classList.add('d-none');
                 const icon = document.getElementById(`audit-icon-${idx}`);
                 if (icon) {
@@ -568,10 +568,11 @@ export const UI = {
                     badge.className = 'status-badge status-pass';
                 }
 
-                i++;
+                animationIndex++;
                 animateNext();
-            }, baseDelay);
+            }, 500); // Reduced from 3000-5000ms to 500ms
         }
+
         requestAnimationFrame(() => animateNext());
     },
 

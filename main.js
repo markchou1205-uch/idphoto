@@ -194,16 +194,10 @@ async function handleFileUpload(e) {
     reader.onload = async (event) => {
         console.log("File Reader Loaded");
         try {
-            // API.warmupBackend(); // Moved up
-
             let rawResult = event.target.result;
 
             // --- ULTIMATE STRUCTURAL SANITIZER ---
-            // Structural split is safer: get the last part (data) and strictly add one header.
-
             if (rawResult.includes(',')) {
-                // Split by comma to separate any headers from data
-                // The last element is always the raw base64 data
                 const parts = rawResult.split(',');
                 const cleanData = parts.pop();
                 state.originalImage = `data:image/jpeg;base64,${cleanData}`;
@@ -213,14 +207,47 @@ async function handleFileUpload(e) {
 
             console.log("State Updated (Split Sanitization). Length:", state.originalImage.length);
 
+            // 🆕 Check image dimensions
+            const img = new Image();
+            img.src = state.originalImage;
+            await new Promise(r => img.onload = r);
+
+            const minDimension = 600;
+            if (img.width < minDimension || img.height < minDimension) {
+                console.warn(`⚠️ Image size warning: ${img.width}x${img.height}px`);
+                const userConfirm = confirm(
+                    `⚠️ 圖片尺寸偏小 (${img.width}×${img.height}px)\n\n` +
+                    `建議使用至少 600×800px 的照片以確保品質。\n\n` +
+                    `是否繼續使用此照片？`
+                );
+                if (!userConfirm) {
+                    console.log("User cancelled due to small image size");
+                    return;
+                }
+            }
+
             UI.showUseConfirm(DEFAULT_SPECS[state.spec], async () => {
                 console.log("Modal Confirmed, Showing Action Panel");
 
-                // [NEW FLOW]: UX Improvements
-                // 1. Hide Spec Selector Sidebar (if separate) or just replace content
-                UI.toggleSidebar(false); // Action Panel is inside sidebar now, verify this logic.
+                // 🆕 [FIX] Immediately run face detection after user confirms
+                // This prevents duplicate detection in runProductionPhase
+                if (!state.faceData) {
+                    console.log("⚡ [預處理] 立即執行人臉偵測...");
+                    console.time("⏱️ [預處理人臉偵測]");
+                    const detectRes = await API.detectFace(state.originalImage);
+                    console.timeEnd("⏱️ [預處理人臉偵測]");
 
-                // 2. Render Action Panel (Production vs Audit)
+                    if (!detectRes || !detectRes.found) {
+                        alert('❌ 未偵測到人臉，請更換照片或調整角度');
+                        location.reload();
+                        return;
+                    }
+                    state.faceData = detectRes;
+                    console.log("✅ [預處理] 人臉偵測完成，已儲存至 state");
+                }
+
+                // [NEW FLOW]: UX Improvements
+                UI.toggleSidebar(false);
                 UI.renderActionPanel(runProductionPhase, runAuditPhase);
 
                 // [NEW] Advanced Adjustment UI (Overlay on Preview)
@@ -406,22 +433,16 @@ async function runProductionPhase() {
     UI.toggleAuditView(false);
 
     try {
-
-        // [Safety Check]: Ensure Face Data exists (Critical for Direct Production Flow)
+        // ✅ [FIX] Face detection now happens in handleFileUpload
+        // No need to check or re-run detection here
         if (!state.faceData) {
-            console.log("No existing face data. Running detection...");
-            console.time("⏱️ [人臉偵測]");
-            const detectRes = await API.detectFace(state.originalImage);
-            console.timeEnd("⏱️ [人臉偵測]");
-
-            if (!detectRes || !detectRes.found) {
-                alert('未偵測到人臉，請更換照片');
-                // Reload or Reset
-                location.reload();
-                return;
-            }
-            state.faceData = detectRes;
+            console.error("❌ Face data missing! This should not happen.");
+            alert('系統錯誤：缺少人臉資料，請重新上傳');
+            location.reload();
+            return;
         }
+
+        console.log("✅ 使用已快取的人臉資料，跳過重複偵測");
 
         // 2. Start Animation FIRST (Immediate Feedback)
         // This shows the overlay and progress indicators immediately
