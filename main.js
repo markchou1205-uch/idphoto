@@ -279,31 +279,14 @@ async function handleFileUpload(e) {
                 }
             }
 
-            // 🆕 [WORKFLOW CHANGE] Skip modal, directly proceed to face detection and P2
-            console.log("⚡ 開始人臉偵測...");
-
-            // 🆕 [FIX] Immediately run face detection after upload
-            if (!state.faceData) {
-                console.log("⚡ [預處理] 立即執行人臉偵測...");
-                console.time("⏱️ [預處理人臉偵測]");
-                const detectRes = await API.detectFace(state.originalImage);
-                console.timeEnd("⏱️ [預處理人臉偵測]");
-
-                if (!detectRes || !detectRes.found) {
-                    alert('❌ 未偵測到人臉，請更換照片或調整角度');
-                    showUploadLoading(false);
-                    location.reload();
-                    return;
-                }
-                state.faceData = detectRes;
-                console.log("✅ [預處理] 人臉偵測完成，已儲存至 state");
-            }
+            // ✅ [OPTIMIZED] Skip Azure detection at upload stage
+            console.log("⚡ 圖片上傳成功，準備顯示確認介面");
 
             // Hide loading overlay
             showUploadLoading(false);
 
-            // Show P2 confirmation stage
-            console.log("⚡ 顯示 P2 確認階段");
+            // Show P2 confirmation stage immediately (no Azure call)
+            console.log("⚡ 直接顯示 P2 確認階段（Azure 偵測將在確認製作後執行）");
             showConfirmationStage();
 
             // Show Original Image Preview in right panel
@@ -507,18 +490,10 @@ async function runProductionPhase() {
     UI.toggleAuditView(false);
 
     try {
-        // ✅ [FIX] Face detection now happens in handleFileUpload
-        // No need to check or re-run detection here
-        if (!state.faceData) {
-            console.error("❌ Face data missing! This should not happen.");
-            alert('系統錯誤：缺少人臉資料，請重新上傳');
-            location.reload();
-            return;
-        }
+        // ✅ [OPTIMIZED] Face detection will happen in parallel with Vercel during production
+        console.log("🚀 開始製作流程（Azure + Vercel 並行處理）");
 
-        console.log("✅ 使用已快取的人臉資料，跳過重複偵測");
-
-        // 2. Start Animation FIRST (Immediate Feedback)
+        // 1. Start Animation FIRST (Immediate Feedback)
         // This shows the overlay and progress indicators immediately
         console.time("⏱️ [UI動畫初始化]");
         UI.renderServiceAnimation(async () => {
@@ -529,14 +504,14 @@ async function runProductionPhase() {
                 console.timeEnd("⏱️ [前端壓縮]");
                 console.log(`   ↳ 壓縮結果: ${state.originalImage.length} -> ${compressedB64.length}`);
 
-                // 3. Start API Task (Parallel Execution)
+                // 2. Start API Task (Azure + Vercel in Parallel - No cached data)
                 console.time("⏱️ [並行API處理 (Azure + Vercel)]");
                 const processRes = await API.executeParallelProduction(
                     compressedB64,       // Send compressed image
-                    state.originalImage, // Keep original for high-res crop if needed (though API uses input for both now)
+                    state.originalImage, // Keep original for high-res crop if needed
                     state.spec,
                     state.adjustments,
-                    state.faceData       // ✅ Pass cached face data to skip duplicate Azure call
+                    null                 // ✅ No cached data - will execute both Azure + Vercel in parallel
                 );
                 console.timeEnd("⏱️ [並行API處理 (Azure + Vercel)]");
 
