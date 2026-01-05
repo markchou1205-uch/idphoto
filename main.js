@@ -1,6 +1,7 @@
 import * as API from './js/api.js';
 import { UI } from './js/ui.js';
 import { DEFAULT_SPECS } from './js/config.js'; // Restore Spec Import
+import { preloadHairSegmentation } from './js/hairMask.js'; // Hair segmentation preload
 
 // --- State ---
 let state = {
@@ -19,6 +20,14 @@ function preloadLocalAI() {
     import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/+esm')
         .then(() => console.log("AI Model Pre-loaded"))
         .catch(err => console.warn("AI Pre-load failed:", err));
+}
+
+// [NEW] Pre-load MediaPipe Hair Segmentation Model
+function preloadHairModel() {
+    console.log("Pre-loading MediaPipe Hair Segmentation...");
+    preloadHairSegmentation().catch(err => {
+        console.warn("Hair segmentation preload failed:", err);
+    });
 }
 
 // [Optimization] Helper: Client-Side Compression
@@ -71,6 +80,9 @@ const specsContainer = document.getElementById('specs-container');
 document.addEventListener('DOMContentLoaded', () => {
     UI.initStyles();
     initSpecs(); // Restore UI Render
+
+    // [NEW] Preload Hair Segmentation Model
+    preloadHairModel();
 
     // Legacy support: HTML calls handleFileUpload(this) via onchange.
     // We do NOT need to addEventListener here, or it will fire twice.
