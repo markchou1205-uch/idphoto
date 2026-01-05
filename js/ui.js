@@ -691,34 +691,76 @@ export const UI = {
             }
         };
 
+        // ✅ NEW P4 UI LAYOUT
         newArea.innerHTML = `
-            <div class="d-flex gap-2 justify-content-center">
-                <button class="btn btn-outline-primary flex-fill" id="btn-dl-single">
-                    <i class="bi bi-download"></i> 下載單張 (JPG)
-                </button>
-                <button class="btn btn-success flex-fill" id="btn-dl-4x2">
-                    <i class="bi bi-grid-3x3"></i> 下載 4x2 排版
+            <!-- 標題 -->
+            <div class="text-center mb-3">
+                <h5 class="fw-bold text-success mb-0">
+                    <i class="bi bi-check-circle-fill me-2"></i>您的證件照製作完成！
+                </h5>
+            </div>
+
+            <!-- 紅色提醒框 -->
+            <div class="alert alert-danger border border-danger mb-3 py-2 px-3" role="alert">
+                <div class="d-flex align-items-start">
+                    <i class="bi bi-exclamation-triangle-fill text-danger me-2 fs-5" style="margin-top: 2px;"></i>
+                    <div class="small">
+                        <strong>提醒您</strong>，為了符合證件照規格，請您確認圖片中人物<strong>下巴的端點位置進入紅色區域</strong>。
+                    </div>
+                </div>
+            </div>
+
+            <!-- 次標題 -->
+            <div class="mb-2 small text-muted text-center">
+                <i class="bi bi-download"></i> 您可以選擇以下方式取得您的證件照：
+            </div>
+
+            <!-- 按鈕組 -->
+            <div class="vstack gap-2">
+                <!-- 單張和排版下載 -->
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary flex-fill" id="btn-dl-single">
+                        <i class="bi bi-file-earmark-image"></i> 單張下載
+                    </button>
+                    <button class="btn btn-success flex-fill" id="btn-dl-4x2">
+                        <i class="bi bi-grid-3x3"></i> 2x4格式下載
+                    </button>
+                </div>
+
+                <!-- 電子郵件（功能待完成） -->
+                <div>
+                    <button class="btn btn-outline-secondary w-100 disabled" id="btn-email">
+                        <i class="bi bi-envelope"></i> 電子郵件
+                    </button>
+                    <input type="email" class="form-control form-control-sm mt-2" 
+                           id="email-input" placeholder="請輸入電子郵件地址..." disabled>
+                    <small class="text-muted d-block text-center mt-1">
+                        (功能開發中，敬請期待)
+                    </small>
+                </div>
+
+                <!-- 分隔線 -->
+                <hr class="my-2 opacity-25">
+
+                <!-- 製作其它圖片 -->
+                <button class="btn btn-outline-primary w-100" id="btn-make-another">
+                    <i class="bi bi-arrow-clockwise"></i> 製作其它圖片
                 </button>
             </div>
-            <div class="mt-2 text-center text-muted small">
-                <i class="bi bi-info-circle"></i> 單張為 JPG 電子檔 / 4x2 為列印排版預覽
-            </div>
-            <hr class="my-2 opacity-25">
-            <button id="btn-start-audit-post" class="btn btn-outline-dark w-100 shadow-sm">
-                <i class="bi bi-shield-check"></i> 執行合規審查 (檢測報告)
-            </button>
         `;
+
+        // Define makeAnother action
+        const makeAnotherAction = () => {
+            location.reload(); // 返回 P1
+        };
 
         const btnSingle = document.getElementById('btn-dl-single');
         const btn4x2 = document.getElementById('btn-dl-4x2');
-        const btnAudit = document.getElementById('btn-start-audit-post');
+        const btnMakeAnother = document.getElementById('btn-make-another');
 
         if (btnSingle) btnSingle.onclick = dlSingleAction;
         if (btn4x2) btn4x2.onclick = preview4x2Action;
-        if (btnAudit) btnAudit.onclick = () => {
-            // Call Global Audit Function
-            if (window.runAuditPhase) window.runAuditPhase();
-        };
+        if (btnMakeAnother) btnMakeAnother.onclick = makeAnotherAction;
     },
 
     // NEW: Handle Single Download Cleanly
