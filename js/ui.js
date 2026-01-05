@@ -670,10 +670,10 @@ export const UI = {
         const area = document.getElementById('service-action-area') || document.getElementById('audit-action-area');
         if (!area) return;
 
-        // ✅ [FIX] Hide P3 progress table and confirmation section when showing P4
-        const serviceTableContainer = document.getElementById('service-table-container');
+        // ✅ [FIX] Hide P3 progress table (but NOT the container, to preserve service-action-area)
+        const progressTableDiv = document.querySelector('#service-table-container \u003e div.mb-2');
         const confirmationSection = document.getElementById('confirmation-section');
-        if (serviceTableContainer) serviceTableContainer.classList.add('d-none');
+        if (progressTableDiv) progressTableDiv.classList.add('d-none');
         if (confirmationSection) confirmationSection.classList.add('d-none');
 
         // Clean previous listeners
