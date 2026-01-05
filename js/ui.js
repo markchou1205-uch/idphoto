@@ -323,20 +323,26 @@ export const UI = {
             container.innerHTML = '';
             container.classList.remove('d-none');
 
-            // Service Items - Start Index 6 (to match legacy IDs or reset to 0?)
-            // Let's use specific IDs for services to avoid collision
+            // ✅ [OPTIMIZED] Expanded to 13 detailed progress items
             const serviceItems = [
-                { item: '臉部識別推算' },
-                { item: 'AI 智能裁切' },
-                { item: '背景去除' },
-                { item: '臉部補光' },
-                { item: '尺寸格式化' },
-                { item: '解析度優化' }
+                { item: '正在壓縮圖片...' },
+                { item: '正在連接 Azure API...' },
+                { item: '正在執行臉部偵測...' },
+                { item: '正在分析五官座標...' },
+                { item: '正在計算頭部比例...' },
+                { item: '正在連接 Vercel API...' },
+                { item: '正在準備圖片上傳...' },
+                { item: '正在執行 AI 去背...' },
+                { item: '正在套用幾何裁切...' },
+                { item: '正在合成白色背景...' },
+                { item: '正在套用光線補正...' },
+                { item: '正在優化輸出品質...' },
+                { item: '正在準備預覽...' }
             ];
 
             const createServiceRows = (items) => {
                 return items.map((res, i) => {
-                    const idx = i + 100; // Offset to avoid checks
+                    const idx = i + 100; // Offset to avoid collision (100-112 for 13 items)
                     return `
                         <tr class="audit-row show" id="audit-row-${idx}">
                             <td class="small fw-bold">${res.item}</td>
@@ -355,7 +361,7 @@ export const UI = {
 
             container.innerHTML = `
                 <div class="mb-2">
-                    <h6 class="fw-bold text-success small"><i class="bi bi-stars"></i> 加值服務項目</h6>
+                    <h6 class="fw-bold text-success small"><i class="bi bi-stars"></i> 製作進度</h6>
                     <table class="audit-table table-sm" style="font-size:0.9rem;">
                         <tbody id="audit-service-body">${createServiceRows(serviceItems)}</tbody>
                     </table>
@@ -556,8 +562,13 @@ export const UI = {
     renderServiceAnimation(onComplete, taskPromise) {
         console.log("🎬 [動畫] 啟動服務動畫與 API 並行處理");
 
-        // Correct Indices for 6 services (100 to 105)
-        const serviceIndices = [100, 101, 102, 103, 104, 105];
+        // ✅ [FIX] Initialize and show the service progress table
+        this.initServiceTable('#service-table-container');
+        const container = document.getElementById('service-table-container');
+        if (container) container.classList.remove('d-none');
+
+        // ✅ [OPTIMIZED] Updated for 13 items (indices 100-112)
+        const serviceIndices = [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112];
         let animationIndex = 0;
 
         // 1. Setup Preview Overlay
@@ -593,23 +604,26 @@ export const UI = {
 
         // 3. Animate in parallel (visual feedback only)
         function animateNext() {
-            // Update Progress
-            const pct = (animationIndex / serviceIndices.length) * 100;
-            updateProgress(pct);
+            // ✅ [OPTIMIZED] Limit progress bar to 95% maximum
+            const rawPct = (animationIndex / serviceIndices.length) * 100;
+            const cappedPct = Math.min(rawPct, 95); // Cap at 95%
+            updateProgress(cappedPct);
 
             if (animationIndex >= serviceIndices.length) {
-                updateProgress(100);
-
                 // Animation complete, wait for API if still running
                 console.log("🎬 [動畫] 動畫序列完成，等待 API 處理完成...");
                 apiPromise.then(() => {
-                    console.log("✅ [動畫] API 處理完成，移除載入畫面");
-                    const old = document.getElementById('ui-prog-overlay');
-                    if (old) old.remove();
+                    console.log("✅ [動畫] API 處理完成，準備顯示結果");
+                    // ✅ [OPTIMIZED] Jump to 100% and remove overlay simultaneously
+                    updateProgress(100);
+                    setTimeout(() => {
+                        const overlay = document.getElementById('ui-prog-overlay');
+                        if (overlay) overlay.remove();
+                    }, 200); // Brief 200ms to show 100% before revealing photo
                 }).catch(err => {
                     console.error("❌ [動畫] API 處理失敗:", err);
-                    const old = document.getElementById('ui-prog-overlay');
-                    if (old) old.remove();
+                    const overlay = document.getElementById('ui-prog-overlay');
+                    if (overlay) overlay.remove();
                 });
                 return;
             }
@@ -627,7 +641,7 @@ export const UI = {
                 badge.className = 'status-badge status-warn';
             }
 
-            // Faster animation (500ms per item instead of 3-5s)
+            // ✅ [OPTIMIZED] Slowed down to 1000ms per item (13 seconds total)
             setTimeout(() => {
                 if (spinner) spinner.classList.add('d-none');
                 const icon = document.getElementById(`audit-icon-${idx}`);
@@ -644,7 +658,7 @@ export const UI = {
 
                 animationIndex++;
                 animateNext();
-            }, 500); // Reduced from 3000-5000ms to 500ms
+            }, 1000); // Increased from 500ms to 1000ms
         }
 
         requestAnimationFrame(() => animateNext());
