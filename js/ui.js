@@ -138,6 +138,80 @@ export const UI = {
     },
 
 
+    // NEW: Show P2 Confirmation Panel (確認製作階段)
+    showConfirmationPanel(specName, onConfirm, onReupload) {
+        const confirmSection = document.getElementById('confirmation-section');
+        if (!confirmSection) return;
+
+        // Hide P1 sections
+        const specsSection = document.getElementById('specs-section');
+        const uploadSection = document.getElementById('upload-section');
+        if (specsSection) specsSection.classList.add('d-none');
+        if (uploadSection) uploadSection.classList.add('d-none');
+
+        // Show and populate P2
+        confirmSection.classList.remove('d-none');
+        confirmSection.innerHTML = `
+            <div class="p-3 bg-light border rounded">
+                <div class="alert alert-success mb-3 d-flex align-items-center">
+                    <i class="bi bi-check-circle-fill fs-4 me-2"></i>
+                    <div>
+                        <strong>上傳成功！</strong><br>
+                        您選擇的是<strong>${specName}</strong>證件照
+                    </div>
+                </div>
+                
+                <div class="alert alert-info mb-3">
+                    <div class="small"><i class="bi bi-info-circle-fill me-1"></i> <strong>系統將自動進行：</strong></div>
+                    <ul class="small mb-0 mt-2 ps-3">
+                        <li>AI 智能人臉偵測與裁切</li>
+                        <li>自動去背與換白底</li>
+                        <li>尺寸調整與格式優化 (300DPI)</li>
+                    </ul>
+                </div>
+                
+                <div class="vstack gap-2">
+                    <button class="btn btn-primary w-100 py-3 shadow-sm fw-bold" id="btn-confirm-production">
+                        <i class="bi bi-magic me-1"></i> 確認製作
+                    </button>
+                    
+                    <button class="btn btn-outline-secondary w-100 py-2" id="btn-beauty-retouch" disabled title="功能開發中">
+                        <i class="bi bi-stars me-1"></i> 美顏修圖 <small class="text-muted">(即將推出)</small>
+                    </button>
+                    
+                    <button class="btn btn-outline-danger w-100 py-2" id="btn-reupload">
+                        <i class="bi bi-arrow-clockwise me-1"></i> 重新選擇照片
+                    </button>
+                </div>
+                
+                <div class="mt-3 p-2 bg-white rounded border">
+                    <small class="text-muted">
+                        <i class="bi bi-lightbulb me-1"></i>
+                        請確保上傳的照片五官清晰、無遮擋，以利 AI 正確辨識。
+                    </small>
+                </div>
+            </div>
+        `;
+
+        // Bind buttons
+        const btnConfirm = document.getElementById('btn-confirm-production');
+        const btnReupload = document.getElementById('btn-reupload');
+
+        if (btnConfirm) {
+            btnConfirm.onclick = () => {
+                if (onConfirm) onConfirm();
+            };
+        }
+
+        if (btnReupload) {
+            btnReupload.onclick = () => {
+                if (onReupload) onReupload();
+            };
+        }
+
+        // Note: btn-beauty-retouch is disabled, no onclick needed
+    },
+
     // Show Check Spec Modal
     showUseConfirm(specData, onConfirm) {
         // specData should be the full object from config

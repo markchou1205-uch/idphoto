@@ -34,13 +34,14 @@
                     class="bi bi-power"></i></div>
         </div>
 
-        <div id="sidebar-panels" class="bg-white border-end position-relative" style="width: 320px; min-width: 320px;">
+        <div id="sidebar-panels" class="bg-white border-end position-relative" style="width: 400px; min-width: 400px;">
             <div id="panel-id-photo" class="feature-panel h-100 p-4 d-flex flex-column">
                 <h4 class="fw-bold mb-4">證件照製作</h4>
 
                 <!-- Step 1: 選擇用途 -->
                 <div id="specs-section">
-                    <label class="fw-bold text-primary small mb-2 d-block"><i class="bi bi-1-circle-fill me-1"></i>選擇用途</label>
+                    <label class="fw-bold text-primary small mb-2 d-block"><i
+                            class="bi bi-1-circle-fill me-1"></i>選擇用途</label>
                     <div id="specs-container" class="vstack gap-2 mb-3"></div>
                 </div>
 
@@ -48,7 +49,8 @@
 
                 <!-- Step 2: 上傳照片 -->
                 <div id="upload-section">
-                    <label class="fw-bold text-success small mb-2 d-block"><i class="bi bi-2-circle-fill me-1"></i>上傳照片</label>
+                    <label class="fw-bold text-success small mb-2 d-block"><i
+                            class="bi bi-2-circle-fill me-1"></i>上傳照片</label>
                     <div class="upload-btn-wrapper mb-3">
                         <input type="file" id="fileInput" accept="image/*,.heic" hidden
                             onchange="handleFileUpload(this)">
@@ -59,13 +61,19 @@
                         </button>
                         <div class="text-center mt-2 small text-muted">支援 JPG, PNG, HEIC (5MB內)</div>
                     </div>
-                    
+
                     <!-- Loading Spinner (隱藏) -->
                     <div id="upload-loading" class="d-none text-center py-3">
                         <div class="spinner-border text-success" role="status"></div>
                         <div class="mt-2 small text-muted">正在載入照片...</div>
                     </div>
                 </div>
+
+                <!-- P2: 確認製作階段 (隱藏，由 JS 動態填充) -->
+                <div id="confirmation-section" class="d-none">
+                    <!-- 將由 showConfirmationStage() 動態填充 -->
+                </div>
+
 
                 <div class="mt-auto">
                     <!-- Disclaimer Moved -->
@@ -89,44 +97,11 @@
                 </div>
             </div>
 
+
             <div id="result-dashboard" class="d-none container-fluid h-100 p-0">
                 <div class="row h-100 g-0">
-                    <!-- Sidebar: Audit Report (Restored) -->
-                    <!-- Sidebar: Action & Audit Panel -->
-                    <div class="col-md-3 h-100 bg-white border-end shadow-sm overflow-auto" id="sidebar-container">
-                        <!-- ... -->
-                        <div id="action-panel" class="p-4 d-flex flex-column gap-3">
-                            <!-- ... content ... -->
-                            <h5 class="fw-bold mb-2">請選擇下一步</h5>
-                            <button id="btn-start-production"
-                                class="btn btn-primary btn-lg w-100 py-3 shadow-sm fw-bold">
-                                <i class="bi bi-magic"></i> 開始製作證件照
-                            </button>
-                            <div id="service-table-container" class="mt-2"></div>
-                            <hr class="my-2 opacity-25">
-                            <button id="btn-start-audit" class="btn btn-outline-secondary w-100 d-none">
-                                <i class="bi bi-shield-check"></i> 合規審查 (檢測報告)
-                            </button>
-                            <div id="audit-report-container" class="d-none"></div>
-                            <div class="mt-2 p-3 bg-light rounded border">
-                                <h6 class="fw-bold text-muted mb-2"><small>外交部相關規定</small></h6>
-                                <ul class="list-unstyled small text-muted mb-2 ps-1" style="font-size: 0.85rem;">
-                                    <li>• 最近6個月內拍攝</li>
-                                    <li>• 白色背景</li>
-                                    <li>• 脫帽、五官清晰 (眉毛/耳朵)</li>
-                                    <li>• 不露齒、表情自然</li>
-                                </ul>
-                                <a href="https://www.boca.gov.tw/cp-16-4123-c2932-1.html" target="_blank"
-                                    class="small text-primary text-decoration-none">
-                                    <i class="bi bi-box-arrow-up-right"></i> 詳細規範連結
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Main Preview Area -->
-                    <!-- Added overflow-auto to allow scrolling if controls stick out -->
-                    <div class="col-md-9 h-100 d-flex flex-column bg-dark overflow-auto"
+                    <!-- Main Preview Area - Now Full Width -->
+                    <div class="col-12 h-100 d-flex flex-column bg-dark overflow-auto"
                         style="overflow-x: auto; overflow-y: auto;">
                         <div class="flex-grow-1 d-flex justify-content-center align-items-center p-5 position-relative"
                             id="preview-container">
@@ -203,33 +178,6 @@
 
     </div>
 
-    <!-- Spec Confirmation Modal -->
-    <div class="modal fade" id="checkSpecModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="checkSpecLabel">製作規格確認</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="alert alert-info d-flex align-items-center mb-3">
-                        <i class="bi bi-info-circle-fill me-2 fs-4"></i>
-                        <div>
-                            系統將自動進行：<br>
-                            <strong>1. AI 智能人臉偵測與裁切</strong><br>
-                            <strong>2. 自動去背與換白底 (電子檔/列印用)</strong><br>
-                            <strong id="confirm-spec-dims">3. 尺寸調整為 3.5cm x 4.5cm (300DPI)</strong>
-                        </div>
-                    </div>
-                    <p class="mb-0 text-muted small">請確保您上傳的照片五官清晰、無遮擋，以利 AI 正確辨識。</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-primary" id="btn-confirm-use">確認開始製作</button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <div class="modal fade" id="paymentModal" tabindex="-1">
         <div class="modal-dialog modal-xl modal-dialog-centered">

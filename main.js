@@ -130,17 +130,51 @@ window.updateAILoading = (text) => {
     }
 };
 
-// Helper to show/hide upload loading spinner
+// Helper to show/hide upload loading spinner with fullscreen overlay
 function showUploadLoading(show) {
     const uploadBtn = document.getElementById('upload-btn');
     const loadingSpinner = document.getElementById('upload-loading');
 
+    // Remove old overlay if exists
+    const existingOverlay = document.getElementById('upload-fullscreen-overlay');
+    if (existingOverlay) existingOverlay.remove();
+
     if (show) {
+        // Hide upload button
         if (uploadBtn) uploadBtn.classList.add('d-none');
-        if (loadingSpinner) loadingSpinner.classList.remove('d-none');
+        if (loadingSpinner) loadingSpinner.classList.add('d-none'); // Hide old spinner
+
+        // Create fullscreen overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'upload-fullscreen-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(3px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        `;
+
+        overlay.innerHTML = `
+            <div class="spinner-border text-light" role="status" style="width: 3rem; height: 3rem;">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <div class="mt-3 text-white fs-5 fw-bold">讀取圖片中...</div>
+            <div class="mt-2 text-white-50 small">請稍候，正在進行人臉偵測</div>
+        `;
+
+        document.body.appendChild(overlay);
     } else {
+        // Show upload button
         if (uploadBtn) uploadBtn.classList.remove('d-none');
-        if (loadingSpinner) loadingSpinner.classList.add('d-none');
+        if (loadingSpinner) loadingSpinner.classList.remove('d-none');
     }
 }
 
@@ -245,55 +279,46 @@ async function handleFileUpload(e) {
                 }
             }
 
-            UI.showUseConfirm(DEFAULT_SPECS[state.spec], async () => {
-                console.log("Modal Confirmed, Showing Action Panel");
+            // 🆕 [WORKFLOW CHANGE] Skip modal, directly proceed to face detection and P2
+            console.log("⚡ 開始人臉偵測...");
 
-                // 🆕 [FIX] Immediately run face detection after user confirms
-                // This prevents duplicate detection in runProductionPhase
-                if (!state.faceData) {
-                    console.log("⚡ [預處理] 立即執行人臉偵測...");
-                    console.time("⏱️ [預處理人臉偵測]");
-                    const detectRes = await API.detectFace(state.originalImage);
-                    console.timeEnd("⏱️ [預處理人臉偵測]");
+            // 🆕 [FIX] Immediately run face detection after upload
+            if (!state.faceData) {
+                console.log("⚡ [預處理] 立即執行人臉偵測...");
+                console.time("⏱️ [預處理人臉偵測]");
+                const detectRes = await API.detectFace(state.originalImage);
+                console.timeEnd("⏱️ [預處理人臉偵測]");
 
-                    if (!detectRes || !detectRes.found) {
-                        alert('❌ 未偵測到人臉，請更換照片或調整角度');
-                        showUploadLoading(false);
-                        location.reload();
-                        return;
-                    }
-                    state.faceData = detectRes;
-                    console.log("✅ [預處理] 人臉偵測完成，已儲存至 state");
+                if (!detectRes || !detectRes.found) {
+                    alert('❌ 未偵測到人臉，請更換照片或調整角度');
+                    showUploadLoading(false);
+                    location.reload();
+                    return;
                 }
+                state.faceData = detectRes;
+                console.log("✅ [預處理] 人臉偵測完成，已儲存至 state");
+            }
 
-                // Hide loading spinner
-                showUploadLoading(false);
+            // Hide loading overlay
+            showUploadLoading(false);
 
-                // 🆕 [NEW] Directly start production without showing action panel
-                // User clicked "confirm" in modal, so we start production immediately
-                console.log("⚡ Modal 確認後立即開始製作，無需再點擊");
-                runProductionPhase();
+            // Show P2 confirmation stage
+            console.log("⚡ 顯示 P2 確認階段");
+            showConfirmationStage();
 
-                // [NEW] Advanced Adjustment UI (Overlay on Preview)
-                // MOVED: Logic moved to injectAdvancedControls() to show ONLY after production.
-                const existingOverlay = document.getElementById('control-overlay');
-                if (existingOverlay) existingOverlay.remove();
+            // Show Original Image Preview in right panel
+            const previewImg = document.getElementById('main-preview-img');
+            if (previewImg) {
+                previewImg.src = state.originalImage;
+                previewImg.classList.remove('d-none');
+            }
 
+            // Hide Compare View if open
+            const compareView = document.getElementById('compare-view');
+            if (compareView) compareView.classList.add('d-none');
 
-                // 3. Show Original Image Preview
-                const previewImg = document.getElementById('main-preview-img');
-                if (previewImg) {
-                    previewImg.src = state.originalImage;
-                    previewImg.classList.remove('d-none');
-                }
-
-                // Hide Compare View if open
-                const compareView = document.getElementById('compare-view');
-                if (compareView) compareView.classList.add('d-none');
-
-                // Ensure Result Dashboard is visible (swapped by renderActionPanel but double check)
-                UI.switchView('result');
-            });
+            // Ensure Result Dashboard is visible
+            UI.switchView('result');
 
         } catch (err) {
             console.error("Error inside reader.onload:", err);
@@ -301,6 +326,27 @@ async function handleFileUpload(e) {
     };
     reader.onerror = (err) => console.error("File Reader Error:", err);
     reader.readAsDataURL(file);
+}
+
+// NEW: Show P2 Confirmation Stage
+function showConfirmationStage() {
+    const specData = DEFAULT_SPECS[state.spec];
+    const specName = specData ? specData.name : "未知規格";
+
+    // Use UI helper to show confirmation panel
+    UI.showConfirmationPanel(
+        specName,
+        // onConfirm callback - Start production
+        () => {
+            console.log("用戶確認製作，開始執行 runProductionPhase");
+            runProductionPhase();
+        },
+        // onReupload callback - Reload page
+        () => {
+            console.log("用戶選擇重新上傳");
+            location.reload();
+        }
+    );
 }
 
 // Phase 1: Compliance Audit (Post-Production Check)
@@ -446,7 +492,11 @@ async function runProductionPhase() {
     console.time("⏱️ [總製作時間]");
     console.log("\n========== 開始製作證件照 ==========");
 
-    // UX: Disable Button
+    // [NEW] Hide P2 Confirmation Section (transition to P3)
+    const confirmSection = document.getElementById('confirmation-section');
+    if (confirmSection) confirmSection.classList.add('d-none');
+
+    // UX: Disable Button (legacy support if button exists)
     const btn = document.getElementById('btn-start-production');
     if (btn) {
         btn.disabled = true;
