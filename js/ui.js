@@ -697,59 +697,59 @@ export const UI = {
             }
         };
 
-        // ✅ NEW P4 UI LAYOUT
+        // ✅ NEW P4 UI LAYOUT - Optimized with larger text and spacing
         newArea.innerHTML = `
             <!-- 標題 -->
-            <div class="text-center mb-3">
-                <h5 class="fw-bold text-success mb-0">
+            <div class="text-center mb-4">
+                <h4 class="fw-bold text-success mb-0">
                     <i class="bi bi-check-circle-fill me-2"></i>您的證件照製作完成！
-                </h5>
+                </h4>
             </div>
 
             <!-- 紅色提醒框 -->
-            <div class="alert alert-danger border border-danger mb-3 py-2 px-3" role="alert">
+            <div class="alert alert-danger border border-danger mb-4 py-3 px-4" role="alert">
                 <div class="d-flex align-items-start">
-                    <i class="bi bi-exclamation-triangle-fill text-danger me-2 fs-5" style="margin-top: 2px;"></i>
-                    <div class="small">
+                    <i class="bi bi-exclamation-triangle-fill text-danger me-3 fs-4" style="margin-top: 2px;"></i>
+                    <div>
                         <strong>提醒您</strong>，為了符合證件照規格，請您確認圖片中人物<strong>下巴的端點位置進入紅色區域</strong>。
                     </div>
                 </div>
             </div>
 
             <!-- 次標題 -->
-            <div class="mb-2 small text-muted text-center">
+            <div class="mb-3 text-muted text-center">
                 <i class="bi bi-download"></i> 您可以選擇以下方式取得您的證件照：
             </div>
 
             <!-- 按鈕組 -->
-            <div class="vstack gap-2">
+            <div class="vstack gap-3">
                 <!-- 單張和排版下載 -->
-                <div class="d-flex gap-2">
-                    <button class="btn btn-primary flex-fill" id="btn-dl-single">
+                <div class="d-flex gap-3">
+                    <button class="btn btn-primary btn-lg flex-fill" id="btn-dl-single">
                         <i class="bi bi-file-earmark-image"></i> 單張下載
                     </button>
-                    <button class="btn btn-success flex-fill" id="btn-dl-4x2">
+                    <button class="btn btn-success btn-lg flex-fill" id="btn-dl-4x2">
                         <i class="bi bi-grid-3x3"></i> 2x4格式下載
                     </button>
                 </div>
 
                 <!-- 電子郵件（功能待完成） -->
                 <div>
-                    <button class="btn btn-outline-secondary w-100 disabled" id="btn-email">
+                    <button class="btn btn-outline-secondary btn-lg w-100 disabled" id="btn-email">
                         <i class="bi bi-envelope"></i> 電子郵件
                     </button>
-                    <input type="email" class="form-control form-control-sm mt-2" 
+                    <input type="email" class="form-control mt-2" 
                            id="email-input" placeholder="請輸入電子郵件地址..." disabled>
-                    <small class="text-muted d-block text-center mt-1">
+                    <small class="text-muted d-block text-center mt-2">
                         (功能開發中，敬請期待)
                     </small>
                 </div>
 
                 <!-- 分隔線 -->
-                <hr class="my-2 opacity-25">
+                <hr class="my-3 opacity-25">
 
                 <!-- 製作其它圖片 -->
-                <button class="btn btn-outline-primary w-100" id="btn-make-another">
+                <button class="btn btn-outline-primary btn-lg w-100" id="btn-make-another">
                     <i class="bi bi-arrow-clockwise"></i> 製作其它圖片
                 </button>
             </div>
