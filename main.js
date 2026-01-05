@@ -130,6 +130,20 @@ window.updateAILoading = (text) => {
     }
 };
 
+// Helper to show/hide upload loading spinner
+function showUploadLoading(show) {
+    const uploadBtn = document.getElementById('upload-btn');
+    const loadingSpinner = document.getElementById('upload-loading');
+
+    if (show) {
+        if (uploadBtn) uploadBtn.classList.add('d-none');
+        if (loadingSpinner) loadingSpinner.classList.remove('d-none');
+    } else {
+        if (uploadBtn) uploadBtn.classList.remove('d-none');
+        if (loadingSpinner) loadingSpinner.classList.add('d-none');
+    }
+}
+
 // --- Handlers ---
 async function handleFileUpload(e) {
     console.log("Upload Handler Triggered", e);
@@ -147,6 +161,9 @@ async function handleFileUpload(e) {
     console.log("File detected:", file);
 
     if (!file) return;
+
+    // 🆕 Show loading spinner immediately
+    showUploadLoading(true);
 
     // HEIC Conversion Support
     const isHeic = file.name.toLowerCase().endsWith('.heic') || file.type === 'image/heic';
@@ -177,6 +194,7 @@ async function handleFileUpload(e) {
         } catch (err) {
             console.error("HEIC Conversion Failed:", err);
             alert("HEIC 照片轉換失敗，請改用 JPG/PNG 或稍後再試。");
+            showUploadLoading(false); // Hide spinner on error
             return;
         }
     }
@@ -222,6 +240,7 @@ async function handleFileUpload(e) {
                 );
                 if (!userConfirm) {
                     console.log("User cancelled due to small image size");
+                    showUploadLoading(false);
                     return;
                 }
             }
@@ -239,6 +258,7 @@ async function handleFileUpload(e) {
 
                     if (!detectRes || !detectRes.found) {
                         alert('❌ 未偵測到人臉，請更換照片或調整角度');
+                        showUploadLoading(false);
                         location.reload();
                         return;
                     }
@@ -246,9 +266,13 @@ async function handleFileUpload(e) {
                     console.log("✅ [預處理] 人臉偵測完成，已儲存至 state");
                 }
 
-                // [NEW FLOW]: UX Improvements
-                UI.toggleSidebar(false);
-                UI.renderActionPanel(runProductionPhase, runAuditPhase);
+                // Hide loading spinner
+                showUploadLoading(false);
+
+                // 🆕 [NEW] Directly start production without showing action panel
+                // User clicked "confirm" in modal, so we start production immediately
+                console.log("⚡ Modal 確認後立即開始製作，無需再點擊");
+                runProductionPhase();
 
                 // [NEW] Advanced Adjustment UI (Overlay on Preview)
                 // MOVED: Logic moved to injectAdvancedControls() to show ONLY after production.

@@ -38,30 +38,33 @@
             <div id="panel-id-photo" class="feature-panel h-100 p-4 d-flex flex-column">
                 <h4 class="fw-bold mb-4">證件照製作</h4>
 
-                <div id="upload-section">
-                    <div class="upload-btn-wrapper mb-4">
-                        <input type="file" id="fileInput" accept="image/*,.heic" hidden
-                            onchange="handleFileUpload(this)">
-                        <button class="btn btn-primary w-100 py-3 shadow-sm fw-bold"
-                            onclick="document.getElementById('fileInput').click()"><i
-                                class="bi bi-cloud-upload me-2"></i> 上傳照片</button>
-                        <div class="text-center mt-2 small text-muted">支援 JPG, PNG, HEIC (5MB內)</div>
-                    </div>
-                    <div id="uploaded-status" class="d-none mb-3 d-flex justify-content-between align-items-center">
-                        <span class="text-success fw-bold"><i class="bi bi-check-circle-fill"></i> 照片已載入</span>
-                        <a href="#" class="text-decoration-none small" onclick="resetUpload()">重選</a>
-                    </div>
+                <!-- Step 1: 選擇用途 -->
+                <div id="specs-section">
+                    <label class="fw-bold text-primary small mb-2 d-block"><i class="bi bi-1-circle-fill me-1"></i>選擇用途</label>
+                    <div id="specs-container" class="vstack gap-2 mb-3"></div>
                 </div>
 
                 <hr class="my-3 text-secondary opacity-25">
 
-                <div id="specs-section">
-                    <label class="fw-bold text-muted small mb-2 d-block">選擇用途</label>
-                    <div id="specs-container" class="vstack gap-2 mb-3"></div>
-                    <button id="btn-process" class="btn btn-primary w-100 py-2 fw-bold shadow-sm d-none"
-                        onclick="processImage()">
-                        <i class="bi bi-lightning-charge-fill"></i> 開始 AI 製作
-                    </button>
+                <!-- Step 2: 上傳照片 -->
+                <div id="upload-section">
+                    <label class="fw-bold text-success small mb-2 d-block"><i class="bi bi-2-circle-fill me-1"></i>上傳照片</label>
+                    <div class="upload-btn-wrapper mb-3">
+                        <input type="file" id="fileInput" accept="image/*,.heic" hidden
+                            onchange="handleFileUpload(this)">
+                        <!-- 改為綠色/成功色，區別於用途選擇 -->
+                        <button class="btn btn-success w-100 py-3 shadow-sm fw-bold" id="upload-btn"
+                            onclick="document.getElementById('fileInput').click()">
+                            <i class="bi bi-cloud-upload me-2"></i> 上傳照片
+                        </button>
+                        <div class="text-center mt-2 small text-muted">支援 JPG, PNG, HEIC (5MB內)</div>
+                    </div>
+                    
+                    <!-- Loading Spinner (隱藏) -->
+                    <div id="upload-loading" class="d-none text-center py-3">
+                        <div class="spinner-border text-success" role="status"></div>
+                        <div class="mt-2 small text-muted">正在載入照片...</div>
+                    </div>
                 </div>
 
                 <div class="mt-auto">
