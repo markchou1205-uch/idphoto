@@ -1,5 +1,5 @@
 
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from api.index import handler as APIHandler
 import os
 
@@ -11,19 +11,19 @@ class CORSRequestHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == '/api/remove-bg':
-            handler = APIHandler(self.request, self.client_address, self.server)
-            handler.do_POST()
+            # Correctly delegate to the APIHandler's method using the current instance
+            APIHandler.do_POST(self)
         else:
             self.send_error(404)
 
     def do_GET(self):
         if self.path == '/api/remove-bg':
-            handler = APIHandler(self.request, self.client_address, self.server)
-            handler.do_GET()
+            # Correctly delegate to the APIHandler's method using the current instance
+            APIHandler.do_GET(self)
         else:
             super().do_GET()
 
-print("Starting Local Server on port 8000...")
+print("Starting Local Server on port 8000 (Threading)...")
 print("Open http://localhost:8000 in your browser.")
-httpd = HTTPServer(('localhost', 8000), CORSRequestHandler)
+httpd = ThreadingHTTPServer(('localhost', 8000), CORSRequestHandler)
 httpd.serve_forever()

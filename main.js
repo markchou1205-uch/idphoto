@@ -10,7 +10,7 @@ let state = {
     faceData: null,
     auditResults: null, // Store validation results
     spec: 'passport',
-    adjustments: { brightness: 1, contrast: 1 } // User lighting adjustments
+    adjustments: { brightness: 1, contrast: 1, showGuides: true } // User lighting adjustments
 };
 
 // Optimization: Pre-load AI Model to save time later
@@ -869,7 +869,8 @@ async function handleClientSideUpdate() {
                 state.assets.fullRect,
                 state.faceData,
                 state.spec,
-                state.adjustments
+                state.adjustments,
+                state.assets.hairMask // [FIX] Persist Hair Mask on Recompose
             );
             await updateResultUI(b64);
         } catch (e) {

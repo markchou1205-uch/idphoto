@@ -658,7 +658,7 @@ export const UI = {
 
                 animationIndex++;
                 animateNext();
-            }, 1000); // Increased from 500ms to 1000ms
+            }, 400); // 400ms * 13 items ~= 5.2 seconds
         }
 
         requestAnimationFrame(() => animateNext());
