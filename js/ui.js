@@ -521,7 +521,8 @@ export const UI = {
                     const old = document.getElementById('ui-prog-overlay');
                     if (old) old.remove();
 
-                    alert("製作完成");
+                    // 直接完成，無需等待用戶確認
+                    console.log("✅ 服務動畫完成，直接呼叫 onComplete");
                     if (onComplete) onComplete();
                 }, 100);
                 return;

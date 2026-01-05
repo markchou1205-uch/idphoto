@@ -42,6 +42,7 @@ export async function detectFace(base64) {
     }
 
     try {
+        console.time("  ⏱️ [Azure Face API - 總時間]");
         console.log("detectFace called. Base64 len:", base64 ? base64.length : 0);
         // Clean input before Blob creation
         const cleanBase64 = ensureSinglePrefix(base64);
@@ -83,6 +84,7 @@ export async function detectFace(base64) {
         const url = `${endpoint}/face/v1.0/detect?returnFaceId=false&returnFaceLandmarks=true&returnFaceAttributes=glasses,occlusion,exposure,blur,noise,headPose&recognitionModel=recognition_01&detectionModel=detection_01`;
 
         console.log("Fetching Azure URL:", url);
+        console.time("    ⏱️ [Azure API Request]");
 
         const res = await fetch(url, {
             method: 'POST',
@@ -93,6 +95,7 @@ export async function detectFace(base64) {
             body: resizedBlob
         });
 
+        console.timeEnd("    ⏱️ [Azure API Request]");
         console.log("Azure Response Status:", res.status);
 
         if (!res.ok) {
@@ -215,7 +218,11 @@ export async function detectFace(base64) {
                 faceLandmarks: l, // Important: Pass scaled landmarks for composition
                 faceAttributes: data[0].faceAttributes // Pass attributes for compliance check
             };
+
+            console.timeEnd("  ⏱️ [Azure Face API - 總時間]");
+            return result;
         }
+        console.timeEnd("  ⏱️ [Azure Face API - 總時間]");
     } catch (e) {
         console.error("Detect Failed:", e);
         console.error("Error Details:", e.message, e.stack);
@@ -589,8 +596,11 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
 // 2. Process Preview (Optimized: Local Crop + Direct Vercel)
 // 2. Fetch Transparent Blob (Extracted)
 export async function fetchTransparentImage(base64) {
+    console.time("  ⏱️ [Vercel 背景移除 - 總時間]");
+
     const cleanBase64 = ensureSinglePrefix(base64);
     // 1. Prepare Upload Blob (Resize & Compress) - Re-use logic
+    console.time("    ⏱️ [圖片準備與上傳]");
     const optimizedBlob = await prepareImageForUpload(cleanBase64);
 
     console.log("Calling Vercel Backend...");
@@ -598,6 +608,7 @@ export async function fetchTransparentImage(base64) {
         method: 'POST',
         body: optimizedBlob
     });
+    console.timeEnd("    ⏱️ [圖片準備與上傳]");
 
     if (!vercelRes.ok) {
         const errorText = await vercelRes.text();
@@ -606,7 +617,9 @@ export async function fetchTransparentImage(base64) {
     }
 
     const base64Data = await vercelRes.text();
-    return await (await fetch(`data:image/png;base64,${base64Data}`)).blob();
+    const blob = await (await fetch(`data:image/png;base64,${base64Data}`)).blob();
+    console.timeEnd("  ⏱️ [Vercel 背景移除 - 總時間]");
+    return blob;
 }
 
 // 2b. Parallel Production (New Entry Point)
@@ -616,12 +629,12 @@ export async function executeParallelProduction(compressedBase64, originalBase64
 
     try {
         // --- PARALLEL EXECUTION ---
-        console.time("Parallel_API");
+        console.time("  ⏱️ [並行任務 - Promise.all]");
         const [faceRes, transparentBlob] = await Promise.all([
             detectFace(compressedBase64),          // Azure (takes ~2-4s)
             fetchTransparentImage(compressedBase64) // Vercel (takes ~3-5s)
         ]);
-        console.timeEnd("Parallel_API");
+        console.timeEnd("  ⏱️ [並行任務 - Promise.all]");
 
         // Note: transparentBlob is result of compressedBase64.
         // If we want to use originalBase64 for high-res cropping, we need to be careful about coordinate systems.
@@ -653,6 +666,7 @@ export async function executeParallelProduction(compressedBase64, originalBase64
         // So if we passed compressedBase64 (Width 1500), it returns coords for Width 1500.
         // So fullRect should match compressedBase64. Correct.
 
+        console.time("  ⏱️ [Canvas合成與濾鏡]");
         const retB64 = await compositeToWhiteBackground(
             transparentBlob,
             faceRes,
@@ -660,6 +674,7 @@ export async function executeParallelProduction(compressedBase64, originalBase64
             config,
             userAdjustments
         );
+        console.timeEnd("  ⏱️ [Canvas合成與濾鏡]");
 
         return {
             photos: [retB64, retB64],

@@ -391,6 +391,10 @@ function renderResult(imgSrc, bgRemoved = false) {
 // Phase 2: Production (Processing)
 // Phase 2: Production (Service + Final)
 async function runProductionPhase() {
+    // ⏱️ START: Total Production Time
+    console.time("⏱️ [總製作時間]");
+    console.log("\n========== 開始製作證件照 ==========");
+
     // UX: Disable Button
     const btn = document.getElementById('btn-start-production');
     if (btn) {
@@ -406,8 +410,10 @@ async function runProductionPhase() {
         // [Safety Check]: Ensure Face Data exists (Critical for Direct Production Flow)
         if (!state.faceData) {
             console.log("No existing face data. Running detection...");
-            // Optional: Show spinner
+            console.time("⏱️ [人臉偵測]");
             const detectRes = await API.detectFace(state.originalImage);
+            console.timeEnd("⏱️ [人臉偵測]");
+
             if (!detectRes || !detectRes.found) {
                 alert('未偵測到人臉，請更換照片');
                 // Reload or Reset
@@ -419,31 +425,29 @@ async function runProductionPhase() {
 
         // 2. Start Animation FIRST (Immediate Feedback)
         // This shows the overlay and progress indicators immediately
+        console.time("⏱️ [UI動畫初始化]");
         UI.renderServiceAnimation(async () => {
             try {
                 // [Optimization] 1. Client-Side Downsampling (<1.0MB)
+                console.time("⏱️ [前端壓縮]");
                 const compressedB64 = await compressImage(state.originalImage, 1024 * 1024, 1500); // 1MB limit, 1500px max
-                console.log(`[Optimization] Compressed: ${state.originalImage.length} -> ${compressedB64.length}`);
+                console.timeEnd("⏱️ [前端壓縮]");
+                console.log(`   ↳ 壓縮結果: ${state.originalImage.length} -> ${compressedB64.length}`);
 
                 // 3. Start API Task (Parallel Execution)
-                console.time("ParallelProduction");
+                console.time("⏱️ [並行API處理 (Azure + Vercel)]");
                 const processRes = await API.executeParallelProduction(
                     compressedB64,       // Send compressed image
                     state.originalImage, // Keep original for high-res crop if needed (though API uses input for both now)
                     state.spec,
                     state.adjustments
                 );
-                console.timeEnd("ParallelProduction");
+                console.timeEnd("⏱️ [並行API處理 (Azure + Vercel)]");
 
-                console.log("API.executeParallelProduction Result Retrieved");
+                console.log("   ↳ API 處理完成，開始更新 UI");
 
                 if (processRes && processRes.photos && processRes.photos.length > 0) {
                     // Cache Assets for Client-Side Re-composition
-                    // Note: Parallel API returns fullRect based on the image passed to it.
-                    // If we passed compressedB64, fullRect corresponds to that.
-                    // Ideally we might want the original high-res result, but for speed 1500px is sufficient for 4x6 print usually.
-                    // If user needs strict high-res, we might need to rethink, but requirement says <1MB upload.
-
                     if (processRes.assets) {
                         state.assets = processRes.assets;
                     }
@@ -460,8 +464,15 @@ async function runProductionPhase() {
                         b64 = `data:image/jpeg;base64,${b64}`;
                     }
                     state.processedImage = b64;
-                    // ... (rest of update UI logic)
-                    await updateResultUI(b64); // Extract UI update logic
+
+                    // Update UI
+                    console.time("⏱️ [UI更新與控制項注入]");
+                    await updateResultUI(b64);
+                    console.timeEnd("⏱️ [UI更新與控制項注入]");
+
+                    // ⏱️ END: Total Production Time
+                    console.timeEnd("⏱️ [總製作時間]");
+                    console.log("========== 製作完成 ==========\n");
                 } else {
                     console.error("No photos returned from API");
                     alert("生成失敗：無回傳影像");
