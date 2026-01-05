@@ -623,17 +623,30 @@ export async function fetchTransparentImage(base64) {
 }
 
 // 2b. Parallel Production (New Entry Point)
-export async function executeParallelProduction(compressedBase64, originalBase64, specKey = 'taiwan_passport', userAdjustments = {}) {
+export async function executeParallelProduction(compressedBase64, originalBase64, specKey = 'taiwan_passport', userAdjustments = {}, cachedFaceData = null) {
     const config = PHOTO_CONFIGS[specKey] || PHOTO_CONFIGS['taiwan_passport'];
     console.log("[Parallel] Starting Production for:", config.name);
 
     try {
-        // --- PARALLEL EXECUTION ---
+        // --- PARALLEL EXECUTION (Optimized) ---
         console.time("  ⏱️ [並行任務 - Promise.all]");
-        const [faceRes, transparentBlob] = await Promise.all([
-            detectFace(compressedBase64),          // Azure (takes ~2-4s)
-            fetchTransparentImage(compressedBase64) // Vercel (takes ~3-5s)
-        ]);
+
+        let faceRes, transparentBlob;
+
+        if (cachedFaceData) {
+            // ✅ Use cached face data, only fetch transparent image
+            console.log("[Parallel] ✅ Using cached face data, skipping Azure detection");
+            faceRes = cachedFaceData;
+            transparentBlob = await fetchTransparentImage(compressedBase64); // Only Vercel
+        } else {
+            // Both Azure + Vercel in parallel (first run)
+            console.log("[Parallel] Running both Azure detection + Vercel background removal");
+            [faceRes, transparentBlob] = await Promise.all([
+                detectFace(compressedBase64),          // Azure (takes ~2-4s)
+                fetchTransparentImage(compressedBase64) // Vercel (takes ~3-5s)
+            ]);
+        }
+
         console.timeEnd("  ⏱️ [並行任務 - Promise.all]");
 
         // Note: transparentBlob is result of compressedBase64.

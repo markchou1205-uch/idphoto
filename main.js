@@ -535,7 +535,8 @@ async function runProductionPhase() {
                     compressedB64,       // Send compressed image
                     state.originalImage, // Keep original for high-res crop if needed (though API uses input for both now)
                     state.spec,
-                    state.adjustments
+                    state.adjustments,
+                    state.faceData       // ✅ Pass cached face data to skip duplicate Azure call
                 );
                 console.timeEnd("⏱️ [並行API處理 (Azure + Vercel)]");
 
