@@ -716,6 +716,13 @@ export const UI = {
                 </div>
             </div>
 
+            <!-- [NEW] 美顏修圖按鈕 -->
+            <div class="mb-4">
+                <button class="btn btn-warning btn-lg w-100" id="btn-beauty-mode">
+                    <i class="bi bi-magic"></i> 我要美顏修圖
+                </button>
+            </div>
+
             <!-- 次標題 -->
             <div class="mb-3 text-muted text-center">
                 <i class="bi bi-download"></i> 您可以選擇以下方式取得您的證件照：
@@ -763,10 +770,20 @@ export const UI = {
         const btnSingle = document.getElementById('btn-dl-single');
         const btn4x2 = document.getElementById('btn-dl-4x2');
         const btnMakeAnother = document.getElementById('btn-make-another');
+        const btnBeautyMode = document.getElementById('btn-beauty-mode');
 
         if (btnSingle) btnSingle.onclick = dlSingleAction;
         if (btn4x2) btn4x2.onclick = preview4x2Action;
         if (btnMakeAnother) btnMakeAnother.onclick = makeAnotherAction;
+
+        // [NEW] Beauty Mode Toggle
+        if (btnBeautyMode) {
+            btnBeautyMode.onclick = () => {
+                if (window.enterBeautyMode) {
+                    window.enterBeautyMode();
+                }
+            };
+        }
     },
 
     // NEW: Handle Single Download Cleanly

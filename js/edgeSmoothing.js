@@ -261,15 +261,15 @@ function bilateralFilterAlpha(imageData, options = {}) {
  */
 export function smoothEdges(source, options = {}) {
     const {
-        erosionRadius = 1,
-        dilationRadius = 2,
-        featherWidth = 4,
-        gaussianRadius = 2,
+        erosionRadius = 0,          // No erosion - preserve original edges  
+        dilationRadius = 0,          // No dilation - keep sharp
+        featherWidth = 0,            // No feathering
+        gaussianRadius = 0.5,        // Minimal blur (just for noise)
         bilateralSpatial = 2,
         bilateralIntensity = 30,
-        enableMorphology = true,
-        enableFeathering = true,
-        enableBilateral = true
+        enableMorphology = false,    // Disabled - no morphological ops
+        enableFeathering = false,    // Disabled - no feathering
+        enableBilateral = false      // Disabled - no bilateral filter
     } = options;
 
     console.time('⏱️ [Edge Smoothing Pipeline]');

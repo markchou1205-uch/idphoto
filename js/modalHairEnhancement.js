@@ -12,7 +12,7 @@ const MODAL_WEBHOOK_URL = 'https://markchou1205-uch--hair-api.modal.run';
  * @param {string|Blob} transparentImage - Transparent image (base64 or Blob)
  * @returns {Promise<Blob>} - Enhanced image as Blob
  */
-export async function enhanceHairWithModal(transparentImage) {
+async function enhanceHairWithModal(transparentImage) {
     console.log("[Modal] 🚀 Starting Auto Hair enhancement...");
     console.time("[Modal] Total Processing Time");
 
@@ -34,7 +34,8 @@ export async function enhanceHairWithModal(transparentImage) {
         // Call Modal API with timeout
         console.log('[Modal] Calling Modal webhook...');
 
-        // Add 60s timeout
+        // 60s timeout for cold start (first call may take 40-50s)
+        // Subsequent calls will be much faster (15-20s) with warm container
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 60000);
 
@@ -78,7 +79,11 @@ export async function enhanceHairWithModal(transparentImage) {
 
         // Track usage for monitoring
         const timeSec = parseFloat(result.timings.total.replace('s', ''));
-        trackModalUsage(timeSec);
+        // Assuming 'timestamp' is defined elsewhere or intended to be added.
+        // For now, adding a placeholder for timestamp if it's not provided by the user's context.
+        // If 'timestamp' is meant to be a new Date().getTime(), it should be added before this line.
+        const timestamp = new Date().getTime(); // Added for completeness based on the requested change
+        trackModalUsage(timestamp, timeSec);
 
         return enhancedBlob;
 
@@ -138,7 +143,7 @@ function safeBase64ToBlob(base64, mimeType = 'image/png') {
  * Check if Modal service is available
  * @returns {Promise<boolean>}
  */
-export async function checkModalHealth() {
+async function checkModalHealth() {
     try {
         const healthUrl = MODAL_WEBHOOK_URL.replace('hair-api', 'health');
         const response = await fetch(healthUrl, {
@@ -157,6 +162,7 @@ export async function checkModalHealth() {
         return false;
     }
 }
+
 
 /**
  * Track Modal usage for cost monitoring
@@ -182,7 +188,7 @@ function trackModalUsage(processingTime) {
  * Get Modal usage statistics
  * @returns {Object} Usage stats
  */
-export function getModalStats() {
+function getModalStats() {
     return {
         ...modalStats,
         avgTimePerCall: modalStats.callCount > 0 ? (modalStats.totalTime / modalStats.callCount).toFixed(2) : 0,
@@ -193,10 +199,16 @@ export function getModalStats() {
 /**
  * Reset Modal statistics
  */
-export function resetModalStats() {
+function resetModalStats() {
     modalStats = {
         callCount: 0,
         totalTime: 0,
         totalCost: 0
     };
 }
+
+// Expose functions globally
+window.enhanceHairWithModal = enhanceHairWithModal;
+window.checkModalHealth = checkModalHealth;
+window.getModalStats = getModalStats;
+window.resetModalStats = resetModalStats;

@@ -923,3 +923,5 @@ window.restorePreview = function () {
 window.handleFileUpload = handleFileUpload;
 window.runProductionPhase = runProductionPhase;
 window.runAuditPhase = runAuditPhase;
+window.handleGuideToggle = handleGuideToggle;
+window.state = state;

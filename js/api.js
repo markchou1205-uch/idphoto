@@ -2,9 +2,8 @@ import { AZURE, CLOUDINARY } from './config.js';
 import { PHOTO_CONFIGS } from './photoSpecs.js';
 import { state } from './state.js';
 import { calculateUniversalLayout, IMAGE_PRESETS } from './photoGeometry.js';
-import { detectHairMaskLocal } from './hairMask.js';
 import { smoothEdges } from './edgeSmoothing.js';
-import { enhanceHairWithModal, checkModalHealth } from './modalHairEnhancement.js';
+// Note: Modal functions (enhanceHairWithModal, checkModalHealth) loaded globally via script tag
 
 
 /* --- Azure Helper --- */
@@ -848,27 +847,20 @@ export async function executeParallelProduction(compressedBase64, originalBase64
 
         console.timeEnd("  ⏱️ [並行任務 - Promise.all]");
 
-        // [MODAL ENHANCEMENT] Apply GPU-based hair segmentation refinement
-        console.log("[Modal] 🚀 Starting hair enhancement...");
-        console.time("    ⏱️ [Modal Hair Enhancement]");
-
-        try {
-            // Enhance hair using Modal's Auto Hair
-            const enhancedBlob = await enhanceHairWithModal(transparentBlob);
-
-            if (enhancedBlob && enhancedBlob !== transparentBlob) {
-                console.log("[Modal] ✅ Hair enhancement successful");
-                transparentBlob = enhancedBlob; // Use enhanced version
-                userAdjustments.modalEnhanced = true; // Skip edge smoothing
-            } else {
-                console.log("[Modal] ⚠️ Using original (enhancement skipped or failed)");
+        // [MODAL ENHANCEMENT] DISABLED per user request
+        console.log('[Modal] ⚠️ Modal enhancement disabled');
+        /*
+        console.log('[Modal] 🚀 Starting hair enhancement...');
+        enhanceInBackground(transparentBlob, compressedBase64).then(enhancedImg => {
+            if (enhancedImg) {
+                console.log('[Modal] ✨ Background enhancement complete, quality upgraded!');
             }
-        } catch (modalError) {
-            console.warn("[Modal] Hair enhancement failed, continuing with original:", modalError);
-            // Continue with original transparentBlob (graceful degradation)
-        }
+        }).catch(err => {
+            console.log('[Modal] Background enhancement failed, using Edge Smoothing');
+        });
+        console.log('[Modal] ⚡ Proceeding with Edge Smoothing while Modal processes in background');
+        */
 
-        console.timeEnd("    ⏱️ [Modal Hair Enhancement]");
 
         // Note: transparentBlob is result of compressedBase64.
         // If we want to use originalBase64 for high-res cropping, we need to be careful about coordinate systems.

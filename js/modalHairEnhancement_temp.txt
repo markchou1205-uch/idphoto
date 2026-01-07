@@ -1,0 +1,12 @@
+function resetModalStats() {
+    modalStats = {
+        callCount: 0,
+        totalTime: 0,
+        totalCost: 0
+    };
+}
+
+// Expose functions globally for use in other scripts
+window.enhanceHairWithModal = enhanceHairWithModal;
+window.getModalStats = getModalStats;
+window.resetModalStats = resetModalStats;

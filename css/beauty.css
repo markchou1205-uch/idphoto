@@ -1,0 +1,108 @@
+/* Beauty Mode Styles */
+
+/* Tool Panel */
+.beauty-tool-panel {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 280px;
+    z-index: 1000;
+    animation: slideInLeft 0.3s ease-out;
+}
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateY(-50%) translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(-50%) translateX(0);
+    }
+}
+
+.beauty-tool-panel .card {
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.beauty-tool-panel .card-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.beauty-control {
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+
+.beauty-control:hover {
+    background: #e9ecef;
+}
+
+.beauty-control label {
+    margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Range Sliders */
+.beauty-control .form-range {
+    cursor: pointer;
+}
+
+.beauty-control .form-range::-webkit-slider-thumb {
+    background: #ffc107;
+    border-color: #ffc107;
+}
+
+.beauty-control .form-range::-moz-range-thumb {
+    background: #ffc107;
+    border-color: #ffc107;
+}
+
+/* Color Pickers */
+.beauty-control input[type="color"] {
+    height: 32px;
+    cursor: pointer;
+}
+
+/* Complete Button Animation */
+#beauty-complete-btn-wrapper {
+    animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive Adjustments */
+@media (max-width: 992px) {
+    .beauty-tool-panel {
+        width: 240px;
+        left: 10px;
+    }
+}
+
+@media (max-width: 768px) {
+    .beauty-tool-panel {
+        position: relative;
+        left: 0;
+        top: 0;
+        transform: none;
+        width: 100%;
+        margin-bottom: 1rem;
+    }
+}
