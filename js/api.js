@@ -3,6 +3,9 @@ import { PHOTO_CONFIGS } from './photoSpecs.js';
 import { state } from './state.js';
 import { calculateUniversalLayout, IMAGE_PRESETS } from './photoGeometry.js';
 import { detectHairMaskLocal } from './hairMask.js';
+import { smoothEdges } from './edgeSmoothing.js';
+import { enhanceHairWithModal, checkModalHealth } from './modalHairEnhancement.js';
+
 
 /* --- Azure Helper --- */
 export function ensureSinglePrefix(str) {
@@ -345,7 +348,7 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
         const img = new Image();
         const url = URL.createObjectURL(transparentBlob);
 
-        img.onload = () => {
+        img.onload = async () => {
             let layout;
             // Destructure new params with defaults
             // showGuides default true
@@ -422,18 +425,75 @@ async function compositeToWhiteBackground(transparentBlob, faceData, fullRect, c
             ctx.filter = `brightness(${finalBrightness}) contrast(${finalContrast}) saturate(${IMAGE_PRESETS.DEFAULT_SATURATION})`;
 
             if (faceData && faceData.faceLandmarks && fullRect && layout.scale !== 1) {
-                // [HAIR OPTIMIZATION]
-                // If we have a hair mask, we need to blend it before drawing.
-                // Since this is canvas composition, we draw:
-                // 1. The Main Subject (Vercel Result)
-                // 2. The Hair Details (Masked Original) on top? Or underneath?
-                // Actually, Vercel result usually has hard edges on hair.
-                // We want to overlay the "Hair Masked Original" on top of the Vercel result?
-                // Or: Draw Hair Details (Soft) -> Draw Main Subject (Hard) -> Issues?
-                // Best approach: Draw Main Subject. Then Draw "Hair Only" from Original Image with transparency.
+                // [EDGE SMOOTHING PIPELINE]
+                // Apply advanced edge processing to eliminate fuzzy/jagged edges
+                // This works independently of MediaPipe hair mask
+                console.log("[Composite] Applying Edge Smoothing Pipeline...");
 
-                // Draw Main Subject (Vercel Result)
-                ctx.drawImage(img, layout.x, layout.y, img.width * layout.scale, img.height * layout.scale);
+                let finalImg = img; // Use this for drawing
+                const skipSmoothing = (userAdjustments && userAdjustments.skipEdgeSmoothing) ||
+                    (userAdjustments && userAdjustments.modalEnhanced);
+
+                if (skipSmoothing) {
+                    if (userAdjustments.modalEnhanced) {
+                        console.log("[Composite] ⚡ Skipping edge smoothing (Modal already enhanced)");
+                    }
+                } else {
+                    try {
+                        // Create temporary canvas for edge processing
+                        const smoothedCanvas = smoothEdges(img, {
+                            erosionRadius: 1,
+                            dilationRadius: 2,
+                            featherWidth: 4,
+                            gaussianRadius: 2,
+                            bilateralSpatial: 2,
+                            bilateralIntensity: 30,
+                            enableMorphology: true,
+                            enableFeathering: true,
+                            enableBilateral: false  // Disabled - Modal already handles edge refinement
+                        });
+
+                        // Convert canvas to Image for drawing
+                        const smoothedImage = new Image();
+                        smoothedImage.width = smoothedCanvas.width;
+                        smoothedImage.height = smoothedCanvas.height;
+                        smoothedImage.src = smoothedCanvas.toDataURL('image/png');
+
+                        // Wait for smoothed image to load
+                        await new Promise(resolve => {
+                            smoothedImage.onload = resolve;
+                        });
+
+                        // Use smoothed image for drawing
+                        finalImg = smoothedImage;
+
+                        // Cache for instant guide toggle
+                        if (state && !state.smoothedImageCache) {
+                            state.smoothedImageCache = finalImg;
+                            console.log("[Composite] Cached smoothed image for fast toggle");
+                        }
+
+                        console.log("[Composite] Edge smoothing applied successfully");
+                    } catch (edgeErr) {
+                        console.warn("[Composite] Edge smoothing failed, using original:", edgeErr);
+                    }
+                }
+
+                // Calculate final dimensions for drawing
+                const finalW = img.width * layout.scale;
+                const finalH = img.height * layout.scale;
+
+                // [CRITICAL FIX] Reset filter before drawing
+                // Filter was set at Line 425 for brightness/contrast
+                // Must reset to avoid grey color bleeding on transparent edges
+                ctx.filter = 'none';
+
+                // Use smoothed result if available, otherwise original
+                ctx.drawImage(finalImg, layout.x, layout.y, finalW, finalH);
+
+                // [REMOVED] Duplicate drawImage call that was causing double-rendering
+                // Old Line 500: ctx.drawImage(finalImg, layout.x, layout.y, finalImg.width * layout.scale, finalImg.height * layout.scale);
+
 
                 if (hairMaskCanvas) {
                     console.log("[Composite] Applying Hair Optimization...");
@@ -754,6 +814,7 @@ export async function fetchTransparentImage(base64) {
 export async function executeParallelProduction(compressedBase64, originalBase64, specKey = 'taiwan_passport', userAdjustments = {}, cachedFaceData = null) {
     const config = PHOTO_CONFIGS[specKey] || PHOTO_CONFIGS['taiwan_passport'];
     console.log("[Parallel] Starting Production for:", config.name);
+    console.time("🎯 [總製作時間]");
 
     try {
         // --- PARALLEL EXECUTION (Optimized) ---
@@ -775,26 +836,39 @@ export async function executeParallelProduction(compressedBase64, originalBase64
                 detectHairMaskLocal(compressedBase64)
             ]);
         } else {
-            // Both Azure + Vercel + HairMask in parallel (first run)
-            console.log("[Parallel] Running Azure detection + Vercel BG + Local Hair Mask");
+            // Both Azure + Vercel in parallel (removed MediaPipe - Modal does better job)
+            console.log("[Parallel] Running Azure detection + Vercel BG (Hair handled by Modal)");
 
-            // Note: detectHairMaskLocal is client-side and fast (~100ms for 256px), but it adds to CPU.
-            // We run it alongside fetches.
-
-            [faceRes, transparentBlob, hairMaskCanvas] = await Promise.all([
+            [faceRes, transparentBlob] = await Promise.all([
                 detectFace(compressedBase64),           // Azure (takes ~2-4s)
                 fetchTransparentImage(compressedBase64), // Vercel (takes ~3-5s)
-                detectHairMaskLocal(compressedBase64)    // Local MediaPipe (~0.5s)
+                // Removed: detectHairMaskLocal - Modal provides superior results
             ]);
-
-            if (hairMaskCanvas) {
-                console.log("[Parallel] Hair Mask Generated:", hairMaskCanvas.width, "x", hairMaskCanvas.height);
-            } else {
-                console.warn("[Parallel] Hair Mask Generation Failed or Null.");
-            }
         }
 
         console.timeEnd("  ⏱️ [並行任務 - Promise.all]");
+
+        // [MODAL ENHANCEMENT] Apply GPU-based hair segmentation refinement
+        console.log("[Modal] 🚀 Starting hair enhancement...");
+        console.time("    ⏱️ [Modal Hair Enhancement]");
+
+        try {
+            // Enhance hair using Modal's Auto Hair
+            const enhancedBlob = await enhanceHairWithModal(transparentBlob);
+
+            if (enhancedBlob && enhancedBlob !== transparentBlob) {
+                console.log("[Modal] ✅ Hair enhancement successful");
+                transparentBlob = enhancedBlob; // Use enhanced version
+                userAdjustments.modalEnhanced = true; // Skip edge smoothing
+            } else {
+                console.log("[Modal] ⚠️ Using original (enhancement skipped or failed)");
+            }
+        } catch (modalError) {
+            console.warn("[Modal] Hair enhancement failed, continuing with original:", modalError);
+            // Continue with original transparentBlob (graceful degradation)
+        }
+
+        console.timeEnd("    ⏱️ [Modal Hair Enhancement]");
 
         // Note: transparentBlob is result of compressedBase64.
         // If we want to use originalBase64 for high-res cropping, we need to be careful about coordinate systems.
@@ -832,8 +906,8 @@ export async function executeParallelProduction(compressedBase64, originalBase64
             faceRes,
             fullRect,
             config,
-            userAdjustments,
-            hairMaskCanvas // Pass the mask
+            userAdjustments,  // Contains modalEnhanced flag
+            null  // hairMask no longer needed (Modal handles it)
         );
         console.timeEnd("  ⏱️ [Canvas合成與濾鏡]");
 

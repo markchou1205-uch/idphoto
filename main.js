@@ -689,10 +689,10 @@ function injectAdvancedControls() {
     // Toggle Guides
     const toggleBtn = document.getElementById('toggle-guides-btn');
     if (toggleBtn) {
-        toggleBtn.onclick = () => {
+        toggleBtn.onclick = async () => {
             state.adjustments.showGuides = !state.adjustments.showGuides;
-            // Re-render UI
-            handleClientSideUpdate();
+            // Fast path: Skip edge smoothing when only toggling guides
+            await handleGuideToggle();
         };
     }
 
@@ -858,6 +858,34 @@ async function updateResultUI(b64) {
     UI.showDownloadOptions(b64, specData, handle4x2Click);
     UI.updateToReuploadMode();
     UI.setAuditButtonRed();
+}
+
+// [PERF OPT] Fast Guide Toggle (Skips Edge Smoothing)
+async function handleGuideToggle() {
+    console.log("[Perf] ⚡ Fast guide toggle - skipping edge smoothing");
+
+    if (state.assets && state.assets.transparentBlob) {
+        try {
+            // Pass skipEdgeSmoothing flag to reuse cached smoothed image
+            const fastAdjustments = { ...state.adjustments, skipEdgeSmoothing: true };
+
+            const b64 = await API.recomposePreview(
+                state.assets.transparentBlob,
+                state.assets.fullRect,
+                state.faceData,
+                state.spec,
+                fastAdjustments,
+                state.assets.hairMask
+            );
+            await updateResultUI(b64);
+            return;
+        } catch (e) {
+            console.warn("[Perf] Fast path failed, fallback to full recompose:", e);
+        }
+    }
+
+    // Fallback to full recompose if assets not available
+    await handleClientSideUpdate();
 }
 
 // Client-Side Re-composition Handler

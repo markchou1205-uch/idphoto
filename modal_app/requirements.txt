@@ -1,0 +1,17 @@
+# Modal Auto Hair Requirements
+
+# Core ML libraries
+torch==2.0.1
+torchvision==0.15.2
+
+# Image processing
+opencv-python-headless==4.8.0.74
+Pillow==10.0.0
+scikit-image==0.21.0
+
+# Numerical computing
+numpy==1.24.3
+scipy==1.11.1
+
+# Modal SDK
+modal==0.55.0
