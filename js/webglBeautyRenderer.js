@@ -92,48 +92,123 @@ class WebGLBeautyRenderer {
             }
         `;
 
-        // Fragment shader: Bilateral Filter (Skin Smoothing)
+        // Fragment shader: Edge-Preserving Bilateral Filter with Skin Detection
+        // Stronger smoothing effect while preserving edges
         const bilateralShaderSource = `
-            precision mediump float;
+            precision highp float;
             uniform sampler2D u_image;
             uniform float u_intensity;
             uniform vec2 u_resolution;
             varying vec2 v_texCoord;
             
+            // Relaxed skin color detection - more permissive
+            bool isSkinColor(vec3 color) {
+                float r = color.r;
+                float g = color.g;
+                float b = color.b;
+                
+                // Very relaxed rules for broader skin tone coverage
+                // Basic luminance check - not too dark, not too bright
+                float lum = r * 0.299 + g * 0.587 + b * 0.114;
+                if (lum < 0.1 || lum > 0.95) return false;
+                
+                // R channel should be relatively strong (most skin tones)
+                if (r < 0.15) return false;
+                
+                // Avoid pure blue/green (background, clothing)
+                if (b > r * 1.2 || g > r * 1.3) return false;
+                
+                // Avoid highly saturated colors (lips, clothing)
+                float maxC = max(max(r, g), b);
+                float minC = min(min(r, g), b);
+                float saturation = (maxC - minC) / (maxC + 0.001);
+                if (saturation > 0.7) return false;
+                
+                return true;
+            }
+            
+            // Simplified edge detection
+            float getEdgeStrength(vec2 coord) {
+                vec2 texelSize = 1.0 / u_resolution;
+                
+                vec3 c = texture2D(u_image, coord).rgb;
+                vec3 l = texture2D(u_image, coord - vec2(texelSize.x, 0.0)).rgb;
+                vec3 r = texture2D(u_image, coord + vec2(texelSize.x, 0.0)).rgb;
+                vec3 t = texture2D(u_image, coord - vec2(0.0, texelSize.y)).rgb;
+                vec3 b = texture2D(u_image, coord + vec2(0.0, texelSize.y)).rgb;
+                
+                float dx = distance(l, r);
+                float dy = distance(t, b);
+                
+                return (dx + dy) * 0.5;
+            }
+            
             void main() {
+                vec4 centerColor = texture2D(u_image, v_texCoord);
+                
+                // Skip if intensity is zero
                 if (u_intensity < 0.01) {
-                    gl_FragColor = texture2D(u_image, v_texCoord);
+                    gl_FragColor = centerColor;
                     return;
                 }
                 
-                vec4 centerColor = texture2D(u_image, v_texCoord);
+                float normalizedIntensity = u_intensity / 100.0;
+                
+                // Get edge strength
+                float edgeStrength = getEdgeStrength(v_texCoord);
+                
+                // Strong edges should be preserved (threshold raised for more smoothing)
+                if (edgeStrength > 0.25) {
+                    gl_FragColor = centerColor;
+                    return;
+                }
+                
+                // Check if skin-colored
+                bool isSkin = isSkinColor(centerColor.rgb);
+                
+                // Apply bilateral filter
                 vec3 sum = vec3(0.0);
                 float weightSum = 0.0;
                 
-                float sigma_s = 3.0 + u_intensity * 0.1;  // Spatial sigma
-                float sigma_r = 0.1 + u_intensity * 0.005; // Range sigma
+                // STRONGER parameters for visible effect
+                float blurRadius = 2.0 + normalizedIntensity * 4.0;  // 2-6 pixels
+                float sigma_r = 0.08 + normalizedIntensity * 0.15;   // Range: 0.08-0.23
                 
-                // Sample kernel (5x5)
-                for (int i = -2; i <= 2; i++) {
-                    for (int j = -2; j <= 2; j++) {
-                        vec2 offset = vec2(float(i), float(j)) / u_resolution;
+                // 9x9 kernel for stronger smoothing
+                for (int i = -4; i <= 4; i++) {
+                    for (int j = -4; j <= 4; j++) {
+                        vec2 offset = vec2(float(i), float(j)) * blurRadius / u_resolution;
                         vec4 sampleColor = texture2D(u_image, v_texCoord + offset);
                         
                         // Spatial weight
                         float spatialDist = float(i*i + j*j);
-                        float spatialWeight = exp(-spatialDist / (2.0 * sigma_s * sigma_s));
+                        float spatialWeight = exp(-spatialDist / 32.0);
                         
                         // Range weight (color difference)
                         float colorDist = distance(centerColor.rgb, sampleColor.rgb);
                         float rangeWeight = exp(-colorDist * colorDist / (2.0 * sigma_r * sigma_r));
                         
-                        float weight = spatialWeight * rangeWeight;
+                        // For skin, use both weights; for non-skin reduce effect
+                        float skinFactor = isSkin ? 1.0 : 0.3;
+                        float weight = spatialWeight * rangeWeight * skinFactor;
+                        
                         sum += sampleColor.rgb * weight;
                         weightSum += weight;
                     }
                 }
                 
-                gl_FragColor = vec4(sum / weightSum, centerColor.a);
+                vec3 filtered = (weightSum > 0.0) ? sum / weightSum : centerColor.rgb;
+                
+                // STRONGER blend - more visible smoothing
+                // Skin areas get full effect, edges get reduced effect
+                float edgeFactor = 1.0 - clamp(edgeStrength * 5.0, 0.0, 0.8);
+                float skinBoost = isSkin ? 1.0 : 0.5;
+                float blendAmount = normalizedIntensity * edgeFactor * skinBoost;
+                
+                // Apply with stronger blending (up to 100% at max intensity)
+                vec3 finalColor = mix(centerColor.rgb, filtered, blendAmount);
+                
+                gl_FragColor = vec4(finalColor, centerColor.a);
             }
         `;
 
@@ -148,9 +223,9 @@ class WebGLBeautyRenderer {
             uniform vec3 u_blushColor;
             uniform float u_blushIntensity;
             uniform vec2 u_resolution;
-            uniform vec4 u_lipRect;    // x, y, w, h (normalized)
-            uniform vec4 u_blushLeft;  // x, y, radius, unused
-            uniform vec4 u_blushRight; // x, y, radius, unused
+            uniform vec4 u_lipRect;
+            uniform vec4 u_blushLeft;
+            uniform vec4 u_blushRight;
             varying vec2 v_texCoord;
             
             void main() {
@@ -174,7 +249,7 @@ class WebGLBeautyRenderer {
                     }
                 }
                 
-                // Blush overlay (left cheek)
+                // Blush overlay
                 if (u_blushIntensity > 0.0) {
                     vec2 leftPos = u_blushLeft.xy;
                     float leftRadius = u_blushLeft.z;
@@ -185,7 +260,6 @@ class WebGLBeautyRenderer {
                         color.rgb = mix(color.rgb, u_blushColor, blushBlend);
                     }
                     
-                    // Right cheek
                     vec2 rightPos = u_blushRight.xy;
                     float rightRadius = u_blushRight.z;
                     float rightDist = distance(v_texCoord, rightPos) / rightRadius;
@@ -260,22 +334,33 @@ class WebGLBeautyRenderer {
             -1, 1, 1, -1, 1, 1
         ]);
 
-        // Texture coordinates (flipped Y for WebGL)
-        const texCoords = new Float32Array([
+        // Texture coordinates for source image (flip Y for image loading)
+        // WebGL textures are loaded upside down, so we flip here
+        const texCoordsSource = new Float32Array([
             0, 1, 1, 1, 0, 0,
             0, 0, 1, 1, 1, 0
         ]);
 
+        // Texture coordinates for framebuffer (NO flip - already correct orientation)
+        const texCoordsFB = new Float32Array([
+            0, 0, 1, 0, 0, 1,
+            0, 1, 1, 0, 1, 1
+        ]);
+
         this.buffers = {
             position: gl.createBuffer(),
-            texCoord: gl.createBuffer()
+            texCoordSource: gl.createBuffer(),
+            texCoordFB: gl.createBuffer()
         };
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.position);
         gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.texCoord);
-        gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.texCoordSource);
+        gl.bufferData(gl.ARRAY_BUFFER, texCoordsSource, gl.STATIC_DRAW);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.texCoordFB);
+        gl.bufferData(gl.ARRAY_BUFFER, texCoordsFB, gl.STATIC_DRAW);
     }
 
     /**
@@ -358,26 +443,30 @@ class WebGLBeautyRenderer {
         let currentTexture = this.textures.source;
         let fbIndex = 0;
 
+        // Track if current texture is the source (needs Y flip) or from FB (no flip)
+        let isFromSource = true;
+
         // Pass 1: Bilateral Filter (Skin Smoothing)
         if (this.params.smoothIntensity > 0) {
             gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffers[fbIndex]);
-            this.renderBilateral(currentTexture);
+            this.renderBilateral(currentTexture, isFromSource);
             currentTexture = this.textures.fb[fbIndex];
+            isFromSource = false; // Now from framebuffer
             fbIndex = 1 - fbIndex;
         }
 
         // Pass 2: Color Adjustment + Makeup (Final pass to screen)
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        this.renderColorAdjust(currentTexture);
+        this.renderColorAdjust(currentTexture, isFromSource);
 
         const renderTime = performance.now() - startTime;
-        console.log(`[WebGL Beauty] Rendered in ${renderTime.toFixed(1)}ms`);
+        console.log(`[WebGL Beauty]Rendered in ${renderTime.toFixed(1)} ms`);
     }
 
     /**
      * Render bilateral filter pass
      */
-    renderBilateral(inputTexture) {
+    renderBilateral(inputTexture, isSourceTexture) {
         const gl = this.gl;
         const program = this.programs.bilateral;
 
@@ -392,13 +481,13 @@ class WebGLBeautyRenderer {
         gl.bindTexture(gl.TEXTURE_2D, inputTexture);
         gl.uniform1i(gl.getUniformLocation(program, 'u_image'), 0);
 
-        this.drawQuad(program);
+        this.drawQuad(program, isSourceTexture);
     }
 
     /**
      * Render color adjustment pass
      */
-    renderColorAdjust(inputTexture) {
+    renderColorAdjust(inputTexture, isSourceTexture) {
         const gl = this.gl;
         const program = this.programs.colorAdjust;
 
@@ -434,13 +523,15 @@ class WebGLBeautyRenderer {
         gl.bindTexture(gl.TEXTURE_2D, inputTexture);
         gl.uniform1i(gl.getUniformLocation(program, 'u_image'), 0);
 
-        this.drawQuad(program);
+        this.drawQuad(program, isSourceTexture);
     }
 
     /**
      * Draw full-screen quad
+     * @param {WebGLProgram} program 
+     * @param {boolean} isSourceTexture - true if rendering source image, false if rendering from framebuffer
      */
-    drawQuad(program) {
+    drawQuad(program, isSourceTexture = false) {
         const gl = this.gl;
 
         // Position attribute
@@ -449,9 +540,10 @@ class WebGLBeautyRenderer {
         gl.enableVertexAttribArray(posLoc);
         gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
 
-        // TexCoord attribute
+        // TexCoord attribute - use different buffer based on texture source
         const texLoc = gl.getAttribLocation(program, 'a_texCoord');
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffers.texCoord);
+        const texBuffer = isSourceTexture ? this.buffers.texCoordSource : this.buffers.texCoordFB;
+        gl.bindBuffer(gl.ARRAY_BUFFER, texBuffer);
         gl.enableVertexAttribArray(texLoc);
         gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 0, 0);
 
